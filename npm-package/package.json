@@ -1,7 +1,7 @@
 {
   "name": "lumanin",
-  "version": "0.0.1",
-  "description": "The Lumanin launcher's plugin API. Provided by the launcher itself at runtime — installing this package from npm is never necessary.",
+  "version": "1.0.0",
+  "description": "The Lumanin launcher's plugin API. Provided by the launcher itself at runtime - installing this package from npm is never necessary.",
   "license": "MIT",
   "main": "index.js",
   "files": ["index.js"],

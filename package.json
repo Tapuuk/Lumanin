@@ -1,6 +1,6 @@
 {
   "name": "lumanin",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "description": "A keyboard-first command palette and launcher for Linux, with a plugin API and a generator skill for Claude Code.",
   "license": "MIT",
