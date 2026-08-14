@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { ACTION_LABELS, type ResultItem, type ResultKind } from '@shared/ipc'
+import { IconImage } from '../ext/icons'
 
 /**
  * What stands in for an icon on the kinds that have none.
@@ -44,6 +45,27 @@ const KIND_GLYPHS: Readonly<Record<ResultKind, string>> = {
  * panel no height.
  */
 
+/**
+ * The three-dot search mark, drawn over an app-connected plugin's icon.
+ *
+ * The icon underneath is the target application's own — Godot's, Steam's — and
+ * these dots are what says "a search of it" rather than "it". One SVG stamped by
+ * the renderer, never baked into an image, so every search row wears exactly the
+ * same mark and it recolours with the theme: text-coloured dots, outlined in the
+ * panel background so they read on any logo.
+ *
+ * Geometry against the 26px icon box: three 5px squares, 1.5px apart, centred.
+ */
+function SearchBadge(): React.JSX.Element {
+  return (
+    <svg className="result__badge" viewBox="0 0 26 26" aria-hidden="true">
+      {[4, 10.5, 17].map((x) => (
+        <rect key={x} x={x} y={10.5} width={5} height={5} rx={1.2} />
+      ))}
+    </svg>
+  )
+}
+
 interface ResultListProps {
   /** Never empty: the panel omits this section entirely when there is nothing. */
   readonly items: readonly ResultItem[]
@@ -80,8 +102,14 @@ export function ResultList({ items, selectedIndex, onActivate }: ResultListProps
           <span className="result__icon">
             {item.icon !== undefined ? (
               // Decorative: the name beside it already says what this is, so an
-              // alt text would just be read twice by a screen reader.
-              <img src={item.icon} alt="" draggable={false} />
+              // alt text would just be read twice by a screen reader. `IconImage`
+              // rather than a bare `<img>` because a plugin row's icon can 404 —
+              // a `search:` icon for an app that is not installed — and the
+              // failure has to degrade to the kind's glyph, not a broken image.
+              <>
+                <IconImage src={item.icon} fallback={KIND_GLYPHS[item.kind]} />
+                {item.badge === 'search' && <SearchBadge />}
+              </>
             ) : (
               // Applications have icons; commands, sums and searches do not, and
               // a blank column beside them made the list read as two lists. The

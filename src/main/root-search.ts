@@ -79,6 +79,10 @@ export interface RootCommand {
    * difference, rather than a second list with a second ranking.
    */
   readonly kind?: 'command' | 'extension'
+  /** A `lumanin-icon:` URL, already resolved by whoever registered the command. */
+  readonly icon?: string
+  /** See `ResultItem.badge` — the search mark over an app-connected plugin's icon. */
+  readonly badge?: 'search'
   /** Extension rows only: what the plugin is called, for category-pin titles. */
   readonly extensionTitle?: string
   /** Extension rows only: the categories the command declares in its manifest. */
@@ -137,7 +141,9 @@ function commandRow(command: RootCommand): ResultItem {
     id: `${kind}:${command.id}`,
     title: command.title,
     subtitle: command.subtitle,
-    kind
+    kind,
+    ...(command.icon === undefined ? {} : { icon: command.icon }),
+    ...(command.badge === undefined ? {} : { badge: command.badge })
   }
 }
 
@@ -266,22 +272,31 @@ export function composeRoot(input: RootSearchInput): readonly ResultItem[] {
     if (parts.category.length > 0 && category === undefined) return null
 
     const owner = command.extensionTitle ?? command.title
+    // The command's own icon and mark: a pinned slice of Search Godot is still
+    // Search Godot, and drawing it differently would make the pin look like a
+    // different thing than the row it came from.
+    const icon = {
+      ...(command.icon === undefined ? {} : { icon: command.icon }),
+      ...(command.badge === undefined ? {} : { badge: command.badge })
+    }
     if (parts.item === null) {
       if (category === undefined) return null
       return {
         id: `extension:${payload}`,
         title: `${owner}: ${category.title}`,
         subtitle: command.title,
-        kind: 'extension'
+        kind: 'extension',
+        ...icon
       }
     }
     return {
       id: `extension:${payload}`,
       // The title captured at pin time; the raw id is the honest fallback for a
       // pin written by hand without one.
-      title: storedTitle ?? (parts.action === null ? parts.item : `${parts.item} — ${parts.action}`),
+      title: storedTitle ?? (parts.action === null ? parts.item : `${parts.item} - ${parts.action}`),
       subtitle: category === undefined ? `${owner} · ${command.title}` : `${owner} · ${category.title}`,
-      kind: 'extension'
+      kind: 'extension',
+      ...icon
     }
   }
 

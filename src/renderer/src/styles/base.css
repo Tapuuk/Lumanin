@@ -309,6 +309,26 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Anchors the search mark, which sits over the icon rather than beside it. */
+  position: relative;
+}
+
+/* The three-dot search mark over an app-connected plugin's icon. Text-coloured
+   with a panel-background outline: legible on any logo, recolours with the
+   theme, and identical on every row because it is one SVG, not per-plugin art. */
+.result__badge {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.result__badge rect {
+  fill: var(--lumanin-text);
+  stroke: var(--lumanin-bg);
+  stroke-width: 1.5;
+  paint-order: stroke;
 }
 
 .result__icon img {

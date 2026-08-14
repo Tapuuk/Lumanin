@@ -263,6 +263,8 @@ export function fallbackGlyphFor(src: string): string {
 interface IconImageProps {
   readonly src: string
   readonly tint?: string | undefined
+  /** What a failed load degrades to, when the caller knows better than the dot. */
+  readonly fallback?: string | undefined
 }
 
 /**
@@ -274,7 +276,7 @@ interface IconImageProps {
  * `src`: a re-render with the same dead URL must not retry and flash, and a
  * *new* URL deserves a fresh attempt.
  */
-export function IconImage({ src, tint }: IconImageProps): React.JSX.Element {
+export function IconImage({ src, tint, fallback }: IconImageProps): React.JSX.Element {
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
 
   useEffect(() => {
@@ -289,7 +291,7 @@ export function IconImage({ src, tint }: IconImageProps): React.JSX.Element {
         aria-hidden="true"
         style={tint === undefined ? undefined : { color: colorToken(tint) }}
       >
-        {fallbackGlyphFor(src)}
+        {fallback ?? fallbackGlyphFor(src)}
       </span>
     )
   }

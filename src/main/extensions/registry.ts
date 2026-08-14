@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { ICON_SCHEME } from '../../shared/identity'
 import { parseManifest, type CommandSpec, type Manifest, type PreferenceSpec } from '../../shared/extension'
 import { readProvenance, type Provenance } from '../../store/plugin'
 import type { Logger } from '../../node/logger'
@@ -162,7 +163,7 @@ export function scanExtensions(
         // command is missing" and a root list that is quietly one row short.
         problems.push({
           name: manifest.name,
-          problem: `command "${spec.name}" has no built entry — reinstall the extension`
+          problem: `command "${spec.name}" has no built entry - reinstall the extension`
         })
         continue
       }
@@ -272,8 +273,48 @@ export function extensionRootCommands(
       ],
       kind: 'extension' as const,
       extensionTitle: command.extension.manifest.title,
-      categories: command.spec.categories
+      categories: command.spec.categories,
+      ...commandIcon(command)
     }))
+}
+
+/**
+ * A command's icon as the root list draws it: a `lumanin-icon:` URL the renderer
+ * can put in an `<img>`, never a filesystem path (SECURITY.md §Renderer).
+ *
+ * The manifest `icon` (command first, then the extension's) is one of three
+ * forms, and the form decides both where the image comes from and whether the
+ * search mark goes over it:
+ *
+ * - `search:<name>[,<fallback>…]` — the desktop's own icon for the application
+ *   the plugin fronts, resolved from the icon theme, with the three-dot search
+ *   mark drawn over it. What an app-connected "Search X" command declares: the
+ *   row is Godot's face plus the mark that says "a search of it, not it".
+ * - `system:<name>[,<fallback>…]` — a theme icon with no mark.
+ * - anything else — a file in the extension's `assets/`, badge-free. What a
+ *   standalone plugin ships as its own identity.
+ *
+ * An icon the theme cannot resolve 404s at the protocol and the renderer falls
+ * back to the row glyph — the row an uninstalled app leaves behind is the plain
+ * chevron, never a broken image.
+ */
+function commandIcon(command: InstalledCommand): { icon?: string; badge?: 'search' } {
+  const raw = command.spec.icon ?? command.extension.manifest.icon
+  if (raw === undefined || raw.length === 0) return {}
+  if (raw.startsWith('search:')) {
+    return { icon: themeIconUrl(raw.slice('search:'.length)), badge: 'search' }
+  }
+  if (raw.startsWith('system:')) return { icon: themeIconUrl(raw.slice('system:'.length)) }
+  return {
+    icon: `${ICON_SCHEME}://ext/${encodeURIComponent(command.extension.manifest.name)}/${raw
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/')}`
+  }
+}
+
+function themeIconUrl(names: string): string {
+  return `${ICON_SCHEME}://theme/${encodeURIComponent(names)}`
 }
 
 /**

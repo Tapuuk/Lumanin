@@ -10,8 +10,6 @@ runtime: a plugin writes
 import { List, showToast } from 'lumanin'
 ```
 
-and Lumanin answers that import with its own implementation. This npm package exists to hold the
-name and to fail loudly if it is ever installed by accident, so that the name can never resolve to
-someone else's code.
+and Lumanin answers that import with its own implementation. This npm package exists to hold the name and to fail loudly if it is ever installed by accident, so that the name can never resolve to someone else's code.
 
-Want to write a plugin? See the repository — it ships a generator and a full API reference.
+Want to write a plugin? See the repository - it ships a generator and a full API reference.

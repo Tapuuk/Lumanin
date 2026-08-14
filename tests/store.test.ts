@@ -155,6 +155,56 @@ describe('[extensions].disabled', () => {
   })
 })
 
+describe('root row icons', () => {
+  const index = (icon: string | undefined, manifestIcon?: string): ExtensionIndex => ({
+    extensions: [],
+    problems: [],
+    commands: [
+      {
+        id: 'godot-docs/search',
+        spec: { ...spec('search', 'Search Godot'), ...(icon === undefined ? {} : { icon }) },
+        entryPath: '',
+        extension: {
+          ...extension('godot-docs'),
+          manifest: {
+            ...extension('godot-docs').manifest,
+            ...(manifestIcon === undefined ? {} : { icon: manifestIcon })
+          }
+        }
+      }
+    ] as unknown as ExtensionIndex['commands']
+  })
+
+  it('turns search: into a theme URL wearing the search mark', () => {
+    const [row] = extensionRootCommands(index('search:godot,godot-engine'))
+    expect(row?.icon).toBe('lumanin-icon://theme/godot%2Cgodot-engine')
+    expect(row?.badge).toBe('search')
+  })
+
+  it('turns system: into the same URL without the mark', () => {
+    const [row] = extensionRootCommands(index('system:folder'))
+    expect(row?.icon).toBe('lumanin-icon://theme/folder')
+    expect(row?.badge).toBeUndefined()
+  })
+
+  it('treats anything else as a file in the extension assets', () => {
+    const [row] = extensionRootCommands(index('icon.svg'))
+    expect(row?.icon).toBe('lumanin-icon://ext/godot-docs/icon.svg')
+    expect(row?.badge).toBeUndefined()
+  })
+
+  it('falls back to the manifest icon when the command declares none', () => {
+    const [row] = extensionRootCommands(index(undefined, 'icon.svg'))
+    expect(row?.icon).toBe('lumanin-icon://ext/godot-docs/icon.svg')
+  })
+
+  it('leaves both off when neither declares one', () => {
+    const [row] = extensionRootCommands(index(undefined))
+    expect(row?.icon).toBeUndefined()
+    expect(row?.badge).toBeUndefined()
+  })
+})
+
 describe('wizard', () => {
   it('runs the steps in order and reports completion', async () => {
     const seen: number[] = []
