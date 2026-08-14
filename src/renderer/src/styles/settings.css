@@ -1,0 +1,940 @@
+/*
+ * The settings app.
+ *
+ * Same rule as base.css: every colour, radius, font and duration is a semantic
+ * token set by the theme runtime, and there must never be a raw colour here.
+ * The settings window is an opaque, resizable window — it overrides the
+ * transparent-body default the panel needs.
+ */
+
+body:has(.settings) {
+  background: var(--lumanin-bg);
+
+  /* The app's corner rounding, derived from the theme's radius tokens so a
+     square-corner theme squares this window too. Multiplied, not offset: at
+     the default outer radius of 6px these come out at the 10/12/16px the
+     design was drawn with, and at 0 they are 0. */
+  --s-radius-inner: var(--lumanin-radius-inner, 4px);
+  --s-radius: calc(var(--lumanin-radius-outer, 6px) * 1.667);
+  --s-radius-large: calc(var(--lumanin-radius-outer, 6px) * 2);
+  --s-radius-hero: calc(var(--lumanin-radius-outer, 6px) * 2.667);
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  color: var(--lumanin-text);
+}
+
+/* ---------------------------------------------------------------- titlebar */
+
+/* The window is frameless; this strip is the frame. Draggable everywhere the
+   close button is not. */
+.settings__titlebar {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  height: 48px;
+  padding: 0 10px 0 18px;
+  border-bottom: 1px solid var(--lumanin-border);
+  -webkit-app-region: drag;
+}
+
+/* The logo, inline in the titlebar. `currentColor` inside the SVG means the
+   `color` here is the whole recolouring story — it takes the theme's accent
+   like the rest of the chrome. */
+.settings__logo {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  color: var(--lumanin-accent);
+}
+
+/* The app's name, not a subheading: full text colour, bold, sized like the
+   content headings. */
+.settings__title {
+  flex: 1 1 auto;
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--lumanin-text);
+}
+
+.settings__close {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--lumanin-radius-inner);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text-faint);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.settings__close:hover {
+  background: var(--lumanin-bg-hover);
+  color: var(--lumanin-text);
+}
+
+/* -------------------------------------------------------------------- body */
+
+.settings__body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.settings__sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 0 0 200px;
+  padding: 10px 8px;
+  border-right: 1px solid var(--lumanin-border);
+  overflow-y: auto;
+}
+
+.settings__section {
+  padding: 9px 14px;
+  border: none;
+  border-radius: var(--s-radius);
+  background: none;
+  font: inherit;
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 13.5px;
+  color: var(--lumanin-text-muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings__section:hover {
+  background: var(--lumanin-bg-hover);
+  color: var(--lumanin-text);
+}
+
+.settings__section[aria-current='page'] {
+  background: color-mix(in srgb, var(--lumanin-accent) 18%, var(--lumanin-bg-selected));
+  color: var(--lumanin-accent);
+}
+
+.settings__content {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 18px 22px;
+  overflow-y: auto;
+}
+
+.settings__heading {
+  margin: 0 0 4px;
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.settings__hint {
+  margin: 0 0 18px;
+  font-size: 13px;
+  color: var(--lumanin-text-faint);
+}
+
+
+/* Scrollbars match the panel's thin bar. */
+.settings__sidebar::-webkit-scrollbar,
+.settings__content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.settings__sidebar::-webkit-scrollbar-track,
+.settings__content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings__sidebar::-webkit-scrollbar-thumb,
+.settings__content::-webkit-scrollbar-thumb {
+  background: var(--lumanin-border);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.settings__sidebar::-webkit-scrollbar-button,
+.settings__content::-webkit-scrollbar-button {
+  display: none;
+}
+
+/* ------------------------------------------------------------- screen pieces */
+
+.s-section {
+  margin-bottom: 26px;
+}
+
+.s-section__title {
+  margin: 0 0 10px;
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lumanin-text-faint);
+}
+
+.s-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 9px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--lumanin-border) 45%, transparent);
+}
+
+.s-row__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.s-row__label {
+  font-size: 13.5px;
+  color: var(--lumanin-text);
+}
+
+.s-row__help {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--lumanin-text-faint);
+}
+
+.s-row__control {
+  flex: 0 0 auto;
+  max-width: 46%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.s-help {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  color: var(--lumanin-text-muted);
+}
+
+.s-help code,
+.s-banner code {
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 0.95em;
+  background: var(--lumanin-bg-hover);
+  padding: 1px 4px;
+  border-radius: var(--s-radius-inner);
+}
+
+.s-error {
+  font-size: 12.5px;
+  color: var(--lumanin-err);
+  overflow-wrap: anywhere;
+}
+
+.s-ok {
+  font-size: 12.5px;
+  color: var(--lumanin-ok);
+}
+
+.s-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ----------------------------------------------------------------- controls */
+
+.s-toggle {
+  width: 36px;
+  height: 20px;
+  flex: 0 0 auto;
+  border: 1px solid var(--lumanin-border);
+  border-radius: 999px;
+  background: var(--lumanin-bg-hover);
+  cursor: pointer;
+  position: relative;
+  transition: background var(--lumanin-motion-duration, 120ms);
+}
+
+.s-toggle__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--lumanin-text-faint);
+  transition: transform var(--lumanin-motion-duration, 120ms);
+}
+
+.s-toggle--on {
+  background: color-mix(in srgb, var(--lumanin-accent) 35%, var(--lumanin-bg-hover));
+  border-color: var(--lumanin-accent);
+}
+
+.s-toggle--on .s-toggle__knob {
+  transform: translateX(16px);
+  background: var(--lumanin-accent);
+}
+
+.s-toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.s-select,
+.s-input {
+  padding: 5px 9px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--s-radius);
+  background: var(--lumanin-bg-hover);
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text);
+  outline: none;
+  max-width: 280px;
+}
+
+.s-input {
+  user-select: text;
+  cursor: text;
+}
+
+/* An env/flag-overridden setting renders its editor disabled — without this,
+   a disabled field is pixel-identical to an editable one. Same treatment as
+   the buttons and the toggle. */
+.s-select:disabled,
+.s-input:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* `:focus` on both, deliberately: the two controls sit side by side and must
+   signal focus under the same condition (the global :focus-visible ring is
+   stripped by the outline reset above). */
+.s-select:focus,
+.s-input:focus {
+  border-color: var(--lumanin-accent);
+}
+
+.s-input--number {
+  width: 90px;
+}
+
+.s-button {
+  padding: 6px 16px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--s-radius);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text);
+  cursor: pointer;
+}
+
+.s-button:hover {
+  background: var(--lumanin-bg-hover);
+}
+
+.s-button--primary {
+  border-color: var(--lumanin-accent);
+  color: var(--lumanin-accent);
+}
+
+.s-button--danger {
+  border-color: var(--lumanin-err);
+  color: var(--lumanin-err);
+}
+
+.s-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.s-linkish {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--lumanin-accent);
+  cursor: pointer;
+}
+
+.s-linkish:hover {
+  color: var(--lumanin-text);
+  padding: 0;
+  text-align: left;
+}
+
+.s-iconbtn {
+  width: 27px;
+  height: 27px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--s-radius);
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
+  cursor: pointer;
+}
+
+.s-iconbtn:hover {
+  background: var(--lumanin-bg-hover);
+}
+
+.s-iconbtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.s-iconbtn--danger:hover {
+  color: var(--lumanin-err);
+  border-color: var(--lumanin-err);
+}
+
+/* ------------------------------------------------------------------- lists */
+
+.s-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.s-list__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--s-radius);
+}
+
+.s-list__row:hover {
+  background: var(--lumanin-bg-hover);
+}
+
+.s-list__row--off {
+  opacity: 0.55;
+}
+
+.s-list__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.s-list__label {
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.s-list__detail {
+  font-size: 11.5px;
+  color: var(--lumanin-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.s-list__buttons {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+/* ------------------------------------------------------------------ banner */
+
+.s-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--lumanin-accent);
+  border-radius: var(--s-radius-large);
+  font-size: 12.5px;
+  color: var(--lumanin-text);
+}
+
+.s-banner--info {
+  border-color: var(--lumanin-border);
+  color: var(--lumanin-text-muted);
+}
+
+/* ------------------------------------------------------------------- modal */
+
+.s-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--lumanin-bg) 60%, transparent);
+  z-index: 50;
+}
+
+.s-modal__box {
+  width: min(480px, 92%);
+  max-height: 86%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--s-radius-hero);
+  background: var(--lumanin-bg);
+}
+
+.s-modal__box--wide {
+  width: min(640px, 94%);
+}
+
+.s-modal__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--lumanin-border);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.s-modal__body {
+  padding: 14px 16px;
+  overflow-y: auto;
+}
+
+.s-modal__buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* -------------------------------------------------------------- bind flow */
+
+.s-diff {
+  margin: 0 0 12px;
+}
+
+.s-diff__path {
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  color: var(--lumanin-text-faint);
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+}
+
+.s-diff__body,
+.s-progress {
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: var(--s-radius);
+  background: var(--lumanin-bg-hover);
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  color: var(--lumanin-text-muted);
+  overflow-x: auto;
+  max-height: 220px;
+  overflow-y: auto;
+  user-select: text;
+  cursor: auto;
+}
+
+/* ------------------------------------------------------------ hotkey chips */
+
+.s-hotkey {
+  padding: 5px 12px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--s-radius);
+  background: var(--lumanin-bg-hover);
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 12.5px;
+  color: var(--lumanin-text);
+  cursor: pointer;
+}
+
+.s-hotkey:hover:not(:disabled) {
+  border-color: var(--lumanin-accent);
+}
+
+.s-hotkey:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.s-hotkey--capturing {
+  border-color: var(--lumanin-accent);
+  color: var(--lumanin-accent);
+}
+
+.s-chords {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.s-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: 999px;
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--lumanin-text);
+}
+
+.s-chip__remove {
+  border: none;
+  background: none;
+  font-size: 10px;
+  color: var(--lumanin-text-faint);
+  cursor: pointer;
+  padding: 0;
+}
+
+.s-chip__remove:hover {
+  color: var(--lumanin-err);
+}
+
+.s-badge {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--lumanin-border);
+  font-size: 11px;
+  color: var(--lumanin-text-faint);
+}
+
+.s-badge--ok {
+  border-color: var(--lumanin-ok);
+  color: var(--lumanin-ok);
+}
+
+/* ----------------------------------------------------------- target picker */
+
+.s-picklist {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+}
+
+.s-pickrow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 12px;
+  border: none;
+  border-radius: var(--s-radius);
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--lumanin-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.s-pickrow:hover {
+  background: var(--lumanin-bg-hover);
+}
+
+.s-pickrow__label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.s-pickrow__detail {
+  flex: 0 1 auto;
+  font-size: 11.5px;
+  color: var(--lumanin-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- plugins */
+
+.s-plugin__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.s-plugin__title {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--lumanin-text);
+  text-align: left;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.s-plugin__title:hover {
+  color: var(--lumanin-accent);
+}
+
+.s-plugin__body {
+  margin-top: 8px;
+  padding-left: 48px;
+}
+
+.s-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.s-checkline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--lumanin-text);
+  margin: 8px 0;
+  cursor: pointer;
+}
+
+.s-checkline input {
+  accent-color: var(--lumanin-accent);
+}
+
+/* ------------------------------------------------------------------ wizard */
+
+/* First run fills the window: no chrome competing with it, one card, one
+   question at a time. */
+.wiz {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--lumanin-bg);
+  z-index: 60;
+}
+
+.wiz__card {
+  width: min(460px, 88%);
+  max-height: 88%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  padding: 8px;
+}
+
+.wiz__glyph {
+  color: var(--lumanin-accent);
+  margin-bottom: 10px;
+}
+
+.wiz__logo {
+  width: 88px;
+  height: 88px;
+  color: var(--lumanin-accent);
+}
+
+/* At wizard size the mark has to read as a search glass, not a star: the SVG's
+   own stroke widths are drawn for icon-theme sizes, so the ring and its handle
+   are thickened here (CSS wins over the presentation attribute) while the rays
+   keep their weight — the glass is the subject, the sun is the frame. */
+.wiz__logo > circle[fill='none'] {
+  stroke-width: 20;
+}
+.wiz__logo > line {
+  stroke-width: 24;
+}
+
+.wiz__title {
+  margin: 0 0 10px;
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--lumanin-text);
+}
+
+.wiz__lead {
+  margin: 0 0 22px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--lumanin-text-muted);
+}
+
+.wiz__lead code,
+.wiz__lead .s-chip {
+  color: var(--lumanin-text);
+}
+
+.wiz__dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
+.wiz__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--lumanin-border);
+  transition: background var(--lumanin-motion-duration, 120ms);
+}
+
+.wiz__dot--done {
+  background: var(--lumanin-accent);
+}
+
+.wiz__choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 22px;
+}
+
+.wiz__choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--s-radius-large);
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--lumanin-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.wiz__choice:hover {
+  background: var(--lumanin-bg-hover);
+}
+
+.wiz__choice--picked {
+  border-color: var(--lumanin-accent);
+  color: var(--lumanin-accent);
+}
+
+.wiz__choice--picked::after {
+  content: '✓';
+  font-size: 12px;
+}
+
+.wiz__choice-name {
+  font-size: 13.5px;
+}
+
+.wiz__choice-note {
+  font-size: 11px;
+  color: var(--lumanin-text-faint);
+}
+
+.wiz__center {
+  display: flex;
+  justify-content: center;
+  margin: 6px 0 26px;
+}
+
+.wiz__center .s-hotkey {
+  font-size: 16px;
+  padding: 10px 22px;
+}
+
+.wiz__buttons {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.wiz__buttons--center {
+  justify-content: center;
+}
+
+.wiz__button-pair {
+  display: flex;
+  gap: 8px;
+}
+
+.wiz__next {
+  padding: 7px 22px;
+}
+
+.wiz__skip {
+  margin-top: 16px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--lumanin-text-faint);
+  cursor: pointer;
+}
+
+.wiz__skip:hover {
+  color: var(--lumanin-text-muted);
+}
+
+.wiz__details-toggle {
+  align-self: center;
+  margin: 0 0 14px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--lumanin-accent);
+  cursor: pointer;
+}
+
+.wiz__details-toggle:hover {
+  color: var(--lumanin-text);
+}
+
+.wiz__details {
+  text-align: left;
+  margin-bottom: 16px;
+}
+
+.wiz__card::-webkit-scrollbar {
+  width: 8px;
+}
+
+.wiz__card::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.wiz__card::-webkit-scrollbar-thumb {
+  background: var(--lumanin-border);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+
+/* Wizard lists (result order steps) are left-aligned inside a centred card. */
+.wiz__list {
+  text-align: left;
+  margin-bottom: 18px;
+}

@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Must equal SETTINGS_WINDOW_TITLE in shared/identity.ts: on Wayland the
+         title is the only thing telling this window apart from the panel, and
+         the compositor rules match it. -->
+    <title>Lumanin Settings</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/settings/main.tsx"></script>
+  </body>
+</html>

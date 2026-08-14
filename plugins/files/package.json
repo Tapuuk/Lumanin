@@ -1,0 +1,45 @@
+{
+  "name": "files",
+  "title": "Files",
+  "description": "Find a file or folder anywhere under your home, then open it, browse it, or copy its path.",
+  "author": "lumanin",
+  "license": "MIT",
+  "categories": ["Productivity"],
+  "commands": [
+    {
+      "name": "search",
+      "title": "Search Files",
+      "description": "Type a name to find files and folders under your home.",
+      "mode": "view",
+      "keywords": ["file", "files", "find", "folder", "directory", "path", "locate", "fd"],
+      "lumanin": {
+        "root": false
+      }
+    }
+  ],
+  "preferences": [
+    {
+      "name": "showHidden",
+      "title": "Hidden Files",
+      "label": "Include dotfiles and dot-directories",
+      "description": "Off by default: a home directory is mostly .cache and .local, and they drown out what you were looking for.",
+      "type": "checkbox",
+      "required": false,
+      "default": false
+    },
+    {
+      "name": "tool",
+      "title": "Search With",
+      "description": "Leave on Automatic unless you have a reason. Automatic prefers fd, then plocate, then a plain find.",
+      "type": "dropdown",
+      "required": false,
+      "default": "auto",
+      "data": [
+        { "title": "Automatic", "value": "auto" },
+        { "title": "fd", "value": "fd" },
+        { "title": "plocate / locate", "value": "locate" },
+        { "title": "find", "value": "find" }
+      ]
+    }
+  ]
+}

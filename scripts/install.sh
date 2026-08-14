@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+#
+# Build Lumanin from source and put `lumanin` on your PATH.
+#
+#   curl -fsSL https://raw.githubusercontent.com/Tapuuk/Lumanin/main/scripts/install.sh | bash
+#
+# or, from a clone:
+#
+#   ./scripts/install.sh
+#
+# Everything it does is reversible and needs no root:
+#   • clones (or updates) the repo under ~/.local/share/lumanin/src
+#   • installs dependencies and builds
+#   • symlinks ~/.local/bin/lumanin at it
+#
+# It deliberately stops there. Compositor rules, the keybind and the autostart
+# entry are `lumanin doctor --fix`, which shows you the exact diff of every file
+# it would touch and asks first - an installer that edits your window manager
+# config unasked is not one you should be piping into bash.
+#
+# Distro packages (AUR, AppImage, .deb, .rpm) come later; until then this is
+# the supported path.
+
+set -euo pipefail
+
+REPO="${LUMANIN_REPO:-https://github.com/Tapuuk/Lumanin.git}"
+BRANCH="${LUMANIN_BRANCH:-main}"
+SRC="${LUMANIN_SRC:-${XDG_DATA_HOME:-$HOME/.local/share}/lumanin/src}"
+BIN_DIR="${LUMANIN_BIN_DIR:-$HOME/.local/bin}"
+
+say() { printf '\033[36m::\033[0m %s\n' "$1"; }
+die() { printf '\033[31m!!\033[0m %s\n' "$1" >&2; exit 1; }
+
+command -v git >/dev/null || die "git is required"
+command -v node >/dev/null || die "node is required (22.12 or newer)"
+command -v npm >/dev/null || die "npm is required"
+
+node_ok="$(node -p 'const [a,b]=process.versions.node.split(".").map(Number); a>22||(a===22&&b>=12)')"
+[ "$node_ok" = "true" ] || die "node $(node -v) is too old; 22.12 or newer is required"
+
+# Run from a clone if that is where this script lives, rather than cloning a
+# second copy of the tree the user is already standing in.
+here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd || true)"
+if [ -n "$here" ] && [ -f "$here/package.json" ] && grep -q '"name": "lumanin"' "$here/package.json"; then
+  SRC="$here"
+  say "building the clone at $SRC"
+elif [ -d "$SRC/.git" ]; then
+  say "updating $SRC"
+  git -C "$SRC" fetch --depth 1 origin "$BRANCH"
+  git -C "$SRC" reset --hard "origin/$BRANCH"
+else
+  say "cloning into $SRC"
+  mkdir -p "$(dirname "$SRC")"
+  git clone --depth 1 --branch "$BRANCH" "$REPO" "$SRC"
+fi
+
+say "installing dependencies"
+(cd "$SRC" && npm ci)
+
+say "building"
+(cd "$SRC" && npm run build)
+
+mkdir -p "$BIN_DIR"
+ln -sfn "$SRC/bin/lumanin.js" "$BIN_DIR/lumanin"
+say "linked $BIN_DIR/lumanin"
+
+# The icon, into the user's icon theme where every desktop looks for it by
+# name. Scalable SVG is enough - hicolor scales it down for every size a shell
+# asks for.
+ICON_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps"
+mkdir -p "$ICON_DIR"
+cp "$SRC/resources/lumanin.svg" "$ICON_DIR/lumanin.svg"
+say "installed $ICON_DIR/lumanin.svg"
+
+# The settings app in the app grid. Generated rather than shipped as a static
+# file so Exec can be an absolute path - a GUI session does not always have
+# ~/.local/bin on PATH, and a .desktop entry that silently does nothing when
+# clicked is worse than none. Name must stay "Lumanin Settings": it is the
+# window's title too, and the compositor rules tell the two windows apart by it.
+APPS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+mkdir -p "$APPS_DIR"
+cat > "$APPS_DIR/lumanin-settings.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Lumanin Settings
+Comment=Configure the Lumanin launcher
+Exec=$BIN_DIR/lumanin settings
+Icon=lumanin
+Terminal=false
+Categories=Settings;Utility;
+EOF
+say "installed $APPS_DIR/lumanin-settings.desktop"
+
+case ":$PATH:" in
+  *":$BIN_DIR:"*) ;;
+  *) printf '\033[33m!!\033[0m %s is not on your PATH - add it to your shell profile.\n' "$BIN_DIR" ;;
+esac
+
+# Setting up the desktop integration is the difference between a launcher that
+# is instant and one that cold-starts Electron on the first press of the hotkey.
+# It is still not done behind your back: `--fix` prints every diff and asks per
+# run. So this offers, and only when there is somebody there to answer - a
+# `curl | bash` has no terminal on stdin, and a prompt nobody can answer must
+# never become an implied yes.
+if [ -t 0 ] && [ -t 1 ]; then
+  printf '\n'
+  say "set up the compositor rules, hotkey and autostart now? It shows every diff first."
+  printf '   [Y/n] '
+  read -r answer
+  case "$answer" in
+    [Nn]*) ;;
+    *) "$BIN_DIR/lumanin" doctor --fix || true ;;
+  esac
+fi
+
+cat <<'DONE'
+
+Installed. Next:
+
+  lumanin doctor          what your desktop supports, and which backend won
+  lumanin doctor --fix    write the compositor rules, the hotkey bind, a systemd
+                          user unit and the autostart entry - every diff shown
+                          before anything is touched
+  lumanin config          every setting, in a menu
+  lumanin                 open the panel
+
+Until autostart is set up, the first press after login pays a cold start; after
+it, the daemon is already running and the panel is instant.
+
+Optional, and deliberately not done here: if you use Claude Code and want it to
+write Lumanin plugins for you from any project, install the generator skill into
+your personal Claude setup with scripts/install-skill.sh (same repo, same
+curl-able form). This installer never touches ~/.claude.
+
+To uninstall: `lumanin doctor --unfix`, then remove the symlink, the
+lumanin-settings.desktop entry under ~/.local/share/applications, the icon at
+~/.local/share/icons/hicolor/scalable/apps/lumanin.svg, and the source
+directory. Your configuration lives in $XDG_CONFIG_HOME/lumanin and is
+left alone either way.
+DONE

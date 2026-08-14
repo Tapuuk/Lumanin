@@ -1,0 +1,243 @@
+---
+name: lumanin-plugin
+description: Generate a Lumanin launcher plugin. Use when the user wants a new plugin, extension, or command for Lumanin - "make me a plugin for X", "I want to search my Y from the launcher", "add a Lumanin command that does Z".
+---
+
+# Writing a Lumanin plugin
+
+You are generating a plugin for Lumanin, a keyboard-first launcher for Linux. A plugin is a
+directory with a `package.json` and a `src/`, written in TypeScript and React against the
+`lumanin` module. `reference.md` in this folder is the complete API surface - read it before
+writing any code, and do not use anything it lists as *not yet available*. `example/` is a
+complete, working plugin; match its shape and style.
+
+Follow these five steps in order.
+
+## 1. Interview, in plain words
+
+Ask what the plugin should do, in the user's own terms. Then work out - and say out loud - which
+parts of that live **on this machine** and which would need the internet.
+
+**Local first is a rule, not a preference.** If there is any fully local way to get the data,
+use it, even when a web API looks more direct - and before concluding there is none, actively
+hunt for workarounds:
+
+- a CLI the app ships (`op`, `docker`, `gh`, `systemctl`, `pacman`, `hyprctl`, `journalctl`,
+  project scripts…) - check `--help` and man pages for a JSON output flag,
+- files the app leaves behind: SQLite databases, JSON/TOML config, caches, logs under
+  `~/.config`, `~/.local/share`, `~/.cache`,
+- local sockets and D-Bus services the app already exposes,
+- a locally running server the app itself talks to (many desktop apps front a localhost port).
+
+Only when none of those can carry the feature does the network become the plan - and then it
+goes through the consent rules in step 3. The best Lumanin plugins are the ones no one else
+will ever write: they are about *this* computer.
+
+Keep questions short and few. One command doing one thing well beats a suite.
+
+Do not only ask - **probe**. Before designing anything, run the commands the plugin will lean on
+(`op item list`, `docker ps`, `systemctl --user list-units`…) and look at the real output: it
+tells you the output format, and it tells you *now* whether the tool is installed and set up.
+A missing or unconfigured tool is your problem to solve (step 4), not a surprise to ship.
+
+## 2. Design within the supported surface
+
+**A plugin is part of the launcher, not a separate app.** It inherits Lumanin's conventions and
+you do not re-invent them unless the user explicitly asks for different behaviour:
+
+- **Search is the launcher's search.** The built-in `List` filtering already matches the way the
+  root list does - against the item's **title** (plus explicit `keywords`), one forgiven typo,
+  never the subtitle. So: put the thing's *name* in `title`, description in `subtitle`, and add
+  `keywords` only for terms someone would genuinely type. Do not reach for `onSearchTextChange`
+  to build custom matching - that is for when the query drives a computation (an API call, a
+  calculation), or when the user has asked for different search rules.
+- **Keys are the launcher's keys.** Enter runs the first action in the panel's first section,
+  Space (or Ctrl+Enter while typing) runs the second one in that same section, `Ctrl+K` opens the
+  action panel, Esc backs out one level. Order your actions accordingly - that order *is* what the
+  two keys do - and put anything that is not an alternative to the first action in a later
+  `ActionPanel.Section`. Do not assign custom shortcuts that shadow these, and do not add a
+  shortcut for something that is already the primary action.
+- **Shortcuts are Ctrl + one key. No Shift.** `{ modifiers: ['cmd'], key: 'o' }` → Ctrl+O. A
+  launcher is used one-handed while your attention is on something else, and a three-key chord is
+  not that. Ctrl+Alt only if a plugin really runs out of letters; Shift only if the user asks for
+  it by name.
+- **Looks are the launcher's theme.** Colours come from `Color.*`, icons from `Icon.*` - never
+  hard-coded hex, never ASCII-art layouts inside titles.
+- **Every row wears its own face, not the list's.** One icon repeated down the whole list is a
+  wasted column; when the data names something that has its own image, use it per item. A row
+  that is a website gets `getFavicon(url)` (a bookmark list shows each site's favicon, not a
+  bookmark glyph). A row that is a file gets its type's theme icon (`system:text-x-python`,
+  `system:image-x-generic`). A row that is an application gets that app's theme icon
+  (`system:firefox`). Fall back to one `Icon.*` glyph only where the data genuinely has no face
+  of its own - and let a failed favicon degrade to that glyph rather than a broken image.
+- **No em dashes, anywhere a person reads.** Titles, subtitles, toasts, empty states, README
+  text, code comments - a plain `-` with spaces around it does the job. This applies to the
+  plugin you generate and to everything you write while generating it.
+
+**An app-connected plugin - one that fronts another program - is a "Search X" with categories.
+These six are must-haves, not suggestions:**
+
+1. One **view command titled "Search \<App\>"** is the front door; the app's things live inside
+   it, never as separate root commands.
+2. **Declare its categories in the manifest** (`commands[].lumanin.categories`, ids
+   `[a-z0-9-]+`): 1Password → Logins, Credit Cards, Identities; Discord → Friends, Group chats,
+   Channels. One category is fine; invented filler is not.
+3. **Wire a `List.Dropdown`** (`searchBarAccessory`) to those categories, and start it on
+   `launchContext.category` - that is how a pinned category or a hotkey opens the plugin
+   already inside the right one:
+   ```tsx
+   const [category, setCategory] = useState(
+     typeof props.launchContext?.category === 'string' ? props.launchContext.category : 'logins'
+   )
+   ```
+4. **Give every `List.Item` a stable `id`.** It is what lets the user pin a single thing -
+   one login, one friend - from `lumanin config`; a row without an id cannot be pinned, bound
+   to a key, or aliased. Stable means stable *across runs*: derive it from the thing's own
+   identity (a path, a uuid, a slug), never from the row's position.
+
+5. **Keep action titles stable too, and free of `!`.** A key can be bound straight to one action
+   on one row - "Dawnline → Open project" - and an action's *title* is the only name it has to
+   be bound by; the API gives an action no id, and its handler is minted afresh every render.
+   Renaming "Open project" to "Open Project" breaks every key and alias pointing at it, and a
+   title containing `!` cannot be named at all (that character separates the action from its row
+   in a pin key). Write the title once and leave it alone.
+
+6. **Stamp the manifest icon: `"icon": "search:<icon-name>[,<fallback>]"`** on the Search
+   command. The launcher resolves the name against the desktop's icon theme and draws its
+   three-dot search mark over it - Godot's logo under the dots is what says "a search of Godot,
+   not Godot" at the root. Probe for the name, never guess it: read the `Icon=` line of the
+   app's `.desktop` file (`grep -h '^Icon=' ~/.local/share/applications/*.desktop
+   /usr/share/applications/*.desktop | grep -i <app>`), use that as the first name and a likely
+   alternative as the fallback. Ship no image for this - the mark is the launcher's, so every
+   search row wears the identical one.
+
+Also worth knowing while you design the actions: **an action bound to a key runs with no window**.
+The plugin renders headless, the action's handler is dispatched, and nothing is shown - so the
+first action of a row should be the one that *does the obvious thing*, and anything destructive
+still belongs behind `confirmAlert`, which is honoured in that headless run exactly as on screen.
+
+`example/` does all of this. Users reach every level from one browser in `lumanin config` -
+Plugins → plugin → command → category → row → action - to pin it, bind a key to it, or alias it,
+and set a per-plugin alias in `lumanin plugins`. The plugin's only job is the contract above.
+
+Note also that a plugin's **commands** appear in the root list on their own - `plugins` is the
+first result group by default, so "Search Godot Projects" comes up above the Godot application
+for the query "godot". That is exactly why the command's title should name the thing it fronts.
+
+**Every plugin gets an icon; a bare glyph at the root is a missing one.** Which kind is decided
+by what the plugin is:
+
+- **App-connected**: must-have 6 above - the target application's own icon under the launcher's
+  search mark. Never draw one of these yourself.
+- **Standalone** (no application behind it - a calculator, a systemd browser, a note tool):
+  **design one, every time, and a different one every time.** Write `assets/icon.svg` by hand -
+  flat and minimal, two or three geometric shapes on a plain ground, no text, no gradients, no
+  strokes thinner than 4 units - with the shapes invented from *this plugin's* subject: a unit
+  browser might be a column of three bars with one highlighted, a dice roller a tilted square
+  with pips. Never reuse a composition you have drawn before, never imitate the launcher's
+  three-dot search mark (that mark means "a search of an app" and is stamped by the launcher
+  only), and never trace another product's logo. Two colours, mid-saturation so they read on
+  dark and light themes alike; `viewBox="0 0 128 128"`; rounded corners in keeping with a flat
+  terminal aesthetic. Then point the manifest at it: `"icon": "icon.svg"`.
+
+- Pick components only from `reference.md`. **Never emit `Grid` or `MenuBarExtra`** - they render
+  a "not supported yet" card today. A `List` with icons replaces a `Grid`.
+- Input mechanisms that actually exist today, in order of preference:
+  1. the **search bar** - `List` filtering (free) or `onSearchTextChange` (you handle it),
+  2. **preferences** - declared in the manifest, read with `getPreferenceValues()`, edited by the
+     user in `lumanin plugins`; right for API keys, paths, and choices that rarely change,
+  3. **`List.Dropdown`** as `searchBarAccessory` - right for a mode/category switch,
+  4. a **`Form`**, for anything a person has to type or choose that is not a search: "Create",
+     "Add", "Rename", "Send". Give every field an `id`, put the values together in
+     `Action.SubmitForm`'s `onSubmit`, and set a field's `error` prop rather than showing a toast
+     - an error belongs on the field that is wrong. Reach the form from a `Search X` list with a
+     `push`, so the plugin still has one front door.
+  Do **not** design around command `arguments[]`: the manifest field parses, but the launcher has
+  no input UI for it yet, so `LaunchProps.arguments` is always empty.
+- Put a `confirmAlert` in front of every destructive action (stop, delete, kill, overwrite).
+- Report outcomes with `showToast` (success and failure styles), long output with a pushed
+  `Detail` view.
+- **Run programs with `useExec`**, not with `child_process` by hand - it is the hook a Linux
+  plugin needs most, and it brings loading state, error handling, cancellation of a superseded run,
+  and a value that survives the command closing. Pass **argv arrays, never a concatenated shell
+  string**: a query interpolated into a command line is how a plugin runs something its author did
+  not write. Where you do need `execFile`/`spawn` directly (a long-lived process, a stream), the
+  argv rule is the same - see `example/src/units.tsx` for the pattern.
+
+## 3. Dependencies and the network - the rules
+
+**Default: `dependencies` is empty.** The runtime provides `lumanin` and React; Node's builtins
+provide everything else a local plugin needs. A plugin with zero dependencies installs instantly,
+works offline, and can be read top to bottom by the person trusting it. This is the default and
+you do not deviate from it silently.
+
+**If the plugin's purpose needs the internet** (a weather panel, an API client) - and step 1
+found no local route to the same data: use the built-in
+`fetch` - still zero packages. Before writing that code, tell the user in one plain sentence
+which sites it will talk to and what it sends there, and get a yes. Example: *"This will contact
+`api.open-meteo.com` and send it the city name you type - nothing else. OK?"*
+
+**If that site needs credentials, there is one way to get them: a `password` preference.**
+Lumanin runs no online services and does not broker sign-in - `OAuth.PKCEClient`, `OAuthService`,
+`withAccessToken` and `getAccessToken` all throw, permanently, and no milestone will change that.
+Declare the token in the manifest, read it with `getPreferenceValues()`, and put *where to get
+one* in the preference's `description`; the user pastes it in `lumanin plugins` and it stays on
+their machine. If the service issues only OAuth credentials and has no personal access tokens at
+all, say so plainly and stop - that plugin cannot be built here, and half of one is worse than
+none.
+
+**If a third-party npm package would genuinely help**: stop and ask first, in simple words -
+
+- what the package is and what job it does in this plugin,
+- how popular it is: weekly downloads on npm, how long it has existed, who depends on it,
+- the honest part: installing a package means trusting its author's code with everything your
+  user account can touch. Nobody here can promise it is safe; popularity and age are evidence,
+  not proof.
+
+Let the user decide. If they say no, build without it or narrow the feature. Never present this
+policy as a sandbox - it is generation-time discipline, and an installed plugin runs with the
+user's full permissions regardless.
+
+## 4. Verify before declaring done
+
+```sh
+lumanin plugin-install <directory>      # builds it; build errors surface here
+lumanin ext dev <directory>             # rebuild + reload on every save, for iterating
+```
+
+Then actually open the launcher, run the command, and confirm the first view renders **real
+data** and the main action works. A plugin is not done because it compiles, and it is not done
+because its error state renders nicely - handing the user an error card that says "go configure
+X first" is a failing verify, not a finished plugin. If the repository's window-driving harness
+is available (`scripts/verify-plugins.mjs`), it answers "did it render" mechanically - but it
+cannot tell real rows from an error card, so look at what rendered.
+
+**If the underlying tool needs setup** - not installed, an integration not enabled, nobody
+signed in - doing that setup is part of this step, not homework for the user:
+
+- run every setup command you can yourself, argv arrays as always; ask first, in one plain
+  sentence, before anything that installs software or needs root,
+- when a step can only happen in a GUI (a settings toggle in a desktop app) or needs a password
+  or approval typed by a human, give exact click-by-click instructions, wait for the user to say
+  it is done, and do the rest yourself,
+- then re-run the underlying command, reopen the launcher, and re-verify - repeat until the
+  view shows real data.
+
+Do not add `@types/*` or TypeScript tooling to the plugin - the build path compiles TypeScript
+directly and type errors surface at install time.
+
+## 5. Offer publishing
+
+When it works, offer this (do not push anything yourself unless asked): put the plugin directory
+in a **public https git repository**, and anyone installs it with
+
+```sh
+lumanin plugin-install <repository-url>
+```
+
+A repository can hold several plugins in subdirectories; the URL of the subdirectory installs
+just that plugin. Lumanin records where every install came from.
+
+`lumanin plugin-export <name>` packages the installed plugin into the user's Downloads folder
+ready to push, and prints the exact git commands - offer it when the user wants to publish but
+the working directory is somewhere awkward (a scratchpad, a temp dir).
