@@ -6,7 +6,7 @@
 #
 # or, from a clone:
 #
-#   bash scripts/install.sh
+#   ./Lumanin/scripts/install.sh
 #
 # Everything it does is reversible and stays inside your home directory - no
 # sudo, nothing under /usr:

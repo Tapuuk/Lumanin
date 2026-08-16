@@ -24,13 +24,13 @@ curl -fsSL https://raw.githubusercontent.com/Tapuuk/Lumanin/main/scripts/install
 
 It builds from source into your home directory and puts `lumanin` on your PATH. You need `git` and `node`/`npm` installed. Everything else it handles.
 
-Or, if you prefer to clone the repo, run this from inside the clone. Cloning by itself installs nothing - no `lumanin` command, no settings app - until this runs:
+Or, if you prefer to clone the repo, run this from the directory you cloned into. Cloning by itself installs nothing - no `lumanin` command, no settings app - until this runs:
 
 ```bash
-bash scripts/install.sh
+./Lumanin/scripts/install.sh
 ```
 
-(`gh repo clone Tapuuk/Lumanin && cd Lumanin && bash scripts/install.sh` in one go.) The `curl` one-liner above runs this same script; it only clones for you first.
+(`gh repo clone Tapuuk/Lumanin && ./Lumanin/scripts/install.sh` in one go.) The `curl` one-liner above runs this same script; it only clones for you first.
 
 > **Electron:** you do not install it. The script downloads it (about 220 MB, once) into the clone. If you skipped the script and only ran `npm ci`, the launcher has no Electron and will not start - run the script.
 
