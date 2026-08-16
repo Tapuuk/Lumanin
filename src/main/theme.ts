@@ -38,11 +38,21 @@ export interface ThemeServiceDeps {
   readonly onChange: (payload: ThemePayload) => void
 }
 
+/** Snap a zoom within 3% of 1 to exactly 1; round the rest to a hundredth. */
+function nearOne(zoom: number): number {
+  if (!Number.isFinite(zoom) || zoom <= 0) return 1
+  if (Math.abs(zoom - 1) < 0.03) return 1
+  return Math.round(zoom * 100) / 100
+}
+
 export class ThemeService {
   private appearance: AppearanceBackend | null = null
   private blurGranted = false
   private disposers: (() => void)[] = []
   private lastSource = 'built-in default'
+  private lastDesktopTextScale = 1
+  private toolkitTextScale: () => Promise<number> = () => Promise.resolve(1)
+  private lastToolkitTextScale = 1
   private generation = 0
   private current: ThemePayload
 
@@ -57,13 +67,23 @@ export class ThemeService {
     return this.current
   }
 
+  /** What the toolkit already scaled text by, as of the last resolution. */
+  get toolkitScaleNow(): number {
+    return this.lastToolkitTextScale
+  }
+
   /**
    * Adopt the platform's appearance backend once the probes have run, and start
    * watching every source.
    */
-  async attach(appearance: AppearanceBackend, blurGranted: boolean): Promise<void> {
+  async attach(
+    appearance: AppearanceBackend,
+    blurGranted: boolean,
+    toolkitTextScale: () => Promise<number> = () => Promise.resolve(1)
+  ): Promise<void> {
     this.appearance = appearance
     this.blurGranted = blurGranted
+    this.toolkitTextScale = toolkitTextScale
 
     this.disposers.push(appearance.watch(() => void this.refresh('desktop appearance changed')))
     this.watchConfigDir()
@@ -85,9 +105,16 @@ export class ThemeService {
     // wins, not the last to return.
     const generation = (this.generation += 1)
 
-    const signal = this.appearance === null ? null : await this.appearance.read().catch(() => null)
+    const [signal, toolkit] = await Promise.all([
+      this.appearance === null ? null : this.appearance.read().catch(() => null),
+      this.toolkitTextScale().catch(() => 1)
+    ])
     if (generation !== this.generation) return
 
+    // Text size is a separate axis from colour: it applies whether or not the
+    // palette followed the desktop, and whether or not a theme is forced.
+    this.lastDesktopTextScale = signal?.textScale ?? 1
+    this.lastToolkitTextScale = toolkit
     const theme = this.resolve(signal)
     const next = this.payload(theme)
 
@@ -100,7 +127,12 @@ export class ThemeService {
       reason,
       theme: theme.meta.id,
       variant: theme.meta.variant,
-      source: this.lastSource
+      source: this.lastSource,
+      textScale: {
+        wanted: this.deps.config().appearance.textScale.value ?? this.lastDesktopTextScale,
+        toolkitAlreadyApplied: this.lastToolkitTextScale,
+        zoom: next.textScale
+      }
     })
     this.deps.onChange(next)
   }
@@ -109,7 +141,16 @@ export class ThemeService {
     return {
       meta: theme.meta,
       cssVars: tokensToCssVars(effectiveTokens(theme.tokens, this.blurGranted)),
-      blurGranted: this.blurGranted
+      blurGranted: this.blurGranted,
+      // What we zoom by: the size wanted, less what Chromium's toolkit has
+      // already applied (`toolkit-scale.ts`) - so a desktop that scales GTK text
+      // and its shell together is followed once, not twice. Rounded so a
+      // quantised gsettings factor beside an exact shell ratio (1.1818 vs
+      // 1.1667 on Omarchy at 14px) reads as "the same size" rather than as a
+      // 0.99 zoom that blurs every glyph for nothing.
+      textScale: nearOne(
+        (this.deps.config().appearance.textScale.value ?? this.lastDesktopTextScale) / this.lastToolkitTextScale
+      )
     }
   }
 

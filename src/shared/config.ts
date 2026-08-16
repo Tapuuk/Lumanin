@@ -225,6 +225,8 @@ export interface ResolvedConfig {
     readonly theme: Resolved<string | null>
     readonly followSystem: Resolved<boolean>
     readonly animations: Resolved<boolean>
+    /** `null` means "follow the desktop's text size"; a number is a fixed factor. */
+    readonly textScale: Resolved<number | null>
   }
   /**
    * `[file_search]`: the one plugin that is also a section of the settings.
@@ -431,6 +433,15 @@ function asDimension(min: number, max: number): (raw: unknown) => number | undef
     const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN
     if (!Number.isFinite(n) || !Number.isInteger(n)) return undefined
     if (n < min || n > max) return undefined
+    return n
+  }
+}
+
+/** A positive multiplier, fractional allowed - `1.25`, `"1.5"`. */
+function asFactor(min: number, max: number): (raw: unknown) => number | undefined {
+  return (raw) => {
+    const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN
+    if (!Number.isFinite(n) || n < min || n > max) return undefined
     return n
   }
 }
@@ -1090,6 +1101,13 @@ export function loadConfig(options: LoadOptions): ResolvedConfig {
         fileKey: 'animations',
         fallback: true,
         coerce: asBoolean
+      }),
+      textScale: r.resolve<number | null>({
+        envKey: 'TEXT_SCALE',
+        section: 'appearance',
+        fileKey: 'text_scale',
+        fallback: null,
+        coerce: asFactor(0.5, 3)
       })
     },
     fileSearch: {

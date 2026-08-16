@@ -12,7 +12,7 @@ Lumanin is a command palette for your desktop, built for Linux from the ground u
 
 Plugins are how it grows. Anyone can write one and publish it as a plain git repository, and if you use Claude Code there is a skill that writes a working, tested plugin for you from one sentence, in about 5 minutes and ~200k tokens.
 
-It runs everywhere (Hyprland, KDE, GNOME, COSMIC, Sway, X11 desktops) and looks like *your* system: it picks up your desktop's colors and theme automatically.
+It runs everywhere (Hyprland, KDE, GNOME, COSMIC, Sway, X11 desktops) and looks like *your* system: it picks up your desktop's colors, theme and text size automatically, and fits whatever display scale you run.
 
 ## Install
 

@@ -73,7 +73,7 @@ export function App(): React.JSX.Element {
   // as it was before you typed.
   const hasResults = items.length > 0
 
-  useSurfaceSize()
+  useSurfaceSize(theme?.textScale ?? 1)
 
   // Every result set is requested from main. Searching is not debounced: it is
   // in-memory scoring over a few thousand entries, and a debounce would add

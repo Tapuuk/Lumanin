@@ -9,6 +9,7 @@ import { GtkAppearance } from './gtk'
 import { KdeAppearance } from './kde'
 import { NiriAppearance } from './niri'
 import { OmarchyAppearance } from './omarchy'
+import { omarchyCurrentCandidates } from '../probe/appearance'
 import { PortalAppearance } from './portal'
 
 /**
@@ -53,12 +54,25 @@ export interface AppearanceSignal {
    * reasoning is identical here).
    */
   readonly preferBase?: string
+  /**
+   * The desktop's text scale, `1` being its default size. Omarchy 4 expresses it
+   * as the shell font's `base-size` over 12; GNOME as `text-scaling-factor`.
+   * A launcher that ignores it is the one thing on the desktop that stayed small
+   * when the user asked for bigger text.
+   */
+  readonly textScale?: number
   /** Where this came from, for `doctor` and for the log line on a theme swap. */
   readonly source: string
 }
 
 export interface AppearanceBackend {
   readonly id: string
+  /**
+   * Set by a backend that can report `textScale`. Once a palette has settled the
+   * question of colour, only these are still consulted - the portal would be
+   * spawned for an answer it cannot give otherwise.
+   */
+  readonly providesTextScale?: true
   /** `null` when the source exists but currently says nothing usable. */
   read(): Promise<AppearanceSignal | null>
   /**
@@ -109,18 +123,27 @@ export class CompositeAppearance implements AppearanceBackend {
     // `Promise.all` would spawn `gdbus` on every Omarchy machine for a result
     // that is then thrown away.
     const answers: AppearanceSignal[] = []
+    let seeded = false
     for (const backend of this.backends) {
+      // A palette settles the question of colour; lower-priority sources can
+      // still not contribute one. What they may still contribute is the text
+      // scale, so after the palette only backends that have one are asked, and
+      // only until one answers.
+      if (seeded && backend.providesTextScale !== true) continue
       const signal = await backend.read().catch(() => null)
       if (signal !== null) answers.push(signal)
-      // A palette settles the question of colour; lower-priority sources can
-      // still not contribute one, so there is nothing left to collect.
-      if (signal?.seed !== undefined) break
+      if (signal?.seed !== undefined) seeded = true
+      if (seeded && answers.some((answer) => answer.textScale !== undefined)) break
     }
 
     if (answers.length === 0) return null
 
     const withSeed = answers.find((answer) => answer.seed !== undefined)
-    if (withSeed !== undefined) return withSeed
+    if (withSeed !== undefined) {
+      if (withSeed.textScale !== undefined) return withSeed
+      const scaled = answers.find((answer) => answer.textScale !== undefined)?.textScale
+      return scaled === undefined ? withSeed : { ...withSeed, textScale: scaled }
+    }
 
     // Preference-only: take each field from the highest-priority source that has
     // it. niri supplies an accent and nothing else; the portal underneath it
@@ -129,6 +152,7 @@ export class CompositeAppearance implements AppearanceBackend {
       variant?: 'dark' | 'light'
       accent?: string
       preferBase?: string
+      textScale?: number
       source: string
     } = { source: answers.map((answer) => answer.source).join(' + ') }
 
@@ -138,9 +162,12 @@ export class CompositeAppearance implements AppearanceBackend {
       if (merged.preferBase === undefined && answer.preferBase !== undefined) {
         merged.preferBase = answer.preferBase
       }
+      if (merged.textScale === undefined && answer.textScale !== undefined) merged.textScale = answer.textScale
     }
 
-    return merged.variant === undefined && merged.accent === undefined ? null : merged
+    return merged.variant === undefined && merged.accent === undefined && merged.textScale === undefined
+      ? null
+      : merged
   }
 
   watch(onChange: () => void): () => void {
@@ -156,7 +183,10 @@ function build(id: string, deps: AppearanceDeps): AppearanceBackend | null {
 
   switch (id) {
     case 'omarchy':
-      return new OmarchyAppearance(sources.configHome)
+      return new OmarchyAppearance(
+        sources.omarchy.currentDir ?? omarchyCurrentCandidates(sources.configHome, sources.stateHome)[0]!,
+        sources.configHome
+      )
     case 'kde-colors':
       return sources.kdeglobals === null ? null : new KdeAppearance(sources.kdeglobals)
     case 'cosmic':

@@ -2,7 +2,12 @@ import { mkdtempSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { OmarchyAppearance, readOmarchyTheme } from '../src/platform/appearance/omarchy'
+import {
+  OmarchyAppearance,
+  readOmarchyTextScale,
+  readOmarchyTheme,
+  readShellBaseSize
+} from '../src/platform/appearance/omarchy'
 import { resolveTheme } from '../src/shared/theme/derive'
 import { mergePalettes, parseAlacritty, parseOmarchyColors } from '../src/shared/theme/omarchy'
 import { parseThemePack } from '../src/shared/theme/pack'
@@ -38,6 +43,40 @@ color12 = "#89b4fa"
 color13 = "#f5c2e7"
 color14 = "#94e2d5"
 color15 = "#a6adc8"
+`
+
+/** Exactly what Omarchy 4.0 writes to `current/theme/colors.toml` for catppuccin. */
+const COLORS_TOML_V4 = `mode = "dark"
+
+accent = "#89b4fa"
+selection = "#45475a"
+muted = "#585b70"
+
+background = "#1e1e2e"
+dark_background = "#161622"
+darker_background = "#101019"
+lighter_background = "#313244"
+
+foreground = "#cdd6f4"
+dark_foreground = "#6c7086"
+light_foreground = "#bac2de"
+bright_foreground = "#cdd6f4"
+
+red = "#f38ba8"
+yellow = "#f9e2af"
+orange = "#f6b6ab"
+green = "#a6e3a1"
+cyan = "#94e2d5"
+blue = "#89b4fa"
+magenta = "#f5c2e7"
+brown = "#7b5b55"
+
+bright_red = "#f38ba8"
+bright_yellow = "#f9e2af"
+bright_green = "#a6e3a1"
+bright_cyan = "#94e2d5"
+bright_blue = "#89b4fa"
+bright_magenta = "#f5c2e7"
 `
 
 /** A third-party theme that predates `colors.toml` and ships only this. */
@@ -193,7 +232,7 @@ describe('readOmarchyTheme', () => {
     for (const [name, contents] of Object.entries(files)) {
       writeFileSync(join(name.includes('/') ? root : themeDir, name.replace('../', 'current/')), contents)
     }
-    return root
+    return join(root, 'current')
   }
 
   it('reads the applied theme and names it from theme.name', () => {
@@ -207,6 +246,28 @@ describe('readOmarchyTheme', () => {
     // The marker exists because a palette's luminance is not always the whole
     // story, and four stock themes rely on it.
     const root = omarchyTree({ 'colors.toml': COLORS_TOML, 'light.mode': '' })
+    expect(readOmarchyTheme(root)?.seed.meta.variant).toBe('light')
+  })
+
+  it('reads the Omarchy 4 shape: mode key, named palette, shell selection colour', () => {
+    // Verified against the `colors.toml` Omarchy 4.0 (Quattro) writes for
+    // catppuccin on 2026-08-16.
+    const root = omarchyTree({ 'colors.toml': COLORS_TOML_V4, '../theme.name': 'catppuccin\n' })
+    const theme = readOmarchyTheme(root)
+    expect(theme?.seed.meta.variant).toBe('dark')
+    expect(theme?.seed.colours.bg).toBe('#1e1e2e')
+    expect(theme?.seed.colours.accent).toBe('#89b4fa')
+    expect(theme?.seed.colours.bgSelected).toBe('#45475a')
+    expect(theme?.seed.colours.err).toBe('#f38ba8')
+    // ANSI slots rebuilt the way Omarchy's own alacritty template does it.
+    expect(theme?.seed.ansi).toHaveLength(16)
+    expect(theme?.seed.ansi?.[0]).toBe('#1e1e2e')
+    expect(theme?.seed.ansi?.[8]).toBe('#585b70')
+    expect(theme?.seed.ansi?.[15]).toBe('#cdd6f4')
+  })
+
+  it('takes mode = "light" from colors.toml ahead of luminance', () => {
+    const root = omarchyTree({ 'colors.toml': COLORS_TOML_V4.replace('mode = "dark"', 'mode = "light"') })
     expect(readOmarchyTheme(root)?.seed.meta.variant).toBe('light')
   })
 
@@ -252,15 +313,16 @@ describe('OmarchyAppearance watch', () => {
   }
 
   it('survives the theme directory being replaced, and fires again', async () => {
-    // `OmarchyAppearance` takes `$XDG_CONFIG_HOME` and looks for `omarchy/`
-    // inside it, so the tree has to be built one level down.
-    const configHome = mkdtempSync(join(tmpdir(), 'lumanin-watch-'))
-    const root = join(configHome, 'omarchy')
+    // `OmarchyAppearance` takes the `current/` directory itself - the probe
+    // decides whether that lives under `$XDG_STATE_HOME` (Omarchy 4) or
+    // `$XDG_CONFIG_HOME` (Omarchy 3).
+    const stateHome = mkdtempSync(join(tmpdir(), 'lumanin-watch-'))
+    const root = join(stateHome, 'omarchy')
     mkdirSync(join(root, 'current'), { recursive: true })
     themeSet(root, 'first', COLORS_TOML)
 
     let fired = 0
-    const stop = new OmarchyAppearance(configHome).watch(() => {
+    const stop = new OmarchyAppearance(join(root, 'current'), stateHome).watch(() => {
       fired += 1
     })
 
@@ -268,7 +330,7 @@ describe('OmarchyAppearance watch', () => {
     themeSet(root, 'second', gruvbox)
     await new Promise((resolve) => setTimeout(resolve, 400))
     const afterFirstSwitch = fired
-    expect(readOmarchyTheme(root)?.seed.colours.bg).toBe('#282828')
+    expect(readOmarchyTheme(join(root, 'current'))?.seed.colours.bg).toBe('#282828')
 
     // The second switch is the one that matters: it is the one an inner-directory
     // watch would have missed, because the directory it was watching is gone.
@@ -278,5 +340,42 @@ describe('OmarchyAppearance watch', () => {
     stop()
     expect(afterFirstSwitch).toBeGreaterThan(0)
     expect(fired).toBeGreaterThan(afterFirstSwitch)
+  })
+})
+
+describe('Omarchy 4 text size', () => {
+  it('reads [font] base-size and scales against the shell default of 12', () => {
+    expect(readShellBaseSize('[font]\nbase-size = 14\n')).toBe(14)
+    expect(readShellBaseSize('[bar]\nsize-horizontal = 26\n')).toBeNull()
+    expect(readShellBaseSize('[font]\nbase-size = 0\n')).toBeNull()
+    expect(readShellBaseSize('not toml = = =')).toBeNull()
+  })
+
+  it("prefers the user's shell.toml, then the theme's, then 1", () => {
+    const stateHome = mkdtempSync(join(tmpdir(), 'lumanin-textscale-'))
+    const configHome = mkdtempSync(join(tmpdir(), 'lumanin-textscale-cfg-'))
+    const current = join(stateHome, 'omarchy', 'current')
+    mkdirSync(join(current, 'theme'), { recursive: true })
+    expect(readOmarchyTextScale(current, configHome)).toBe(1)
+
+    writeFileSync(join(current, 'theme', 'shell.toml'), '[font]\nbase-size = 15\n')
+    expect(readOmarchyTextScale(current, configHome)).toBe(15 / 12)
+
+    mkdirSync(join(configHome, 'omarchy'), { recursive: true })
+    writeFileSync(join(configHome, 'omarchy', 'shell.toml'), '[font]\nbase-size = 9\n')
+    expect(readOmarchyTextScale(current, configHome)).toBe(0.75)
+  })
+
+  it('reports the text scale beside the palette', async () => {
+    const stateHome = mkdtempSync(join(tmpdir(), 'lumanin-textscale-sig-'))
+    const configHome = mkdtempSync(join(tmpdir(), 'lumanin-textscale-sig-cfg-'))
+    const current = join(stateHome, 'omarchy', 'current')
+    mkdirSync(join(current, 'theme'), { recursive: true })
+    writeFileSync(join(current, 'theme', 'colors.toml'), COLORS_TOML_V4)
+    mkdirSync(join(configHome, 'omarchy'), { recursive: true })
+    writeFileSync(join(configHome, 'omarchy', 'shell.toml'), '[font]\nbase-size = 14\n')
+    const signal = await new OmarchyAppearance(current, configHome).read()
+    expect(signal?.textScale).toBeCloseTo(14 / 12)
+    expect(signal?.seed?.colours.bg).toBe('#1e1e2e')
   })
 })

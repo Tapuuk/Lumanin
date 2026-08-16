@@ -71,7 +71,8 @@ function profile(env: Record<string, string>, tools: readonly string[] = []): Pl
     protocols: PROTOCOLS,
     appearance: {
       configHome: '/nonexistent',
-      omarchy: { present: false, themeDir: null, themeName: null },
+      stateHome: '/nonexistent',
+      omarchy: { present: false, currentDir: null, themeDir: null, themeName: null },
       kdeglobals: null,
       cosmicMode: null,
       gtkCss: [],

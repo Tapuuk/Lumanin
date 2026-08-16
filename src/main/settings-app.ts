@@ -12,6 +12,7 @@ import { applyCsp } from './csp'
 import { SettingsIpc } from './settings-ipc'
 import { SettingsWindow } from './settings-window'
 import { ThemeService } from './theme'
+import { applyTextScale } from './text-scale'
 
 /**
  * The settings app — `lumanin settings`, and what `lumanin-settings.desktop`
@@ -77,6 +78,8 @@ const theme = new ThemeService({
   logger,
   onChange: (payload) => {
     settingsWindow?.webContents?.send(EVENT_CHANNEL, { event: 'theme.changed', payload })
+    const contents = settingsWindow?.webContents
+    if (contents) applyTextScale(contents, payload.textScale)
   }
 })
 
@@ -155,6 +158,10 @@ app.whenReady().then(async () => {
     rendererFile: join(__dirname, '../renderer/settings.html')
   })
   settingsWindow.open()
+  {
+    const contents = settingsWindow.webContents
+    if (contents) applyTextScale(contents, theme.payloadNow.textScale)
+  }
 
   watchConfigFile()
 
@@ -170,7 +177,7 @@ app.whenReady().then(async () => {
       home: paths.home,
       dataHome: paths.dataHome
     })
-    await theme.attach(runtime.appearance, runtime.blurGranted)
+    await theme.attach(runtime.appearance, runtime.blurGranted, runtime.toolkitTextScale)
   } catch (error) {
     logger.warn('appearance probing failed; staying on the built-in theme', { error })
   }

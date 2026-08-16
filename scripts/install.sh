@@ -56,6 +56,10 @@ fi
 
 say "installing dependencies"
 (cd "$SRC" && npm ci)
+# The plugin API's pinned type definitions are a separate npm tree under spec/;
+# the build's type gate imports them, so a build without this step fails on
+# the first `import type` in src/api-shim.
+(cd "$SRC/spec" && npm ci)
 
 say "building"
 (cd "$SRC" && npm run build)
@@ -93,7 +97,15 @@ say "installed $APPS_DIR/lumanin-settings.desktop"
 
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
-  *) printf '\033[33m!!\033[0m %s is not on your PATH - add it to your shell profile.\n' "$BIN_DIR" ;;
+  *)
+    printf '\033[33m!!\033[0m %s is not on your PATH, so `lumanin` will not be found until it is.\n' "$BIN_DIR"
+    case "$(basename "${SHELL:-sh}")" in
+      fish) printf '   fish:  fish_add_path %s\n' "$BIN_DIR" ;;
+      zsh)  printf '   zsh:   echo '"'"'export PATH="%s:$PATH"'"'"' >> ~/.zshrc && exec zsh\n' "$BIN_DIR" ;;
+      *)    printf '   bash:  echo '"'"'export PATH="%s:$PATH"'"'"' >> ~/.bashrc && exec bash\n' "$BIN_DIR" ;;
+    esac
+    printf '   The settings entry in your app grid uses the full path and works either way.\n'
+    ;;
 esac
 
 # Setting up the desktop integration is the difference between a launcher that

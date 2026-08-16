@@ -43,7 +43,8 @@ const NO_PROTOCOLS: WaylandProtocols = {
 
 const NO_APPEARANCE: AppearanceSources = {
   configHome: '/config',
-  omarchy: { present: false, themeDir: null, themeName: null },
+  stateHome: '/state',
+  omarchy: { present: false, currentDir: null, themeDir: null, themeName: null },
   kdeglobals: null,
   cosmicMode: null,
   gtkCss: [],

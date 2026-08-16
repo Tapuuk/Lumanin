@@ -24,53 +24,15 @@ import { guarded, setConfig, useSettingsState } from './useSettings'
 /** The screens that are plain settings: General, Appearance, File Search, Keys. */
 
 export function GeneralScreen(): React.JSX.Element {
-  const { state } = useSettingsState()
-  const [restarting, setRestarting] = useState(false)
-  const [restartNote, setRestartNote] = useState<string | null>(null)
-  const sized =
-    state !== null &&
-    (state.resolved.general.width.layer !== 'default' ||
-      state.resolved.general.height.layer !== 'default')
-
+  // Width and height used to need a restart - the window was created once at
+  // its configured size. It now refits itself the next time it is hidden, so
+  // there is nothing to apply and no button for it.
   return (
-    <>
-      <Section>
-        {GENERAL_SETTINGS.map((setting) => (
-          <SettingControl key={setting.path.join('.')} setting={setting} />
-        ))}
-      </Section>
-      {sized && state.daemonRunning && (
-        <Section>
-          <Row
-            label="Apply the panel size now"
-            help="The panel window is created once at its configured size, so width and height need a restart."
-          >
-            <button
-              type="button"
-              className="s-button"
-              disabled={restarting}
-              onClick={() => {
-                setRestarting(true)
-                setRestartNote(null)
-                window.lumanin
-                  .invoke('settings.restartDaemon')
-                  .then((result: { ok: boolean }) => {
-                    setRestarting(false)
-                    if (!result.ok) setRestartNote('The launcher did not come back - start it with `lumanin`.')
-                  })
-                  .catch((cause: unknown) => {
-                    setRestarting(false)
-                    setRestartNote(cause instanceof Error ? cause.message : String(cause))
-                  })
-              }}
-            >
-              {restarting ? 'Restarting…' : 'Restart the launcher'}
-            </button>
-            {restartNote !== null && <div className="s-error">{restartNote}</div>}
-          </Row>
-        </Section>
-      )}
-    </>
+    <Section>
+      {GENERAL_SETTINGS.map((setting) => (
+        <SettingControl key={setting.path.join('.')} setting={setting} />
+      ))}
+    </Section>
   )
 }
 

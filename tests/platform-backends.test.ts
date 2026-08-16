@@ -76,7 +76,8 @@ function profile(env: Readonly<Record<string, string>>, present: readonly string
     } satisfies WaylandProtocols,
     appearance: {
       configHome: '/config',
-      omarchy: { present: false, themeDir: null, themeName: null },
+      stateHome: '/state',
+      omarchy: { present: false, currentDir: null, themeDir: null, themeName: null },
       kdeglobals: null,
       cosmicMode: null,
       gtkCss: [],

@@ -6,6 +6,8 @@ import {
 } from '../src/platform/appearance/index'
 import { parseRonColour } from '../src/platform/appearance/cosmic'
 import { parseNiriAccent } from '../src/platform/appearance/niri'
+import { readToolkitTextScale } from '../src/platform/appearance/toolkit-scale'
+import type { Exec } from '../src/platform/exec'
 import { contrast, parseHex } from '../src/shared/theme/colour'
 import { contrastProblems, resolveTheme } from '../src/shared/theme/derive'
 import { parseGtkColour, parseGtkCss } from '../src/shared/theme/gtkcss'
@@ -381,6 +383,48 @@ describe('CompositeAppearance', () => {
     expect((await composite.read())?.accent).toBe('#7fc8ff')
   })
 
+  it('takes the text scale from a lower source when the palette has none', async () => {
+    // KDE's palette comes from kdeglobals and knows nothing about text size;
+    // gsettings does. Only a backend that says it has one is asked past the
+    // palette, and a preference-only source is not.
+    let portalAsked = 0
+    const composite = new CompositeAppearance([
+      source(PALETTE, 'kde-colors'),
+      {
+        id: 'portal-settings',
+        read: () => {
+          portalAsked += 1
+          return Promise.resolve({ source: 'portal', variant: 'light' as const })
+        },
+        watch: () => () => undefined
+      },
+      {
+        id: 'gsettings',
+        providesTextScale: true,
+        read: () => Promise.resolve({ source: 'GNOME interface settings', textScale: 1.25 }),
+        watch: () => () => undefined
+      }
+    ])
+    const signal = await composite.read()
+    expect(signal?.seed?.colours.bg).toBe('#101010')
+    expect(signal?.textScale).toBe(1.25)
+    expect(signal?.variant).toBeUndefined()
+    expect(portalAsked).toBe(0)
+  })
+
+  it('keeps a palette source\'s own text scale', async () => {
+    const composite = new CompositeAppearance([
+      source({ ...PALETTE, textScale: 14 / 12 }, 'omarchy'),
+      {
+        id: 'gsettings',
+        providesTextScale: true,
+        read: () => Promise.resolve({ source: 'gnome', textScale: 2 }),
+        watch: () => () => undefined
+      }
+    ])
+    expect((await composite.read())?.textScale).toBeCloseTo(14 / 12)
+  })
+
   it('stops asking once a palette answers', async () => {
     // Not just tidiness: the portal backend spawns `gdbus`, and doing that on
     // every Omarchy machine for a result that is discarded is a subprocess per
@@ -449,5 +493,22 @@ describe('every desktop palette survives derivation', () => {
     })
     expect(contrast(parseHex(theme.tokens.accent)!, parseHex(theme.tokens.bg)!)).toBeGreaterThanOrEqual(3)
     expect(contrastProblems(theme.tokens)).toEqual([])
+  })
+})
+
+describe('readToolkitTextScale', () => {
+  const exec = (stdout: string, ok = true): Exec => ({
+    run: () => Promise.resolve({ ok, stdout, stderr: '' })
+  })
+
+  it('reads text-scaling-factor from gsettings', async () => {
+    expect(await readToolkitTextScale(exec('1.1818\n'), '/usr/bin/gsettings')).toBeCloseTo(1.1818)
+  })
+
+  it('is 1 without gsettings, on a failed call, or on nonsense', async () => {
+    expect(await readToolkitTextScale(exec('1.5'), null)).toBe(1)
+    expect(await readToolkitTextScale(exec('', false), '/usr/bin/gsettings')).toBe(1)
+    expect(await readToolkitTextScale(exec('banana'), '/usr/bin/gsettings')).toBe(1)
+    expect(await readToolkitTextScale(exec('40'), '/usr/bin/gsettings')).toBe(1)
   })
 })

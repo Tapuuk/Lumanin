@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, watch, type FSWatcher } from 'node:fs'
 import { basename, join } from 'node:path'
+import { parse as parseToml } from 'smol-toml'
 import type { ThemeSeed } from '../../shared/theme/derive'
 import { mergePalettes, parseAlacritty, parseOmarchyColors } from '../../shared/theme/omarchy'
 import { parseThemePack } from '../../shared/theme/pack'
@@ -9,10 +10,10 @@ import type { AppearanceBackend, AppearanceSignal } from './index'
 /**
  * Omarchy as an appearance source — the flagship integration in THEMING.md §2.
  *
- * **The layout on disk, verified against `omarchy-theme-set` on 2026-08-08.**
- * THEMING.md originally described a symlink at `~/.config/omarchy/current/theme`
- * and derivation from `alacritty.toml`; neither is true of current Omarchy, and
- * both mattered:
+ * **The layout on disk, verified against `omarchy-theme-set` on 2026-08-08 and
+ * again against Omarchy 4 on 2026-08-16.** THEMING.md originally described a
+ * symlink at `~/.config/omarchy/current/theme` and derivation from
+ * `alacritty.toml`; neither is true of current Omarchy, and both mattered:
  *
  *  - `omarchy-theme-set` assembles the new theme in `current/next-theme`, then
  *    does `rm -rf current/theme && mv current/next-theme current/theme`, then
@@ -25,6 +26,19 @@ import type { AppearanceBackend, AppearanceSignal } from './index'
  *    exists, generating it from `alacritty.toml` when a theme ships only that.
  *    No stock theme ships an `alacritty.toml` any more.
  *
+ *  - Omarchy 4 moved `current/` itself, from `$XDG_CONFIG_HOME/omarchy/` to
+ *    `$XDG_STATE_HOME/omarchy/`. The probe finds whichever exists (state first)
+ *    and hands the backend that directory; nothing here assumes either.
+ *  - Omarchy 4's `colors.toml` carries `mode = "dark" | "light"` (the older
+ *    `light.mode` marker file is legacy but still honoured by Omarchy itself, so
+ *    both are read here), and names its palette (`red`, `bright_red`, `selection`,
+ *    `muted`, …) instead of `color0..15`; `parseOmarchyColors` reads both shapes.
+ *
+ *  - Omarchy 4's text size is `[font] base-size` in `shell.toml`: the user's
+ *    override in `$XDG_CONFIG_HOME/omarchy/shell.toml` (what `omarchy display
+ *    text size` writes), else the applied theme's own `shell.toml`, else 12.
+ *    The shell scales its every type token by `base-size / 12`, and so do we.
+ *
  * Priority within a theme directory: a `lumanin.toml` the theme author wrote
  * beats anything we would infer. That file is the zero-config adoption path
  * THEMING.md promises third-party theme authors, so it has to actually win.
@@ -32,13 +46,6 @@ import type { AppearanceBackend, AppearanceSignal } from './index'
 
 /** Debounce for the watch. A theme swap touches several files in quick succession. */
 const COALESCE_MS = 120
-
-export function omarchyRoot(configHome: string): string {
-  // Omarchy itself hardcodes `$HOME/.config/omarchy`, so in practice this is
-  // always that — but deriving it from the resolved config home keeps CONFIG.md's
-  // "never hardcode ~/.config" rule intact and makes the tests drivable.
-  return join(configHome, 'omarchy')
-}
 
 export interface OmarchyTheme {
   readonly seed: ThemeSeed
@@ -59,16 +66,19 @@ function readIfPresent(path: string): string | null {
  * Exported for the tests and for `doctor`, which needs to explain *why* a theme
  * did not apply without starting a daemon.
  */
-export function readOmarchyTheme(root: string): OmarchyTheme | null {
-  const current = join(root, 'current')
+export function readOmarchyTheme(current: string): OmarchyTheme | null {
   const themeDir = join(current, 'theme')
   if (!existsSync(themeDir)) return null
 
   const name = readIfPresent(join(current, 'theme.name'))?.trim() || basename(themeDir)
   const id = `omarchy:${name}`
-  // The marker file is authoritative where it exists; luminance inference in
-  // `resolveTheme()` covers third-party themes that omit it.
-  const variant = existsSync(join(themeDir, 'light.mode')) ? ('light' as const) : undefined
+  const colours = readIfPresent(join(themeDir, 'colors.toml'))
+  const parsedColours = colours === null ? null : parseOmarchyColors(colours)
+  // Omarchy's own precedence (`omarchy-theme-color`): the `mode` key, then the
+  // legacy `light.mode` marker, then background luminance - which is what
+  // `resolveTheme()` does for a seed with no variant.
+  const variant =
+    parsedColours?.variant ?? (existsSync(join(themeDir, 'light.mode')) ? ('light' as const) : undefined)
 
   const native = readIfPresent(join(themeDir, THEME_FILE_BASENAME))
   if (native !== null) {
@@ -86,13 +96,9 @@ export function readOmarchyTheme(root: string): OmarchyTheme | null {
     }
   }
 
-  const colours = readIfPresent(join(themeDir, 'colors.toml'))
   const alacritty = readIfPresent(join(themeDir, 'alacritty.toml'))
 
-  const palette = mergePalettes(
-    colours === null ? null : parseOmarchyColors(colours),
-    alacritty === null ? null : parseAlacritty(alacritty)
-  )
+  const palette = mergePalettes(parsedColours, alacritty === null ? null : parseAlacritty(alacritty))
   if (palette === null) return null
 
   return {
@@ -106,25 +112,69 @@ export function readOmarchyTheme(root: string): OmarchyTheme | null {
   }
 }
 
+/** The shell's default `base-size`; the size every Omarchy type token is relative to. */
+export const OMARCHY_SHELL_BASE_PX = 12
+
+/** `[font] base-size` from one `shell.toml`, or `null` if it is absent or unreadable. */
+export function readShellBaseSize(text: string): number | null {
+  try {
+    const file = parseToml(text) as Record<string, unknown>
+    const font = file['font']
+    if (typeof font !== 'object' || font === null || Array.isArray(font)) return null
+    const size = (font as Record<string, unknown>)['base-size']
+    const n = typeof size === 'number' ? size : typeof size === 'string' ? Number(size) : NaN
+    // Omarchy's own accepted range is 9 to 20; anything wildly outside it is a
+    // typo, not a wish, and a launcher zoomed to 0 is not recoverable by mouse.
+    return Number.isFinite(n) && n >= 6 && n <= 40 ? n : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The text scale Omarchy is running at: the user's `shell.toml` override first,
+ * then the applied theme's own `shell.toml`, then the shell default. Always an
+ * answer, because "not scaled" is one.
+ */
+export function readOmarchyTextScale(current: string, configHome: string): number {
+  for (const path of [join(configHome, 'omarchy', 'shell.toml'), join(current, 'theme', 'shell.toml')]) {
+    const text = readIfPresent(path)
+    if (text === null) continue
+    const size = readShellBaseSize(text)
+    if (size !== null) return size / OMARCHY_SHELL_BASE_PX
+  }
+  return 1
+}
+
 export class OmarchyAppearance implements AppearanceBackend {
   readonly id = 'omarchy'
-  private readonly root: string
+  readonly providesTextScale = true as const
 
-  constructor(configHome: string) {
-    this.root = omarchyRoot(configHome)
-  }
+  /**
+   * @param current Omarchy's `current/` directory, wherever the probe found it.
+   * @param configHome `$XDG_CONFIG_HOME`, where the user's `omarchy/shell.toml` lives.
+   */
+  constructor(
+    private readonly current: string,
+    private readonly configHome: string
+  ) {}
 
   read(): Promise<AppearanceSignal | null> {
-    const theme = readOmarchyTheme(this.root)
+    const theme = readOmarchyTheme(this.current)
     if (theme === null) return Promise.resolve(null)
-    return Promise.resolve({ seed: theme.seed, source: `Omarchy theme "${theme.name}"` })
+    return Promise.resolve({
+      seed: theme.seed,
+      textScale: readOmarchyTextScale(this.current, this.configHome),
+      source: `Omarchy theme "${theme.name}"`
+    })
   }
 
   watch(onChange: () => void): () => void {
-    const current = join(this.root, 'current')
+    const current = this.current
     let timer: ReturnType<typeof setTimeout> | null = null
     let parent: FSWatcher | null = null
     let inner: FSWatcher | null = null
+    let shell: FSWatcher | null = null
     let disposed = false
 
     const fire = (): void => {
@@ -164,11 +214,25 @@ export class OmarchyAppearance implements AppearanceBackend {
     }
     armInner()
 
+    try {
+      // The user's text-size override. `omarchy display text size` rewrites the
+      // file in place (write to a temp file, `mv` over it), so the watch is on
+      // the directory and filtered by name - a watch on the file itself would
+      // follow the old inode into oblivion on the first change.
+      shell = watch(join(this.configHome, 'omarchy'), { persistent: false }, (_event, filename) => {
+        if (filename === null || filename === undefined || filename.toString() === 'shell.toml') fire()
+      })
+      shell.on('error', () => undefined)
+    } catch {
+      shell = null
+    }
+
     return () => {
       disposed = true
       if (timer !== null) clearTimeout(timer)
       parent?.close()
       inner?.close()
+      shell?.close()
     }
   }
 }

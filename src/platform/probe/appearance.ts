@@ -17,6 +17,16 @@ import { isAbsolute, join } from 'node:path'
 
 export interface OmarchyProbe {
   readonly present: boolean
+  /**
+   * The `current/` directory holding `theme/` and `theme.name`, or `null`.
+   *
+   * Omarchy 4 ("Quattro", 2026-08) moved it from `$XDG_CONFIG_HOME/omarchy/current`
+   * to `$XDG_STATE_HOME/omarchy/current` (`omarchy-theme-set` writes
+   * `$HOME/.local/state/omarchy/current/theme`). Both are probed, state first:
+   * an upgraded machine keeps a stale copy under `.config` for a while, and the
+   * one `omarchy-theme-set` writes today is the one that is live.
+   */
+  readonly currentDir: string | null
   /** The applied theme's directory, or `null`. */
   readonly themeDir: string | null
   /** Contents of `current/theme.name`, or `null` if it has not been written. */
@@ -25,6 +35,7 @@ export interface OmarchyProbe {
 
 export interface AppearanceSources {
   readonly configHome: string
+  readonly stateHome: string
   readonly omarchy: OmarchyProbe
   /** `kdeglobals` **containing an actual colour scheme**, not merely present. */
   readonly kdeglobals: string | null
@@ -51,16 +62,30 @@ export function resolveConfigHome(env: Readonly<Record<string, string | undefine
     : join(home, '.config')
 }
 
-function probeOmarchy(configHome: string): OmarchyProbe {
-  const current = join(configHome, 'omarchy', 'current')
-  const themeDir = join(current, 'theme')
-  if (!existsSync(themeDir)) return { present: false, themeDir: null, themeName: null }
+export function resolveStateHome(env: Readonly<Record<string, string | undefined>>): string {
+  const home = env['HOME'] ?? homedir()
+  const explicit = env['XDG_STATE_HOME']
+  return explicit !== undefined && explicit.length > 0 && isAbsolute(explicit)
+    ? explicit
+    : join(home, '.local', 'state')
+}
 
-  // `theme.name` is written *after* the theme directory is swapped in, so a
-  // daemon that started mid-switch can legitimately see one without the other.
-  // Not an error, and not a reason to call Omarchy absent.
-  const themeName = readIfPresent(join(current, 'theme.name'))?.trim() || null
-  return { present: true, themeDir, themeName }
+/** Where Omarchy's `current/` may be, newest layout first. */
+export function omarchyCurrentCandidates(configHome: string, stateHome: string): readonly string[] {
+  return [join(stateHome, 'omarchy', 'current'), join(configHome, 'omarchy', 'current')]
+}
+
+function probeOmarchy(configHome: string, stateHome: string): OmarchyProbe {
+  for (const current of omarchyCurrentCandidates(configHome, stateHome)) {
+    const themeDir = join(current, 'theme')
+    if (!existsSync(themeDir)) continue
+    // `theme.name` is written *after* the theme directory is swapped in, so a
+    // daemon that started mid-switch can legitimately see one without the other.
+    // Not an error, and not a reason to call Omarchy absent.
+    const themeName = readIfPresent(join(current, 'theme.name'))?.trim() || null
+    return { present: true, currentDir: current, themeDir, themeName }
+  }
+  return { present: false, currentDir: null, themeDir: null, themeName: null }
 }
 
 function probeKdeGlobals(configHome: string): string | null {
@@ -78,6 +103,7 @@ export function probeAppearanceSources(
   env: Readonly<Record<string, string | undefined>> = process.env
 ): AppearanceSources {
   const configHome = resolveConfigHome(env)
+  const stateHome = resolveStateHome(env)
 
   const cosmicMode = join(configHome, 'cosmic', 'com.system76.CosmicTheme.Mode', 'v1', 'is_dark')
 
@@ -93,7 +119,8 @@ export function probeAppearanceSources(
 
   return {
     configHome,
-    omarchy: probeOmarchy(configHome),
+    stateHome,
+    omarchy: probeOmarchy(configHome, stateHome),
     kdeglobals: probeKdeGlobals(configHome),
     cosmicMode: existsSync(cosmicMode) ? cosmicMode : null,
     // GTK4 first: a machine with both is a machine mid-migration, and the GTK4

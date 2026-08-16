@@ -44,6 +44,7 @@ export interface GsettingsDeps {
 
 export class GsettingsAppearance implements AppearanceBackend {
   readonly id = 'gsettings'
+  readonly providesTextScale = true as const
 
   constructor(private readonly deps: GsettingsDeps) {}
 
@@ -59,11 +60,27 @@ export class GsettingsAppearance implements AppearanceBackend {
   }
 
   async read(): Promise<AppearanceSignal | null> {
-    const [scheme, accentName] = await Promise.all([this.get('color-scheme'), this.get('accent-color')])
+    const [scheme, accentName, scaling] = await Promise.all([
+      this.get('color-scheme'),
+      this.get('accent-color'),
+      this.get('text-scaling-factor')
+    ])
 
-    const signal: { variant?: 'dark' | 'light'; accent?: string; preferBase?: string; source: string } = {
+    const signal: {
+      variant?: 'dark' | 'light'
+      accent?: string
+      preferBase?: string
+      textScale?: number
+      source: string
+    } = {
       source: 'GNOME interface settings'
     }
+
+    // `text-scaling-factor` is what GNOME's "Large Text" and Omarchy's
+    // `omarchy display text size` both write; `1.0` is the default and is still
+    // an answer (it says "not scaled", which beats guessing).
+    const factor = scaling === null ? NaN : Number(scaling)
+    if (Number.isFinite(factor) && factor >= 0.5 && factor <= 4) signal.textScale = factor
 
     // `'default'` means the user has expressed no preference, so it must fall
     // through rather than being read as light.
@@ -74,7 +91,9 @@ export class GsettingsAppearance implements AppearanceBackend {
     if (accent !== undefined) signal.accent = accent
     if (this.deps.preferBase !== undefined) signal.preferBase = this.deps.preferBase
 
-    return signal.variant === undefined && signal.accent === undefined ? null : signal
+    return signal.variant === undefined && signal.accent === undefined && signal.textScale === undefined
+      ? null
+      : signal
   }
 
   watch(onChange: () => void): () => void {

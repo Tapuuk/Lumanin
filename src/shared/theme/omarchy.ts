@@ -30,6 +30,8 @@ export interface OmarchyPalette {
   /** All 16 slots, or absent — a partial palette is not useful to anyone. */
   readonly ansi?: readonly string[]
   readonly ui?: Partial<UiTokens>
+  /** Omarchy 4's `mode` key (or the legacy `theme_type`); absent when the file is silent. */
+  readonly variant?: 'dark' | 'light'
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -57,7 +59,9 @@ function parse(text: string): Record<string, unknown> | null {
 }
 
 /**
- * `colors.toml` — the flat, generated schema:
+ * `colors.toml` — two generations of one file.
+ *
+ * The Omarchy 3 shape is flat and terminal-numbered:
  *
  * ```toml
  * accent = "#89b4fa"
@@ -66,11 +70,32 @@ function parse(text: string): Record<string, unknown> | null {
  * color0 = "#45475a"   # … through color15
  * ```
  *
- * `cursor` and `selection_*` are deliberately not read. They are terminal
- * concerns: a selection background is tuned to be loud against a wall of
- * monospace text (Catppuccin's is a near-white pink), and using it for the
- * selected row would make a launcher shout. The selected row is derived from the
- * accent instead, which is consistent across every theme.
+ * Omarchy 4 (2026-08) names the palette instead, and adds a mode and a handful
+ * of UI-level colours the shell itself is drawn with:
+ *
+ * ```toml
+ * mode = "dark"
+ * accent = "#89b4fa"
+ * selection = "#45475a"
+ * muted = "#585b70"
+ * background = "#1e1e2e"
+ * lighter_background = "#313244"
+ * foreground = "#cdd6f4"
+ * dark_foreground = "#6c7086"
+ * light_foreground = "#bac2de"
+ * red = "#f38ba8"   # … green yellow blue magenta cyan, and bright_* of each
+ * ```
+ *
+ * The 16 ANSI slots are rebuilt from the named colours exactly the way Omarchy's
+ * own `alacritty.toml.tpl` does it (`black = background`, `bright black = muted`,
+ * `white = foreground`, `bright white = bright_foreground`), so a launcher and
+ * the terminal beside it agree on every colour.
+ *
+ * `selection` here is the shell's selection colour, not a terminal's - it is
+ * what Omarchy 4 paints its own highlighted rows with, so it *is* our
+ * `bgSelected` (still guarded for legibility downstream). The Omarchy 3
+ * `selection_background` remains deliberately unread: that one is tuned to
+ * shout against a wall of monospace text.
  */
 export function parseOmarchyColors(text: string): OmarchyPalette | null {
   const file = parse(text)
@@ -80,19 +105,62 @@ export function parseOmarchyColors(text: string): OmarchyPalette | null {
   const text_ = asColour(file['foreground'])
   if (bg === undefined || text_ === undefined) return null
 
-  const colours: SeedColours = { bg, text: text_ }
-  const accent = asColour(file['accent'])
+  const named = (key: string): string | undefined => asColour(file[key])
+  const optional = (token: keyof SeedColours, key: string): Partial<SeedColours> => {
+    const value = named(key)
+    return value === undefined ? {} : { [token]: value }
+  }
 
-  const slots: string[] = []
+  const colours: SeedColours = {
+    bg,
+    text: text_,
+    ...optional('accent', 'accent'),
+    // Omarchy 4 only; every one of these is absent from an Omarchy 3 file.
+    ...optional('bgSelected', 'selection'),
+    ...optional('bgSurface', 'lighter_background'),
+    ...optional('textMuted', 'light_foreground'),
+    ...optional('textFaint', 'dark_foreground'),
+    ...optional('ok', 'green'),
+    ...optional('warn', 'yellow'),
+    ...optional('err', 'red'),
+    ...optional('info', 'blue')
+  }
+
+  let ansi: string[] = []
   for (let i = 0; i < 16; i += 1) {
     const slot = asColour(file[`color${String(i)}`])
     if (slot === undefined) break
-    slots.push(slot)
+    ansi.push(slot)
+  }
+  if (ansi.length !== 16) {
+    const namedSlots = [
+      bg,
+      named('red'),
+      named('green'),
+      named('yellow'),
+      named('blue'),
+      named('magenta'),
+      named('cyan'),
+      text_,
+      named('muted'),
+      named('bright_red'),
+      named('bright_green'),
+      named('bright_yellow'),
+      named('bright_blue'),
+      named('bright_magenta'),
+      named('bright_cyan'),
+      named('bright_foreground')
+    ]
+    ansi = namedSlots.every((slot): slot is string => slot !== undefined) ? namedSlots : []
   }
 
+  const modeRaw = file['mode'] ?? file['theme_type']
+  const variant = modeRaw === 'light' ? ('light' as const) : modeRaw === 'dark' ? ('dark' as const) : undefined
+
   return {
-    colours: accent === undefined ? colours : { ...colours, accent },
-    ...(slots.length === 16 ? { ansi: slots } : {})
+    colours,
+    ...(ansi.length === 16 ? { ansi } : {}),
+    ...(variant !== undefined ? { variant } : {})
   }
 }
 
@@ -174,9 +242,11 @@ export function mergePalettes(
   if (base === null) return null
 
   const ui = { ...secondary?.ui, ...primary?.ui }
+  const variant = primary?.variant ?? secondary?.variant
   return {
     colours: base.colours,
     ...(base.ansi !== undefined ? { ansi: base.ansi } : {}),
-    ...(Object.keys(ui).length > 0 ? { ui } : {})
+    ...(Object.keys(ui).length > 0 ? { ui } : {}),
+    ...(variant !== undefined ? { variant } : {})
   }
 }

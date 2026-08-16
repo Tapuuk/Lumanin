@@ -134,11 +134,12 @@ reportConfig(config)
  * ARCHITECTURE.md §"Panel sizing" — so new dimensions need a new window, which
  * means a restart. Reload says so rather than pretending it applied them.
  */
-function needsRestart(before: ResolvedConfig, after: ResolvedConfig): readonly string[] {
-  const changed: string[] = []
-  if (before.general.width.value !== after.general.width.value) changed.push('width')
-  if (before.general.height.value !== after.general.height.value) changed.push('height')
-  return changed
+function needsRestart(_before: ResolvedConfig, _after: ResolvedConfig): readonly string[] {
+  // Width and height were the two entries here until the panel learned to refit
+  // itself (`PanelWindow.fit()`); nothing in `config.toml` needs a restart today.
+  // The plumbing stays because the honest answer to "did that apply?" has to
+  // remain available the day a key does.
+  return []
 }
 
 /** Re-read `config.toml`. Returns what changed but could not be applied live. */
@@ -152,6 +153,8 @@ function reloadConfig(reason: string): readonly string[] {
   // The theme is part of the chain's first link, so a changed `[appearance]`
   // has to re-run it; everything else reads `current()` on demand.
   void theme.refresh(reason)
+  // `[general].width` / `.height` are read at fit time; tell the window to look.
+  panel?.reconfigure()
   // The renderer holds its keymap rather than asking per keystroke, so a change
   // has to be pushed. Sent unconditionally — comparing two keymaps to save one
   // small message would be more code than the message costs.
@@ -228,7 +231,10 @@ const theme = new ThemeService({
   config: current,
   configDir: paths.config,
   logger,
-  onChange: (payload) => emit('theme.changed', payload)
+  onChange: (payload) => {
+    emit('theme.changed', payload)
+    panel?.setTextScale(payload.textScale, theme.toolkitScaleNow)
+  }
 })
 
 // ---------------------------------------------------------------------------
@@ -966,7 +972,7 @@ app.whenReady().then(async () => {
     // built-in default and upgrades to the desktop's a moment later. That is a
     // visible repaint only on the first window of a session, and only if the user
     // beats the probes to it.
-    void theme.attach(runtime.appearance, runtime.blurGranted)
+    void theme.attach(runtime.appearance, runtime.blurGranted, runtime.toolkitTextScale)
 
     // The index needs the probe's binary map and desktop list, so it is built
     // here rather than earlier. Indexing is disk-bound and takes tens of
@@ -1158,6 +1164,7 @@ app.whenReady().then(async () => {
       }
     }
   })
+  panel.setTextScale(theme.payloadNow.textScale, theme.toolkitScaleNow)
   panel.create()
 
   watchConfigFile()

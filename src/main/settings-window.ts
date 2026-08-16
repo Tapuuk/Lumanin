@@ -24,8 +24,16 @@ export interface SettingsWindowDeps {
 
 const DEFAULT_WIDTH = 920
 const DEFAULT_HEIGHT = 620
-const MIN_WIDTH = 680
-const MIN_HEIGHT = 440
+// Low on purpose. These are Chromium DIPs, and on Linux a DIP is the
+// compositor's logical pixel times whatever text scale GTK reports (see
+// `platform/appearance/toolkit-scale.ts`) - so a 680-DIP minimum was 807
+// compositor pixels at Omarchy's 14px text size, wider than the half-screen a
+// tiling compositor hands a new window. Chromium then kept its minimum, drew
+// past the surface and the right third of every row was clipped. The layout
+// reflows fine down to well under this (measured: no horizontal overflow at
+// 480); the minimum only stops it becoming a sliver.
+const MIN_WIDTH = 480
+const MIN_HEIGHT = 360
 
 export class SettingsWindow {
   private window: BrowserWindow | null = null

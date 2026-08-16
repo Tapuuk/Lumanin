@@ -236,3 +236,22 @@ describe('[file_search].hide_on_open', () => {
     expect(config.fileSearch.hideOnOpen.layer).toBe('file')
   })
 })
+
+describe('[appearance].text_scale', () => {
+  it('is unset by default, meaning "follow the desktop"', () => {
+    expect(loadConfig({ env: NO_ENV }).appearance.textScale.value).toBeNull()
+  })
+
+  it('takes a fractional factor from the file and from the env', () => {
+    expect(
+      loadConfig({ fileContents: '[appearance]\ntext_scale = 1.25\n', env: NO_ENV }).appearance.textScale.value
+    ).toBe(1.25)
+    expect(loadConfig({ env: { LUMANIN_TEXT_SCALE: '0.9' } }).appearance.textScale.value).toBe(0.9)
+  })
+
+  it('refuses a factor that would make the panel unusable', () => {
+    const config = loadConfig({ fileContents: '[appearance]\ntext_scale = 0\n', env: NO_ENV })
+    expect(config.appearance.textScale.value).toBeNull()
+    expect(config.problems.join('\n')).toContain('[appearance].text_scale')
+  })
+})

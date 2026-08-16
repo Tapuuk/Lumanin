@@ -8,9 +8,10 @@ import { _electron as electron, expect, test, type ElectronApplication, type Pag
  * directory, pushes tokens over IPC, and the renderer repaints — with no reload
  * and no restart.
  *
- * The Omarchy tree is synthetic, inside the temporary XDG config home this spec
- * already creates. That is not a compromise: the daemon reads
- * `$XDG_CONFIG_HOME/omarchy/current/theme` and cannot tell the difference, and
+ * The Omarchy tree is synthetic, inside the temporary XDG state home this spec
+ * already creates (Omarchy 4's layout; the daemon also probes the older
+ * `$XDG_CONFIG_HOME/omarchy/current`). That is not a compromise: the daemon
+ * reads `$XDG_STATE_HOME/omarchy/current/theme` and cannot tell the difference, and
  * driving `omarchy theme set` against the developer's real session would restart
  * their waybar, terminal and notification daemon to prove something a directory
  * swap proves just as well.
@@ -60,7 +61,7 @@ let page: Page
 
 /** What `omarchy-theme-set` does, step for step. */
 function themeSet(name: string, body: string, extra: Record<string, string> = {}): void {
-  const current = join(root, 'config', 'omarchy', 'current')
+  const current = join(root, 'state', 'omarchy', 'current')
   const next = join(current, 'next-theme')
   mkdirSync(next, { recursive: true })
   writeFileSync(join(next, 'colors.toml'), body)
@@ -86,7 +87,7 @@ test.beforeAll(async () => {
   // focus from every assertion that follows.
   mkdirSync(join(root, 'config', 'lumanin'), { recursive: true })
   writeFileSync(join(root, 'config', 'lumanin', 'config.toml'), '')
-  mkdirSync(join(root, 'config', 'omarchy', 'current'), { recursive: true })
+  mkdirSync(join(root, 'state', 'omarchy', 'current'), { recursive: true })
   themeSet('mocha', colours('#1a1b1e', '#cdd6f4', '#89b4fa'))
 
   app = await electron.launch({

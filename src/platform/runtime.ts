@@ -1,4 +1,5 @@
 import { createAppearance, type AppearanceBackend } from './appearance/index'
+import { readToolkitTextScale } from './appearance/toolkit-scale'
 import { BACKENDS } from './backends'
 import { CAPABILITIES, selectBackend, type CapabilityReport } from './capability'
 import { createClipboard, type ClipboardBackend, type SyncTextClipboard } from './clipboard/index'
@@ -28,6 +29,12 @@ export interface PlatformRuntime {
   readonly selection: SelectionBackend
   readonly windows: WindowsBackend
   readonly appearance: AppearanceBackend
+  /**
+   * The text scale Chromium's toolkit already multiplied into the device scale
+   * - see `appearance/toolkit-scale.ts`. Read per theme resolution, because it
+   * changes with the same desktop setting the appearance watch reports.
+   */
+  readonly toolkitTextScale: () => Promise<number>
   /**
    * Whether the compositor will actually blur behind us.
    *
@@ -100,6 +107,7 @@ export function createRuntime(deps: RuntimeDeps): PlatformRuntime {
         ...(profile.isGnome ? { preferBase: 'adwaita' } : {})
       }
     ),
+    toolkitTextScale: () => readToolkitTextScale(exec, profile.binaries.gsettings),
     // `none` is a real, always-usable backend at the end of the windowEffects
     // chain, so "the chain picked none" is the honest answer to "is blur
     // available", not a gap. On Hyprland we additionally *ask* for no blur —

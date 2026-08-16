@@ -167,6 +167,43 @@ describe('ThemeService', () => {
     theme.dispose()
   })
 
+  it('zooms by the text size the desktop wants, less what the toolkit already applied', async () => {
+    // Omarchy 4 at `omarchy display text size 14`: the shell says 14/12 and
+    // gsettings says 1.1818, and Chromium has already multiplied the latter into
+    // its device scale. Zooming by 14/12 on top would show text a third larger
+    // than the shell's. Within 3% of 1 snaps to exactly 1 - no blur for nothing.
+    const { theme } = service()
+    await theme.attach(new FakeAppearance({ ...OMARCHY_SIGNAL, textScale: 14 / 12 }), false, () =>
+      Promise.resolve(1.1818)
+    )
+    expect(theme.payloadNow.textScale).toBe(1)
+    theme.dispose()
+  })
+
+  it('zooms by the whole desktop text scale where the toolkit applied none', async () => {
+    const { theme } = service()
+    await theme.attach(new FakeAppearance({ ...OMARCHY_SIGNAL, textScale: 1.5 }), false)
+    expect(theme.payloadNow.textScale).toBe(1.5)
+    theme.dispose()
+  })
+
+  it('lets [appearance].text_scale fix the size, still net of the toolkit', async () => {
+    const { theme } = service({ file: '[appearance]\ntext_scale = 1.6\n' })
+    await theme.attach(new FakeAppearance({ ...OMARCHY_SIGNAL, textScale: 1.1 }), false, () =>
+      Promise.resolve(1.25)
+    )
+    expect(theme.payloadNow.textScale).toBe(1.28)
+    theme.dispose()
+  })
+
+  it('applies text size even when not following the desktop for colour', async () => {
+    const { theme } = service({ file: '[appearance]\nfollow_system = false\n' })
+    await theme.attach(new FakeAppearance({ ...OMARCHY_SIGNAL, textScale: 1.5 }), false)
+    expect(theme.payloadNow.meta.id).toBe('tokyo-night')
+    expect(theme.payloadNow.textScale).toBe(1.5)
+    theme.dispose()
+  })
+
   it('picks a light base and tints it from a preference-only source', async () => {
     // What KDE and GNOME give us: no palette, just light/dark and an accent.
     const { theme } = service()

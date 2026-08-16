@@ -29,6 +29,14 @@ export interface ThemePayload {
   readonly cssVars: Readonly<Record<string, string>>
   /** Whether the compositor actually granted background blur (PLATFORM-MATRIX §12). */
   readonly blurGranted: boolean
+  /**
+   * The zoom the main process applies to the window: the text size wanted
+   * (the desktop's - Omarchy's shell font, GNOME's text-scaling-factor - unless
+   * `[appearance].text_scale` says otherwise) divided by what Chromium's toolkit
+   * has already scaled by on its own. Rides along here so both frontends can say
+   * what is in effect.
+   */
+  readonly textScale: number
 }
 
 /** Where Esc was pressed. `esc_at_root` only governs the root — see `escapeAction`. */

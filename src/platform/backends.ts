@@ -425,7 +425,7 @@ const appearance: Backend[] = [
             usable: true,
             detail: `theme "${p.appearance.omarchy.themeName ?? 'unknown'}"; watched for live swaps`
           }
-        : { usable: false, detail: 'no omarchy/current/theme directory' }
+        : { usable: false, detail: 'no omarchy/current/theme directory under $XDG_STATE_HOME or $XDG_CONFIG_HOME' }
   },
   {
     id: 'kde-colors',

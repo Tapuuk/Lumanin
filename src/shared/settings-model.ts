@@ -121,7 +121,7 @@ export const GENERAL_SETTINGS: readonly Setting[] = [
   {
     path: ['general', 'width'],
     label: 'Panel width',
-    help: 'How wide the panel is. Takes effect on the next start.',
+    help: 'How wide the panel is, at the design text size. Applied the next time it opens; clamped to the screen.',
     editor: {
       kind: 'number',
       min: 320,
@@ -140,7 +140,7 @@ export const GENERAL_SETTINGS: readonly Setting[] = [
   {
     path: ['general', 'height'],
     label: 'Panel height',
-    help: 'How far it may grow - a ceiling, not a fixed height. Takes effect on the next start.',
+    help: 'How far it may grow - a ceiling, not a fixed height. Applied the next time it opens; clamped to the screen.',
     editor: {
       kind: 'number',
       min: 240,
@@ -193,6 +193,25 @@ export function appearanceSettings(
       editor: { kind: 'boolean' },
       read: (c) => c.appearance.animations,
       envKey: 'ANIMATIONS'
+    },
+    {
+      path: ['appearance', 'text_scale'],
+      label: 'Text size',
+      help: 'Leave unset to follow the desktop - Omarchy’s text size, GNOME’s text scaling. A number fixes it.',
+      editor: {
+        kind: 'number',
+        min: 0.5,
+        max: 3,
+        integer: false,
+        presets: [
+          { value: 0.9, label: 'Smaller', detail: '×0.9' },
+          { value: 1, label: 'Design size', detail: '×1' },
+          { value: 1.15, label: 'Larger', detail: '×1.15' },
+          { value: 1.35, label: 'Large', detail: '×1.35' }
+        ]
+      },
+      read: (c) => c.appearance.textScale,
+      envKey: 'TEXT_SCALE'
     }
   ]
 }

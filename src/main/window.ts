@@ -4,6 +4,7 @@ import type { ResolvedConfig } from '../shared/config'
 import { WINDOW_CLASS } from '../shared/identity'
 import { panelTop, PANEL_TOP_FRACTION } from '../shared/placement'
 import type { Logger } from '../node/logger'
+import { applyTextScale } from './text-scale'
 
 /**
  * The panel window.
@@ -25,12 +26,38 @@ export interface WindowDeps {
   readonly onVisibilityChange: (visible: boolean) => void
 }
 
+/**
+ * How much of a display's work area the panel may take. The rest is what keeps
+ * it recognisably a panel over the desktop rather than a window that fills it,
+ * and is the reason a `width = 1100` config on a 960-logical-pixel screen (a
+ * 1080p laptop at scale 2) still fits.
+ */
+const MAX_WIDTH_FRACTION = 0.94
+const MAX_HEIGHT_FRACTION = 0.9
+
 export class PanelWindow {
   private window: BrowserWindow | null = null
   private closingForQuit = false
   /** How many things are currently keeping the panel up despite losing focus. */
   private holds = 0
   private readonly placement: PlacementMode
+  /** The zoom applied for the desktop's text size - see `text-scale.ts`. */
+  private textScale = 1
+  /**
+   * The text scale Chromium's toolkit already folded into its device scale
+   * (`platform/appearance/toolkit-scale.ts`). It is also, measured, the ratio
+   * between a window's size in Electron's DIPs and its size in the compositor's
+   * logical pixels - which is what makes `fittedSize()` need it.
+   */
+  private toolkitScale = 1
+  private stopWatchingDisplays: (() => void) | null = null
+  /**
+   * The size the current window was created at. Compared against instead of
+   * `getSize()`, which reads back the compositor's configure divided by the
+   * toolkit scale and lands a pixel off - enough to re-create the window on
+   * every hide if it were the reference.
+   */
+  private createdSize: { width: number; height: number } | null = null
 
   constructor(private readonly deps: WindowDeps) {
     this.placement = placementMode(deps.profile)
@@ -48,20 +75,29 @@ export class PanelWindow {
     const { logger, preloadPath, rendererUrl, rendererFile } = this.deps
     const config = this.deps.config()
 
+    const size = this.fittedSize()
+    this.createdSize = size
     const window = new BrowserWindow({
-      width: config.general.width.value,
-      // The window is the panel's *maximum* extent, not its content, and it
-      // never changes size. See §"Panel sizing" — the panel draws itself as
-      // tall as it needs at the top of this box and leaves the rest
-      // transparent.
-      height: config.general.height.value,
+      width: size.width,
+      // The window is the panel's *maximum* extent, not its content. See §"Panel
+      // sizing" — the panel draws itself as tall as it needs at the top of this
+      // box and leaves the rest transparent. Its size changes only when the
+      // reasons for it change: `config.toml`, the desktop's text size, or the
+      // display it has to fit on (`fit()`), and never while it is visible.
+      height: size.height,
       show: false,
       frame: false,
-      // Nobody should be able to drag a panel's edges, and nothing here ever
-      // resizes it — so this is simply true, and it also pins the toplevel's
-      // min/max size hints to the size above, which is what a compositor
-      // actually reads. (`WM_NORMAL_HINTS` on X11.)
-      resizable: false,
+      // `true`, and not for the user's benefit - a frameless panel has no edge
+      // to drag. `false` makes Chromium pin the toplevel's min/max hints to the
+      // size above, and on Wayland it computes those hints in DIPs while it
+      // sizes the surface's *content* in DIPs times the toolkit's text scale
+      // (Omarchy at 14px text: 1.19). The compositor honours the hint, the
+      // content is 19% wider than the surface, and the right border and a
+      // sixth of every row are simply not on screen. Measured 2026-08-16 on
+      // Hyprland, Electron 43: `resizable: false` → 1100 logical for 1100 DIP,
+      // clipped; `resizable: true` → 1306 logical, whole. Since the window is
+      // only ever resized by being re-created (`fit()`), nothing is lost.
+      resizable: true,
       maximizable: false,
       fullscreenable: false,
       minimizable: false,
@@ -96,6 +132,21 @@ export class PanelWindow {
 
     this.window = window
     this.hardenNavigation(window)
+    applyTextScale(window.webContents, this.textScale)
+
+    // A monitor's scale changing under us is exactly the case the clamp exists
+    // for: 1080p at 1.25 has room for a 1100-wide panel, the same panel at 2
+    // does not. Electron reports every such change here on every platform it
+    // knows the display on.
+    const refit = (): void => this.fit()
+    screen.on('display-metrics-changed', refit)
+    screen.on('display-added', refit)
+    screen.on('display-removed', refit)
+    this.stopWatchingDisplays = () => {
+      screen.removeListener('display-metrics-changed', refit)
+      screen.removeListener('display-added', refit)
+      screen.removeListener('display-removed', refit)
+    }
 
     // A daemon's renderer fails silently by construction — nobody is ever
     // watching a hidden window's console. These four listeners are the whole
@@ -125,7 +176,12 @@ export class PanelWindow {
       if (this.holds === 0 && this.deps.config().general.hideOnBlur.value) this.hide()
     })
     window.on('show', () => this.deps.onVisibilityChange(true))
-    window.on('hide', () => this.deps.onVisibilityChange(false))
+    window.on('hide', () => {
+      this.deps.onVisibilityChange(false)
+      // A resize deferred because the panel was up is applied the moment it is
+      // not - a window that changes size in front of the user is a jump.
+      this.fit()
+    })
 
     // The daemon owns the window's lifetime; a close request means "hide".
     window.on('close', (event) => {
@@ -141,13 +197,120 @@ export class PanelWindow {
     }
 
     logger.info('panel window created', {
-      width: config.general.width.value,
-      height: config.general.height.value,
+      width: size.width,
+      height: size.height,
+      configured: { width: config.general.width.value, height: config.general.height.value },
+      textScale: this.textScale,
       placement: this.placement,
       windowClass: WINDOW_CLASS
     })
 
     return window
+  }
+
+  /**
+   * Adopt the desktop's text size: zoom the renderer and let the box grow with
+   * it, the way the shell's bar grows with its font, so a bigger text setting
+   * shows the same number of rows rather than fewer.
+   *
+   * @param zoom what to zoom the page by
+   * @param toolkitScale what Chromium's toolkit already scaled by, for the fit
+   */
+  setTextScale(zoom: number, toolkitScale = 1): void {
+    const sameZoom = zoom === this.textScale
+    this.textScale = zoom
+    this.toolkitScale = toolkitScale > 0 && Number.isFinite(toolkitScale) ? toolkitScale : 1
+    const window = this.window
+    if (window === null || window.isDestroyed()) return
+    if (!sameZoom) applyTextScale(window.webContents, zoom)
+    this.fit()
+  }
+
+  /** `config.toml` changed - `[general].width` / `.height` may have. */
+  reconfigure(): void {
+    this.fit()
+  }
+
+  /**
+   * The size the panel should be right now, in DIPs: the configured box, scaled
+   * with the text, clamped to the display it has to fit on.
+   *
+   * Which display: the primary when the user asked for it; otherwise the
+   * smallest work area of any connected display, so the panel fits wherever
+   * the compositor decides to put it. On Wayland this process cannot ask which
+   * output it is on, and a box that fits the smallest one fits them all.
+   *
+   * Units: Electron reports work areas in the compositor's logical pixels but
+   * takes window sizes in DIPs, and on Linux the two differ by the toolkit's
+   * text scale (measured: a 749-logical tiled window reads as 631 DIPs at 1.19).
+   * The work area is divided by that scale so both sides of the comparison are
+   * DIPs.
+   */
+  private fittedSize(): { width: number; height: number } {
+    const config = this.deps.config().general
+    const wanted = {
+      width: Math.round(config.width.value * this.textScale),
+      height: Math.round(config.height.value * this.textScale)
+    }
+    let area: { width: number; height: number } | null = null
+    try {
+      const displays = screen.getAllDisplays()
+      const chosen =
+        config.openOnMonitor.value === 'primary'
+          ? [screen.getPrimaryDisplay()]
+          : displays.length > 0
+            ? displays
+            : [screen.getPrimaryDisplay()]
+      for (const display of chosen) {
+        const work = display.workArea
+        if (work.width <= 0 || work.height <= 0) continue
+        area =
+          area === null
+            ? { width: work.width, height: work.height }
+            : { width: Math.min(area.width, work.width), height: Math.min(area.height, work.height) }
+      }
+    } catch {
+      area = null
+    }
+    if (area === null) return wanted
+    const dip = { width: area.width / this.toolkitScale, height: area.height / this.toolkitScale }
+    return {
+      width: Math.max(240, Math.min(wanted.width, Math.floor(dip.width * MAX_WIDTH_FRACTION))),
+      height: Math.max(160, Math.min(wanted.height, Math.floor(dip.height * MAX_HEIGHT_FRACTION)))
+    }
+  }
+
+  /**
+   * Bring the window to `fittedSize()` if it is not there already - only while
+   * hidden; a visible panel keeps its size and gets it on the next hide.
+   *
+   * By re-creating it. A Wayland toplevel does not own its geometry
+   * (ARCHITECTURE.md §"Resizing a Wayland surface"), and the one way to make a
+   * resize land without size hints - which are what break under the toolkit's
+   * text scale, see `resizable` above - is to map a new surface at the new
+   * size. Measured: `setSize`/`setBounds` on a hidden resizable window change
+   * nothing, not even Electron's own bookkeeping. The window is created once
+   * per size, then; the toggle path is still never on it.
+   */
+  private fit(): void {
+    const window = this.window
+    if (window === null || window.isDestroyed() || window.isVisible()) return
+    const size = this.fittedSize()
+    const created = this.createdSize
+    if (created !== null && created.width === size.width && created.height === size.height) return
+    this.deps.logger.info('panel re-created for its new size', {
+      width: size.width,
+      height: size.height,
+      textScale: this.textScale,
+      toolkitScale: this.toolkitScale
+    })
+    this.stopWatchingDisplays?.()
+    this.stopWatchingDisplays = null
+    this.closingForQuit = true
+    window.destroy()
+    this.closingForQuit = false
+    this.window = null
+    this.create()
   }
 
   private hardenNavigation(window: BrowserWindow): void {
@@ -258,6 +421,8 @@ export class PanelWindow {
   }
 
   destroy(): void {
+    this.stopWatchingDisplays?.()
+    this.stopWatchingDisplays = null
     const window = this.window
     if (window === null || window.isDestroyed()) return
     this.closingForQuit = true
