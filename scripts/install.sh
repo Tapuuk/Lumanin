@@ -10,7 +10,8 @@
 #
 # Everything it does is reversible and needs no root:
 #   • clones (or updates) the repo under ~/.local/share/lumanin/src
-#   • installs dependencies and builds
+#   • installs dependencies, downloads the Electron binary (~220 MB, once, into
+#     node_modules/electron - nothing system-wide) and builds
 #   • symlinks ~/.local/bin/lumanin at it
 #
 # It deliberately stops there. Compositor rules, the keybind and the autostart

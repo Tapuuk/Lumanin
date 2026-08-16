@@ -46,3 +46,46 @@ jobs:
         # xvfb-run's default screen is 640x480 at 8-bit depth, which Chromium
         # cannot paint on; ask for a real one.
         run: xvfb-run -a -s '-screen 0 1280x800x24' npm run test:e2e
+
+  # What a stranger's first ten minutes look like: a fresh clone, the install
+  # script, then the daemon actually starting. Nothing else in this file runs
+  # install.sh, which is how a launcher that built fine and started nothing
+  # (Electron 43 stopped fetching its binary in `npm ci`) shipped for a day.
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: clone
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+
+      - name: Run the installer from the clone
+        run: ./clone/scripts/install.sh </dev/null
+
+      - name: What it left behind
+        run: |
+          set -x
+          readlink -f ~/.local/bin/lumanin
+          test -x clone/node_modules/electron/dist/electron
+          test -f ~/.local/share/applications/lumanin-settings.desktop
+          test -f ~/.local/share/icons/hicolor/scalable/apps/lumanin.svg
+          ~/.local/bin/lumanin --version
+
+      # The daemon has to come up from the CLI, the way a hotkey or the settings
+      # entry starts it - not just build. Then a plugin's own path: what the
+      # `lumanin-settings.desktop` Exec runs.
+      - name: The daemon starts and answers
+        env:
+          ELECTRON_DISABLE_SANDBOX: '1'
+        run: |
+          set -x
+          xvfb-run -a -s '-screen 0 1280x800x24' bash -c '
+            ~/.local/bin/lumanin show
+            sleep 3
+            ~/.local/bin/lumanin ping
+            ~/.local/bin/lumanin doctor || true
+            ~/.local/bin/lumanin quit
+          '
