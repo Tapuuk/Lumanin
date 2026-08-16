@@ -16,7 +16,7 @@ It runs everywhere (Hyprland, KDE, GNOME, COSMIC, Sway, X11 desktops) and looks 
 
 ## Install
 
-One command, no root:
+One command. No sudo, nothing outside your home directory:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Tapuuk/Lumanin/main/scripts/install.sh | bash
@@ -24,19 +24,15 @@ curl -fsSL https://raw.githubusercontent.com/Tapuuk/Lumanin/main/scripts/install
 
 It builds from source into your home directory and puts `lumanin` on your PATH. You need `git` and `node`/`npm` installed. Everything else it handles.
 
-Or, if you prefer to clone the repo, run this from inside the clone after cloning. Cloning by itself installs nothing - no `lumanin` command, no settings app - until this runs:
+Or, if you prefer to clone the repo, run this from inside the clone. Cloning by itself installs nothing - no `lumanin` command, no settings app - until this runs:
 
 ```bash
-./scripts/install.sh
+bash scripts/install.sh
 ```
 
-(`gh repo clone Tapuuk/Lumanin && cd Lumanin && ./scripts/install.sh` in one go.) The one-line `curl` above runs the exact same script; it only clones for you first.
+(`gh repo clone Tapuuk/Lumanin && cd Lumanin && bash scripts/install.sh` in one go.) The `curl` one-liner above runs this same script; it only clones for you first.
 
-> **Note on Electron.** Lumanin runs on Electron, but you do not install it yourself: the script downloads the Electron binary (about 220 MB, once) into the clone's `node_modules/electron/`. Do not skip the script and run `npm ci` by hand expecting a working launcher: since Electron 43 the npm package does not download the binary during `npm ci`, so a bare `npm ci && npm run build` builds fine and then starts nothing. If you did that, `node node_modules/electron/install.js` fetches it; `lumanin` tells you the same when it cannot start.
-
-Then run `lumanin` once. The first-run screen lets you pick a hotkey and sets up your desktop. It shows you every file it wants to touch and asks before writing.
-
-Uninstall: `lumanin doctor --unfix`, then delete `~/.local/share/lumanin` and the `~/.local/bin/lumanin` symlink. That's everything.
+> **Electron:** you do not install it. The script downloads it (about 220 MB, once) into the clone. If you skipped the script and only ran `npm ci`, the launcher has no Electron and will not start - run the script.
 
 ## Using it
 

@@ -6,9 +6,10 @@
 #
 # or, from a clone:
 #
-#   ./scripts/install.sh
+#   bash scripts/install.sh
 #
-# Everything it does is reversible and needs no root:
+# Everything it does is reversible and stays inside your home directory - no
+# sudo, nothing under /usr:
 #   • clones (or updates) the repo under ~/.local/share/lumanin/src
 #   • installs dependencies, downloads the Electron binary (~220 MB, once, into
 #     node_modules/electron - nothing system-wide) and builds
@@ -55,8 +56,29 @@ else
   git clone --depth 1 --branch "$BRANCH" "$REPO" "$SRC"
 fi
 
+# `npm ci` wipes node_modules, and the Electron binary lives inside it. On a
+# re-run keep the binary already downloaded aside and put it back, so a second
+# install neither downloads 220 MB again nor makes anyone wait to find out.
+ELECTRON_DIR="$SRC/node_modules/electron"
+ELECTRON_BIN="$ELECTRON_DIR/dist/electron"
+KEPT=""
+if [ -x "$ELECTRON_BIN" ] && [ -f "$ELECTRON_DIR/path.txt" ]; then
+  KEPT="$SRC/.electron-kept"
+  rm -rf "$KEPT" && mkdir -p "$KEPT"
+  mv "$ELECTRON_DIR/dist" "$ELECTRON_DIR/path.txt" "$KEPT/"
+fi
+
 say "installing dependencies"
 (cd "$SRC" && npm ci)
+
+if [ -n "$KEPT" ]; then
+  # Only if it is the version the tree now wants; a bumped Electron must be fetched.
+  wanted="$(node -p "require('$ELECTRON_DIR/package.json').version" 2>/dev/null || true)"
+  if [ -d "$ELECTRON_DIR" ] && [ "$(cat "$KEPT/dist/version" 2>/dev/null)" = "$wanted" ]; then
+    mv "$KEPT/dist" "$KEPT/path.txt" "$ELECTRON_DIR/"
+  fi
+  rm -rf "$KEPT"
+fi
 # The plugin API's pinned type definitions are a separate npm tree under spec/;
 # the build's type gate imports them, so a build without this step fails on
 # the first `import type` in src/api-shim.
@@ -66,9 +88,13 @@ say "installing dependencies"
 # first `require('electron')`, which nothing in the launcher does - the daemon
 # is spawned by path. Without this step there is no binary, no daemon, and a
 # `lumanin` that reports "none could be started" for no visible reason.
-say "fetching the Electron binary"
-(cd "$SRC" && node node_modules/electron/install.js)
-[ -x "$SRC/node_modules/electron/dist/electron" ] || die "Electron binary missing at $SRC/node_modules/electron/dist/electron"
+if [ -x "$ELECTRON_BIN" ]; then
+  say "Electron binary already present, skipping the download"
+else
+  say "downloading the Electron binary (about 220 MB, once)"
+  (cd "$SRC" && node node_modules/electron/install.js) || die "the Electron download failed; check your network and re-run"
+  [ -x "$ELECTRON_BIN" ] || die "Electron binary missing at $ELECTRON_BIN after the download"
+fi
 
 say "building"
 (cd "$SRC" && npm run build)
