@@ -24,6 +24,12 @@ curl -fsSL https://raw.githubusercontent.com/Tapuuk/Lumanin/main/scripts/install
 
 It builds from source into your home directory and puts `lumanin` on your PATH. You need `git` and `node`/`npm` installed. Everything else it handles.
 
+Prefer a clone? Cloning alone installs nothing; run the same script from inside it:
+
+```bash
+git clone https://github.com/Tapuuk/Lumanin.git && cd Lumanin && ./scripts/install.sh
+```
+
 Then run `lumanin` once. The first-run screen lets you pick a hotkey and sets up your desktop. It shows you every file it wants to touch and asks before writing.
 
 Uninstall: `lumanin doctor --unfix`, then delete `~/.local/share/lumanin` and the `~/.local/bin/lumanin` symlink. That's everything.

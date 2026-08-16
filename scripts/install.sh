@@ -61,12 +61,26 @@ say "installing dependencies"
 # the first `import type` in src/api-shim.
 (cd "$SRC/spec" && npm ci)
 
+# Electron 43+ no longer downloads its binary during `npm ci`; it fetches on the
+# first `require('electron')`, which nothing in the launcher does - the daemon
+# is spawned by path. Without this step there is no binary, no daemon, and a
+# `lumanin` that reports "none could be started" for no visible reason.
+say "fetching the Electron binary"
+(cd "$SRC" && node node_modules/electron/install.js)
+[ -x "$SRC/node_modules/electron/dist/electron" ] || die "Electron binary missing at $SRC/node_modules/electron/dist/electron"
+
 say "building"
 (cd "$SRC" && npm run build)
 
 mkdir -p "$BIN_DIR"
-ln -sfn "$SRC/bin/lumanin.js" "$BIN_DIR/lumanin"
+# bin/lumanin, not bin/lumanin.js: the shell shim finds a Node runtime itself
+# (PATH, then the Electron the build already installed). The `#!/usr/bin/env
+# node` script fails silently from a .desktop entry or a compositor bind on any
+# machine where node comes from a version manager, because those only put node
+# on the PATH of interactive shells.
+ln -sfn "$SRC/bin/lumanin" "$BIN_DIR/lumanin"
 say "linked $BIN_DIR/lumanin"
+"$BIN_DIR/lumanin" --version >/dev/null || die "$BIN_DIR/lumanin does not run; see the errors above"
 
 # The icon, into the user's icon theme where every desktop looks for it by
 # name. Scalable SVG is enough - hicolor scales it down for every size a shell
@@ -75,6 +89,7 @@ ICON_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps"
 mkdir -p "$ICON_DIR"
 cp "$SRC/resources/lumanin.svg" "$ICON_DIR/lumanin.svg"
 say "installed $ICON_DIR/lumanin.svg"
+command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -q -t -f "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor" 2>/dev/null || true
 
 # The settings app in the app grid. Generated rather than shipped as a static
 # file so Exec can be an absolute path - a GUI session does not always have
@@ -94,6 +109,9 @@ Terminal=false
 Categories=Settings;Utility;
 EOF
 say "installed $APPS_DIR/lumanin-settings.desktop"
+# Some app grids read the cache rather than the directory; refresh it where the
+# tool exists, and do nothing where it does not.
+command -v update-desktop-database >/dev/null && update-desktop-database -q "$APPS_DIR" 2>/dev/null || true
 
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;

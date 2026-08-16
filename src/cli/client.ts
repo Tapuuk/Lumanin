@@ -94,6 +94,28 @@ export function resolveDaemonCommand(): { command: string; args: string[] } | nu
 }
 
 /**
+ * Why the daemon is not up after `startDaemon`, as a sentence a user can act on.
+ *
+ * Since Electron 43 the npm package no longer downloads its binary in a
+ * postinstall step: `npm ci` leaves `node_modules/electron/` with no `dist/`,
+ * and the first `require('electron')` fetches it. Nothing here requires it -
+ * the daemon is spawned by path - so a tree that was installed but never
+ * fetched has no launcher at all. `scripts/install.sh` runs the fetch; this
+ * names it for a tree that skipped the script.
+ */
+export function missingDaemonHint(): string {
+  const root = repoRoot()
+  const binary = join(root, 'node_modules', 'electron', 'dist', 'electron')
+  if (existsSync(binary)) {
+    return `it exited while starting; run \`${binary} ${root}\` in a terminal to see why`
+  }
+  if (existsSync(join(root, 'node_modules', 'electron', 'install.js'))) {
+    return `the Electron binary was never downloaded; run \`node node_modules/electron/install.js\` in ${root}`
+  }
+  return 'is the app installed?'
+}
+
+/**
  * The dev tree's root: the nearest ancestor with a `package.json`.
  *
  * **Not** a fixed number of `..` from `__dirname` — this module is shared by

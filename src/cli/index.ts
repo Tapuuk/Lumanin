@@ -2,7 +2,7 @@ import { APP_DISPLAY_NAME, APP_ID } from '../shared/identity'
 import { firstRunPending, markFirstRunOffered } from '../node/first-run'
 import { resolvePaths } from '../node/paths'
 import { CLIENT_COMMANDS, parseArgs, VERB_KINDS } from '../shared/protocol'
-import { fail, launchSettings, readVersion, request, startDaemon } from './client'
+import { fail, launchSettings, missingDaemonHint, readVersion, request, startDaemon } from './client'
 
 /**
  * The `lumanin` CLI.
@@ -156,7 +156,7 @@ async function main(): Promise<void> {
     process.exit(await (await import('./plugin-export')).runPluginExport(parsed.rest))
   }
   if (parsed.clientCommand === 'settings') {
-    if (!launchSettings()) fail('the settings app could not be started (is the app installed?)')
+    if (!launchSettings()) fail(`the settings app could not be started (${missingDaemonHint()})`)
     return
   }
   if (parsed.clientCommand === 'start') {
@@ -223,7 +223,7 @@ async function main(): Promise<void> {
     if (verb.kind === 'reload') return
 
     if (!(await startDaemon(socketPath))) {
-      fail('no daemon running and none could be started (is the app installed?)')
+      fail(`no daemon running and none could be started (${missingDaemonHint()})`)
     }
     reply = await request(socketPath, verb)
   }
