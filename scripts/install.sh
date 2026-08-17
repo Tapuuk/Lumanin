@@ -140,6 +140,14 @@ say "installed $APPS_DIR/lumanin-settings.desktop"
 # tool exists, and do nothing where it does not.
 command -v update-desktop-database >/dev/null && update-desktop-database -q "$APPS_DIR" 2>/dev/null || true
 
+# `lumanin update` re-runs this script to rebuild in place. It has already
+# been through the PATH advice and the epilogue once; a second copy of both
+# would bury the one line that matters ("updated to ...").
+if [ "${LUMANIN_UPDATE:-}" = "1" ]; then
+  say "rebuilt in place"
+  exit 0
+fi
+
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
   *)

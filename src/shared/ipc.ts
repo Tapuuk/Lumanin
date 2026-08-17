@@ -527,6 +527,38 @@ export interface SettingsInvokeMap {
   'settings.applySetup': { params: undefined; result: ApplyBindDto }
   /** The wizard was completed or dismissed; never open it again unasked. */
   'settings.finishFirstRun': { params: undefined; result: void }
+  /**
+   * Is there a newer launcher where this one came from? Reaches the network
+   * (a `git fetch`) only on this explicit call.
+   */
+  'settings.updateCheck': { params: undefined; result: UpdateCheckDto }
+  /**
+   * Pull, rebuild in place with the install script, restart the daemon. Long:
+   * a minute or two of npm and a build. Only for a git checkout; a package
+   * answers with its manager's command.
+   */
+  'settings.updateApply': { params: undefined; result: UpdateApplyDto }
+}
+
+export interface UpdateCheckDto {
+  /** How this copy is installed - decides what "update" can mean. */
+  readonly kind: 'git' | 'package' | 'unknown'
+  readonly root: string
+  readonly current: string
+  readonly latest: string | null
+  readonly available: boolean
+  readonly changes: readonly string[]
+  readonly dirty: boolean
+  readonly problem: string | null
+  /** For a package: the manager's own upgrade command. */
+  readonly managerCommand: string | null
+}
+
+export interface UpdateApplyDto {
+  readonly ok: boolean
+  readonly log: string
+  /** The daemon was restarted on the new code. */
+  readonly restarted: boolean
 }
 
 export type InvokeMethod = keyof InvokeMap
@@ -581,7 +613,9 @@ export const SETTINGS_INVOKE_METHODS = [
   'settings.restartDaemon',
   'settings.planSetup',
   'settings.applySetup',
-  'settings.finishFirstRun'
+  'settings.finishFirstRun',
+  'settings.updateCheck',
+  'settings.updateApply'
 ] as const satisfies readonly InvokeMethod[]
 
 export interface EventMap {

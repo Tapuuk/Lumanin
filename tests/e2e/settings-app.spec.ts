@@ -116,6 +116,16 @@ test('opens themed, on the General screen, with every section listed', async () 
   }
 })
 
+test('general: the update check answers with a sentence, whatever the checkout says', async () => {
+  const row = page.locator('.s-row', { hasText: 'Launcher version' })
+  await expect(row).toBeVisible()
+  await row.locator('.s-button').click()
+  // Up to date, behind by N commits, or unreachable - any of the three is a
+  // truthful answer; a silent button is the failure.
+  await expect(page.locator('.s-section', { hasText: 'Updates' }).locator('.s-banner')).toBeVisible({ timeout: 60_000 })
+  await expect(row).toContainText(/checkout at|package|installed/i)
+})
+
 test('a toggled setting lands in config.toml, and toggling back to the default deletes the key', async () => {
   const row = page.locator('.s-row', { hasText: 'Hide when focus is lost' })
   await row.locator('.s-toggle').click()
@@ -244,27 +254,32 @@ test('global search: engines toggle and reorder as [search].engines', async () =
     .not.toContain(`"${firstEngine.toLowerCase()}"`)
 })
 
-test('plugins: the bundled file-search plugin is listed, disable-not-remove enforced', async () => {
+test('file search: hidden-files preference toggles, persists, and redraws from the store', async () => {
+  await section('File Search').click()
+  const row = page.locator('.s-row', { hasText: 'Hidden Files' }).first()
+  await expect(row).toBeVisible()
+  const toggle = row.locator('.s-toggle')
+  await expect(toggle).toHaveAttribute('aria-checked', 'false')
+  await toggle.click()
+  // The switch shows the stored value, so it only flips once the save has
+  // round-tripped and the screen re-fetched - which is the bug this guards.
+  await expect(toggle).toHaveAttribute('aria-checked', 'true')
+  await section('General').click()
+  await section('File Search').click()
+  await expect(page.locator('.s-row', { hasText: 'Hidden Files' }).first().locator('.s-toggle')).toHaveAttribute(
+    'aria-checked',
+    'true'
+  )
+  await page.locator('.s-row', { hasText: 'Hidden Files' }).first().locator('.s-toggle').click()
+  await expect(page.locator('.s-row', { hasText: 'Hidden Files' }).first().locator('.s-toggle')).toHaveAttribute(
+    'aria-checked',
+    'false'
+  )
+})
+
+test('plugins: file search is a feature of the app, not a card on the plugins list', async () => {
   await section('Plugins').click()
-  // The bundled plugin's manifest title is "Files"; "Search Files" is its
-  // command's title.
-  const card = page.locator('.s-section', {
-    has: page.locator('.s-plugin__title', { hasText: 'Files' })
-  })
-  await expect(card).toBeVisible()
-
-  await card.locator('.s-toggle').first().click()
-  await expect.poll(config).toMatch(/disabled = \[ ?"files" ?\]/)
-  // Wait for the file round trip to redraw the switch before toggling back.
-  await expect(card.locator('.s-toggle').first()).toHaveAttribute('aria-checked', 'false')
-
-  await card.locator('.s-plugin__title').click()
-  // Bundled: no Remove button, and the sentence explains why.
-  await expect(card.locator('.s-button--danger')).toHaveCount(0)
-  await expect(card.locator('.s-plugin__body')).toContainText('turned off but not removed')
-
-  await card.locator('.s-toggle').first().click()
-  await expect.poll(config).not.toContain('disabled')
+  await expect(page.locator('.s-plugin__title', { hasText: 'Files' })).toHaveCount(0)
 })
 
 test('a garbage install source is refused with a sentence, nothing spawned', async () => {

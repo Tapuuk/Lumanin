@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, screen } from 'electron'
 import { SETTINGS_WINDOW_TITLE } from '../shared/identity'
 import type { Logger } from '../node/logger'
 import { hardenNavigation } from './window'
@@ -37,8 +37,63 @@ const MIN_HEIGHT = 360
 
 export class SettingsWindow {
   private window: BrowserWindow | null = null
+  private zoom = 1
+  private toolkitScale = 1
+  /** Set once the user has dragged the window to a size of their own. */
+  private userSized = false
 
   constructor(private readonly deps: SettingsWindowDeps) {}
+
+  /**
+   * The text scale the page is zoomed by, and what the toolkit already applies
+   * to every DIP (see `platform/appearance/toolkit-scale.ts`). The window is
+   * sized so the same layout fits at any zoom: 920x620 at 1.0 is a cramped
+   * 613x413 worth of content at 1.5, so the default grows with the zoom and is
+   * clamped to the display. Applied on the next open, and to an open window
+   * the user has not resized themselves - their size is theirs.
+   */
+  setScale(zoom: number, toolkitScale: number): void {
+    this.zoom = zoom
+    this.toolkitScale = toolkitScale
+    const window = this.window
+    if (window === null || window.isDestroyed() || this.userSized) return
+    const size = this.fittedSize()
+    const [w, h] = window.getSize()
+    if (w === size.width && h === size.height) return
+    this.applying = true
+    this.deps.logger.info('settings window resized for text scale', { from: [w, h], to: size, zoom, toolkitScale })
+    window.setSize(size.width, size.height)
+    // The resize event this causes is ours, not the user's; it arrives after
+    // this call returns, so the flag is cleared a beat later - and a second
+    // call within that beat pushes the clearing out, never lets it fire early.
+    if (this.applyingTimer !== null) clearTimeout(this.applyingTimer)
+    this.applyingTimer = setTimeout(() => {
+      this.applying = false
+      this.applyingTimer = null
+    }, 250)
+  }
+  private applying = false
+  private applyingTimer: ReturnType<typeof setTimeout> | null = null
+
+  private fittedSize(): { width: number; height: number } {
+    const wanted = { width: DEFAULT_WIDTH * this.zoom, height: DEFAULT_HEIGHT * this.zoom }
+    let area: { width: number; height: number } | null = null
+    try {
+      const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+      area = display.workArea
+    } catch {
+      area = null
+    }
+    if (area === null) return { width: Math.round(wanted.width), height: Math.round(wanted.height) }
+    // Work areas are compositor-logical; window sizes are DIPs, which differ by
+    // the toolkit scale (same arithmetic as the panel's `fittedSize`).
+    const maxW = (area.width / this.toolkitScale) * 0.94
+    const maxH = (area.height / this.toolkitScale) * 0.9
+    return {
+      width: Math.max(MIN_WIDTH, Math.round(Math.min(wanted.width, maxW))),
+      height: Math.max(MIN_HEIGHT, Math.round(Math.min(wanted.height, maxH)))
+    }
+  }
 
   /** Open the window, creating it if there is none, and give it the focus. */
   open(): void {
@@ -51,10 +106,12 @@ export class SettingsWindow {
 
     const { logger, preloadPath, rendererUrl, rendererFile } = this.deps
 
+    const size = this.fittedSize()
+    this.userSized = false
     const window = new BrowserWindow({
       title: SETTINGS_WINDOW_TITLE,
-      width: DEFAULT_WIDTH,
-      height: DEFAULT_HEIGHT,
+      width: size.width,
+      height: size.height,
       minWidth: MIN_WIDTH,
       minHeight: MIN_HEIGHT,
       // Shown on ready-to-show instead: the first paint should already be the
@@ -82,6 +139,13 @@ export class SettingsWindow {
 
     this.window = window
     hardenNavigation(window, logger, rendererUrl)
+    // A resize in the first moments is the compositor placing the window (a
+    // tiler hands it whatever slot is free), not the user; only later ones
+    // are theirs. Ours are flagged by `applying`.
+    const createdAt = Date.now()
+    window.on('resize', () => {
+      if (!this.applying && Date.now() - createdAt > 1500) this.userSized = true
+    })
 
     window.webContents.on('did-fail-load', (_e, code, description, url) => {
       logger.error('settings renderer failed to load', { code, description, url })
@@ -126,7 +190,13 @@ export class SettingsWindow {
       void window.loadFile(rendererFile)
     }
 
-    logger.info('settings window opened', { title: SETTINGS_WINDOW_TITLE })
+    logger.info('settings window opened', {
+      title: SETTINGS_WINDOW_TITLE,
+      width: size.width,
+      height: size.height,
+      zoom: this.zoom,
+      toolkitScale: this.toolkitScale
+    })
   }
 
   close(): void {

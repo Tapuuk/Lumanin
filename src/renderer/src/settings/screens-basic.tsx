@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   completeFileOrder,
   FILE_CATEGORY_HINTS,
@@ -20,6 +20,8 @@ import {
 } from '@shared/settings-model'
 import { HotkeyCapture, rawChordFrom, ReorderList, Row, Section, SettingControl } from './controls'
 import { guarded, setConfig, useSettingsState } from './useSettings'
+import { PreferenceRow } from './screens-plugins'
+import type { PluginDto, UpdateApplyDto, UpdateCheckDto } from '@shared/ipc'
 
 /** The screens that are plain settings: General, Appearance, File Search, Keys. */
 
@@ -28,10 +30,117 @@ export function GeneralScreen(): React.JSX.Element {
   // its configured size. It now refits itself the next time it is hidden, so
   // there is nothing to apply and no button for it.
   return (
-    <Section>
-      {GENERAL_SETTINGS.map((setting) => (
-        <SettingControl key={setting.path.join('.')} setting={setting} />
-      ))}
+    <>
+      <Section>
+        {GENERAL_SETTINGS.map((setting) => (
+          <SettingControl key={setting.path.join('.')} setting={setting} />
+        ))}
+      </Section>
+      <UpdatesSection />
+    </>
+  )
+}
+
+/**
+ * Updating the launcher from inside it. Nothing runs unasked: the check is a
+ * click (it is the one `git fetch` this window ever does), and applying is a
+ * second click after the list of what changed. A packaged install gets its
+ * manager's command instead of a button - we do not pull over pacman's files.
+ */
+function UpdatesSection(): React.JSX.Element {
+  const [check, setCheck] = useState<UpdateCheckDto | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [applying, setApplying] = useState(false)
+  const [outcome, setOutcome] = useState<UpdateApplyDto | null>(null)
+  const [problem, setProblem] = useState<string | null>(null)
+
+  const runCheck = (): void => {
+    setChecking(true)
+    setProblem(null)
+    setOutcome(null)
+    window.lumanin
+      .invoke('settings.updateCheck')
+      .then(setCheck)
+      .catch((cause: unknown) => setProblem(cause instanceof Error ? cause.message : String(cause)))
+      .finally(() => setChecking(false))
+  }
+  const runApply = (): void => {
+    setApplying(true)
+    setProblem(null)
+    window.lumanin
+      .invoke('settings.updateApply')
+      .then((result) => {
+        setOutcome(result)
+        if (result.ok) setCheck(null)
+      })
+      .catch((cause: unknown) => setProblem(cause instanceof Error ? cause.message : String(cause)))
+      .finally(() => setApplying(false))
+  }
+
+  return (
+    <Section title="Updates">
+      <Row
+        label="Launcher version"
+        help={
+          check === null
+            ? 'Checks where this copy was installed from - a git checkout or a package - and reports what is newer. Nothing is downloaded until you say so.'
+            : `${check.current}${check.kind === 'git' ? ` - checkout at ${check.root}` : ''}`
+        }
+      >
+        <button type="button" className="s-button" disabled={checking || applying} onClick={runCheck}>
+          {checking ? 'Checking...' : 'Check for updates'}
+        </button>
+      </Row>
+      {problem !== null && <div className="s-banner">{problem}</div>}
+      {check !== null && check.problem !== null && (
+        <div className="s-banner s-banner--info">
+          <span>
+            {check.problem}
+            {check.managerCommand !== null && (
+              <>
+                {' '}
+                <code>{check.managerCommand}</code>
+              </>
+            )}
+          </span>
+        </div>
+      )}
+      {check !== null && check.problem === null && !check.available && (
+        <div className="s-banner s-banner--info">Up to date.</div>
+      )}
+      {check !== null && check.available && (
+        <>
+          <div className="s-banner">
+            <span>
+              {String(check.changes.length)} new {check.changes.length === 1 ? 'commit' : 'commits'}
+              {check.latest !== null ? ` (${check.latest})` : ''}. Updating pulls, rebuilds in place and restarts
+              the launcher - a minute or two.
+              {check.dirty ? ' This checkout has local edits, which the update refuses to overwrite.' : ''}
+            </span>
+            <button
+              type="button"
+              className="s-button s-button--primary"
+              disabled={applying || check.dirty}
+              onClick={runApply}
+            >
+              {applying ? 'Updating...' : 'Update now'}
+            </button>
+          </div>
+          <pre className="s-progress">{check.changes.slice(0, 20).join('\n')}</pre>
+        </>
+      )}
+      {outcome !== null && (
+        <>
+          <div className={`s-banner${outcome.ok ? ' s-banner--info' : ''}`}>
+            {outcome.ok
+              ? outcome.restarted
+                ? 'Updated and restarted. Close and reopen this window to run the new settings app too.'
+                : 'Updated. The launcher runs the new version the next time it starts; reopen this window too.'
+              : 'The update did not go through.'}
+          </div>
+          {outcome.log.length > 0 && <pre className="s-progress">{outcome.log}</pre>}
+        </>
+      )}
     </Section>
   )
 }
@@ -50,6 +159,20 @@ export function AppearanceScreen(): React.JSX.Element | null {
 
 export function FileSearchScreen(): React.JSX.Element | null {
   const { state } = useSettingsState()
+  // File search is built as a bundled plugin, so its own knobs (hidden files,
+  // which tool) are plugin preferences - shown here, on the feature's screen,
+  // never on the plugins list.
+  const [files, setFiles] = useState<PluginDto | null>(null)
+  const refreshFiles = useCallback(() => {
+    guarded(
+      window.lumanin
+        .invoke('settings.plugins')
+        .then((plugins: readonly PluginDto[]) => setFiles(plugins.find((p) => p.name === 'files') ?? null))
+    )
+  }, [])
+  useEffect(() => {
+    refreshFiles()
+  }, [refreshFiles, state])
   if (state === null) return null
 
   const hotkey = state.resolved.fileSearch.hotkey.value
@@ -74,6 +197,17 @@ export function FileSearchScreen(): React.JSX.Element | null {
           <div className="s-banner s-banner--info">Without a key, file search is unreachable.</div>
         )}
         <SettingControl setting={FILE_SEARCH_HIDE_ON_OPEN} />
+        {files?.preferenceGroups.flatMap((group) =>
+          group.preferences.map((preference) => (
+            <PreferenceRow
+              key={`${group.command}/${preference.name}`}
+              extension={files.name}
+              command={group.command}
+              preference={preference}
+              onChanged={refreshFiles}
+            />
+          ))
+        )}
       </Section>
       <Section title="Category order">
         <p className="s-help">

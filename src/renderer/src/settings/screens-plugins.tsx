@@ -30,9 +30,14 @@ export function PluginsScreen(): React.JSX.Element {
   return (
     <>
       <InstallSection onInstalled={refresh} />
-      {plugins.map((plugin) => (
-        <PluginCard key={plugin.name} plugin={plugin} onChanged={refresh} />
-      ))}
+      {plugins
+        // A bundled plugin is a feature of the app that happens to be built as
+        // one; file search has its own screen. Listing it here reads as "a
+        // plugin called files", which it is not to anyone using the launcher.
+        .filter((plugin) => !plugin.bundled)
+        .map((plugin) => (
+          <PluginCard key={plugin.name} plugin={plugin} onChanged={refresh} />
+        ))}
     </>
   )
 }
@@ -97,6 +102,7 @@ function PluginCard({ plugin, onChanged }: { plugin: PluginDto; onChanged: () =>
                   extension={plugin.name}
                   command={group.command}
                   preference={preference}
+                  onChanged={onChanged}
                 />
               ))}
             </div>
@@ -283,14 +289,17 @@ function ExportModal({ plugin, onClose }: { plugin: PluginDto; onClose: () => vo
   )
 }
 
-function PreferenceRow({
+export function PreferenceRow({
   extension,
   command,
-  preference
+  preference,
+  onChanged
 }: {
   extension: string
   command: string
   preference: PluginPreferenceDto
+  /** Re-fetch after a save: the control shows the stored value, not a local one. */
+  onChanged: () => void
 }): React.JSX.Element {
   const [problem, setProblem] = useState<string | null>(null)
   const save = (value: string | number | boolean): void => {
@@ -299,6 +308,7 @@ function PreferenceRow({
       .invoke('settings.setPreference', { extension, command, name: preference.name, value })
       .then((result: { ok: boolean; detail?: string }) => {
         if (!result.ok) setProblem(result.detail ?? 'That could not be saved')
+        else onChanged()
       })
       .catch((cause: unknown) => {
         setProblem(cause instanceof Error ? cause.message : String(cause))

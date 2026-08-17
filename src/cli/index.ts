@@ -79,6 +79,13 @@ Configuration:
             ${APP_ID}/config.toml, keeping a backup and preserving keys they
             do not recognise; editing that file by hand still works.
 
+Updating:
+  update    check whether a newer launcher exists where this one came from
+            (a git checkout pulls; a distro package names its manager) and,
+            with your say-so, install it, rebuild in place and restart.
+              --check     only report; exit 3 when an update is available
+              --yes       apply without asking
+
 Diagnostics:
   doctor    report the detected platform and the backend chosen per capability.
             Runs entirely in this process - it needs no daemon, which is the
@@ -154,6 +161,9 @@ async function main(): Promise<void> {
   }
   if (parsed.clientCommand === 'plugin-export') {
     process.exit(await (await import('./plugin-export')).runPluginExport(parsed.rest))
+  }
+  if (parsed.clientCommand === 'update') {
+    process.exit(await (await import('./update')).runUpdate(parsed.flags))
   }
   if (parsed.clientCommand === 'settings') {
     if (!launchSettings()) fail(`the settings app could not be started (${missingDaemonHint()})`)

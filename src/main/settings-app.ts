@@ -80,6 +80,7 @@ const theme = new ThemeService({
     settingsWindow?.webContents?.send(EVENT_CHANNEL, { event: 'theme.changed', payload })
     const contents = settingsWindow?.webContents
     if (contents) applyTextScale(contents, payload.textScale)
+    settingsWindow?.setScale(payload.textScale, theme.toolkitScaleNow)
   }
 })
 
@@ -157,6 +158,31 @@ app.whenReady().then(async () => {
     rendererUrl: devServerUrl,
     rendererFile: join(__dirname, '../renderer/settings.html')
   })
+
+  // The theme chain needs the platform's appearance backend — Omarchy's
+  // palette, the portal's light/dark, and the desktop's text scale. The
+  // window's *size* depends on that last one, and on Wayland a window can only
+  // be sized when it is created (`setSize` on a mapped surface changes
+  // nothing - measured, same as the panel), so the probe runs first. It is
+  // ~150 ms; the cap keeps a stuck probe from keeping the window away, at the
+  // cost of the built-in size and a repaint when the theme lands.
+  const attach = (async (): Promise<void> => {
+    try {
+      const probed = await profileReady()
+      const runtime = createRuntime({
+        profile: probed,
+        systemClipboard: clipboard,
+        home: paths.home,
+        dataHome: paths.dataHome
+      })
+      await theme.attach(runtime.appearance, runtime.blurGranted, runtime.toolkitTextScale)
+    } catch (error) {
+      logger.warn('appearance probing failed; staying on the built-in theme', { error })
+    }
+  })()
+  await Promise.race([attach, new Promise<void>((done) => setTimeout(done, 1500))])
+
+  settingsWindow.setScale(theme.payloadNow.textScale, theme.toolkitScaleNow)
   settingsWindow.open()
   {
     const contents = settingsWindow.webContents
@@ -164,23 +190,7 @@ app.whenReady().then(async () => {
   }
 
   watchConfigFile()
-
-  // The theme chain needs the platform's appearance backend — Omarchy's
-  // palette, the portal's light/dark. The probes shell out and take a moment,
-  // so the window opens on the built-in default and repaints when this lands;
-  // the panel does exactly the same at daemon start.
-  try {
-    const probed = await profileReady()
-    const runtime = createRuntime({
-      profile: probed,
-      systemClipboard: clipboard,
-      home: paths.home,
-      dataHome: paths.dataHome
-    })
-    await theme.attach(runtime.appearance, runtime.blurGranted, runtime.toolkitTextScale)
-  } catch (error) {
-    logger.warn('appearance probing failed; staying on the built-in theme', { error })
-  }
+  await attach
 
   logger.info('settings app ready', { class: SETTINGS_WINDOW_CLASS })
 })

@@ -34,6 +34,12 @@ Or, if you prefer to clone the repo, run this from the directory you cloned into
 
 > **Electron:** you do not install it. The script downloads it (about 220 MB, once) into the clone. If you skipped the script and only ran `npm ci`, the launcher has no Electron and will not start - run the script.
 
+Then run `lumanin` once. The first-run screen lets you pick a hotkey and sets up your desktop. It shows you every file it wants to touch and asks before writing.
+
+Update: `lumanin update`, or Settings > General > Check for updates. It pulls the checkout, rebuilds in place and restarts the launcher; nothing runs until you say yes.
+
+Uninstall: `lumanin doctor --unfix`, then delete `~/.local/share/lumanin` and the `~/.local/bin/lumanin` symlink. That's everything.
+
 ## Using it
 
 ### Global search: Super+R

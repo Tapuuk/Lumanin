@@ -140,7 +140,8 @@ export const CLIENT_COMMANDS = [
   // "unknown verb" answer to a command we shipped would read as a regression.
   'store',
   'plugin-install',
-  'plugin-export'
+  'plugin-export',
+  'update'
 ] as const
 export type ClientCommand = (typeof CLIENT_COMMANDS)[number]
 

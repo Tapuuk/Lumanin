@@ -3,7 +3,8 @@ import { spawn } from 'node:child_process'
 import { basename, join, resolve } from 'node:path'
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { BUILTIN_SEEDS } from '../../themes/index'
-import { request, startDaemon } from '../cli/client'
+import { readVersion, repoRoot, request, startDaemon } from '../cli/client'
+import { applyUpdate, checkForUpdates, detectInstall, managerHint } from '../node/update'
 import { describePlatform, type PlatformProfile } from '../platform/detect'
 import { bindable, choiceFromConfig, planBind, reloadNotes } from '../platform/fix/bind'
 import {
@@ -33,7 +34,9 @@ import {
   type PluginPreferenceGroupDto,
   type SettingsSetValue,
   type SettingsState,
-  type SetupPlanDto
+  type SetupPlanDto,
+  type UpdateApplyDto,
+  type UpdateCheckDto
 } from '../shared/ipc'
 import { allSettings, type Setting } from '../shared/settings-model'
 import { THEME_FILE_BASENAME } from '../shared/identity'
@@ -190,10 +193,51 @@ export class SettingsIpc {
         case 'settings.finishFirstRun':
           this.finishFirstRun()
           return undefined
+        case 'settings.updateCheck':
+          return await this.updateCheck()
+        case 'settings.updateApply':
+          return await this.updateApply()
         default:
           throw new Error('unknown method')
       }
     })
+  }
+
+  // --- updates ---------------------------------------------------------------
+
+  private async updateCheck(): Promise<UpdateCheckDto> {
+    const install = await detectInstall(repoRoot())
+    const check = await checkForUpdates(install, readVersion())
+    return {
+      kind: install.kind,
+      root: install.root,
+      current: check.current,
+      latest: check.latest,
+      available: check.available,
+      changes: check.changes,
+      dirty: check.dirty,
+      problem: check.problem,
+      managerCommand: install.kind === 'package' ? managerHint(install.manager, install.name) : null
+    }
+  }
+
+  private async updateApply(): Promise<UpdateApplyDto> {
+    const install = await detectInstall(repoRoot())
+    const outcome = await applyUpdate(install, (line) => this.deps.logger.info('update', { line }))
+    if (!outcome.ok || !outcome.restart) return { ok: outcome.ok, log: outcome.log, restarted: false }
+    // The daemon is on the old code until it is restarted; the settings app
+    // itself is too, and says so on screen rather than relaunching under the
+    // user - the next open is the new one.
+    let restarted = false
+    if ((await request(this.deps.paths.socket, { kind: 'ping' })) !== null) {
+      await request(this.deps.paths.socket, { kind: 'quit' })
+      const gone = Date.now() + 5000
+      while (Date.now() < gone && (await request(this.deps.paths.socket, { kind: 'ping' })) !== null) {
+        await new Promise((r) => setTimeout(r, 100))
+      }
+      restarted = await startDaemon(this.deps.paths.socket)
+    }
+    return { ok: true, log: outcome.log, restarted }
   }
 
   // --- state -----------------------------------------------------------------
