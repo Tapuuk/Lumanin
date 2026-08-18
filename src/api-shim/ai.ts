@@ -149,7 +149,7 @@ const Model = {
 
 function ask(): never {
   throw new Error(
-    'AI.ask() needs an AI provider, and none is configured. Lumanin ships no AI service; a provider setting arrives with the rest of Wave 3.'
+    'AI.ask() needs an AI provider, and none is configured. Lumanin ships no AI service and no provider setting exists.'
   )
 }
 

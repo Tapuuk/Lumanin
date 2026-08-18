@@ -264,7 +264,7 @@ export function formatReport(report: DoctorReport, verbose = false): string {
       `${String(unverified.length)} capabilit${unverified.length === 1 ? 'y' : 'ies'} marked UNVERIFIED:`
     )
     lines.push('  the backend probed fine but has never been confirmed working on this desktop.')
-    lines.push('  See TESTING.md - these need a human in a VM, not a code change.')
+    lines.push('  These need a human on that desktop to confirm, not a code change.')
   }
 
   const planned = report.capabilities.filter((c) => c.status === 'PLANNED')

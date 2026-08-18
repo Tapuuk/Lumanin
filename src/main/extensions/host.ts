@@ -597,7 +597,7 @@ export class ExtensionHost {
         })
         throw new RpcError(
           RPC_ERRORS.INTERNAL,
-          'the extension preferences screen arrives in M5. Until then, set preferences with `lumanin ext prefs`.'
+          'preferences are edited in the settings window (Plugins) or with `lumanin plugins`.'
         )
       },
       [APP_METHODS.UPDATE_METADATA]: (params) => {

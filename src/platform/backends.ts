@@ -113,7 +113,7 @@ const hotkey: Backend[] = [
     // can explain that it exists and what it costs, not so it can be chosen.
     probe: () => ({
       usable: false,
-      detail: 'opt-in only and off by default; reads all input devices (see SECURITY.md)'
+      detail: 'opt-in only and off by default; reads all input devices'
     })
   }
 ]
@@ -406,7 +406,7 @@ const files: Backend[] = [
     // File search is M7.
     implemented: false,
     verifiedOn: [],
-    probe: () => ({ usable: true, degraded: true, detail: 'not implemented yet (M7)' })
+    probe: () => ({ usable: true, degraded: true, detail: 'not implemented' })
   }
 ]
 
