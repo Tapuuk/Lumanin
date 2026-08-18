@@ -398,3 +398,68 @@ test('a garbage install source is refused with a sentence, nothing spawned', asy
   await install.locator('.s-button', { hasText: 'Fetch' }).click()
   await expect(install.locator('.s-error')).toBeVisible()
 })
+
+// A picker row by its exact label; `hasText` alone also matches the Plugins
+// row's detail line.
+const pickRow = (label: string): ReturnType<Page['locator']> =>
+  page.locator('.s-pickrow', { has: page.locator('.s-pickrow__label', { hasText: new RegExp(`^${label}$`) }) })
+
+test('pins: the same target twice is refused with a note and written once', async () => {
+  await section('Global Search').click()
+  const pins = page.locator('.s-section', { hasText: 'Pins' })
+  const pinFirstCommand = async (): Promise<void> => {
+    await pins.locator('.s-button', { hasText: 'Pin something' }).click()
+    await pickRow('A command').click()
+    await page.locator('.s-pickrow').first().click()
+  }
+  await pinFirstCommand()
+  await expect.poll(config).toContain('command:')
+  await pinFirstCommand()
+  await expect(pins.locator('.s-error', { hasText: 'Already pinned' })).toBeVisible()
+  const written = config()
+  const key = /"(command:[^"]+)"/.exec(written)?.[1]
+  expect(key).toBeDefined()
+  expect(written.split(key ?? '').length - 1).toBe(1)
+})
+
+test('the target picker keeps focus inside and hands it back on close', async () => {
+  const opener = page.locator('.s-section', { hasText: 'Pins' }).locator('.s-button', { hasText: 'Pin something' })
+  await opener.click()
+  await expect(page.locator('.s-modal__box[role="dialog"]')).toBeVisible()
+  await page.keyboard.press('Shift+Tab')
+  expect(await page.evaluate(() => document.activeElement?.closest('.s-modal__box') !== null)).toBe(true)
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.s-modal')).toHaveCount(0)
+  expect(await opener.evaluate((el) => el === document.activeElement)).toBe(true)
+})
+
+test('an alias cannot point at a web search: the picker does not offer one', async () => {
+  const aliases = page.locator('.s-section', { hasText: 'Aliases' })
+  await aliases.locator('input').fill('gg')
+  await aliases.locator('.s-button', { hasText: 'Choose its target' }).click()
+  await expect(pickRow('A command')).toBeVisible()
+  await expect(pickRow('A web search')).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.s-modal')).toHaveCount(0)
+})
+
+test('a typed number commits on Enter', async () => {
+  await section('General').click()
+  const row = page.locator('.s-row', { hasText: 'Panel width' })
+  await row.locator('select').selectOption({ label: 'Type a number…' })
+  const input = row.locator('input[type="number"]')
+  await input.fill('850')
+  await input.press('Enter')
+  await expect.poll(config).toContain('width = 850')
+})
+
+test('Escape in a text field leaves the field and keeps the window', async () => {
+  await section('Global Search').click()
+  const input = page.locator('.s-section', { hasText: 'Aliases' }).locator('input')
+  await input.click()
+  await input.type('ff')
+  await page.keyboard.press('Escape')
+  expect(await input.evaluate((el) => el === document.activeElement)).toBe(false)
+  await page.waitForTimeout(300)
+  await expect(page.locator('.settings')).toBeVisible()
+})

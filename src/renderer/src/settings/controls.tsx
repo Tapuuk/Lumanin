@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ENV_PREFIX } from '@shared/identity'
-import { formatHotkey, KEY_ALIASES, MODIFIERS, type Hotkey, type Modifier } from '@shared/hotkey'
+import { formatHotkey, KEY_ALIASES, MODIFIERS, parseHotkey, type Hotkey, type Modifier } from '@shared/hotkey'
 import type { Setting } from '@shared/settings-model'
 import { setConfig, useOptimistic, useSettingsState } from './useSettings'
 
@@ -241,13 +241,35 @@ function NumberControl({
   const [text, setText] = useState<string>(value === null ? '' : String(value))
   const [problem, setProblem] = useState<string | null>(null)
   // Follow a value changed by another writer (CLI, editor) — same reason as
-  // EnumControl above.
+  // EnumControl above — unless the field has focus and holds a draft.
+  const focused = useRef(false)
   const [seen, setSeen] = useState(value)
   if (seen !== value) {
     setSeen(value)
-    setText(value === null ? '' : String(value))
-    setCustom(presets.length > 0 && value !== null && preset === undefined)
+    if (!focused.current) {
+      setText(value === null ? '' : String(value))
+      setCustom(presets.length > 0 && value !== null && preset === undefined)
+      setProblem(null)
+    }
+  }
+
+  const commitDraft = (): void => {
+    if (text.trim().length === 0) {
+      setProblem(null)
+      save(null)
+      return
+    }
+    const parsed = Number(text)
+    if (!Number.isFinite(parsed) || (integer && !Number.isInteger(parsed))) {
+      setProblem(integer ? 'Must be a whole number' : 'Not a number')
+      return
+    }
+    if (parsed < min || parsed > max) {
+      setProblem(`Must be between ${String(min)} and ${String(max)}`)
+      return
+    }
     setProblem(null)
+    save(parsed)
   }
 
   if (presets.length === 0 || custom) {
@@ -262,23 +284,15 @@ function NumberControl({
           value={text}
           disabled={disabled}
           onChange={(event) => setText(event.target.value)}
+          onFocus={() => {
+            focused.current = true
+          }}
           onBlur={() => {
-            if (text.trim().length === 0) {
-              setProblem(null)
-              save(null)
-              return
-            }
-            const parsed = Number(text)
-            if (!Number.isFinite(parsed) || (integer && !Number.isInteger(parsed))) {
-              setProblem(integer ? 'Must be a whole number' : 'Not a number')
-              return
-            }
-            if (parsed < min || parsed > max) {
-              setProblem(`Must be between ${String(min)} and ${String(max)}`)
-              return
-            }
-            setProblem(null)
-            save(parsed)
+            focused.current = false
+            commitDraft()
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') (event.target as HTMLInputElement).blur()
           }}
         />
         {presets.length > 0 && (
@@ -436,6 +450,14 @@ export function ReorderList({
   )
 }
 
+const FOCUSABLE = 'button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
+
+function focusableIn(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+    (element) => !(element as HTMLButtonElement).disabled
+  )
+}
+
 export function Modal({
   title,
   onClose,
@@ -447,6 +469,8 @@ export function Modal({
   children: ReactNode
   wide?: boolean
 }): React.JSX.Element {
+  const box = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
@@ -462,9 +486,59 @@ export function Modal({
     return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [onClose])
 
+  // Focus moves into the box on open and back to the opener on close. A child
+  // that already took focus with `autoFocus` keeps it. The opener is captured
+  // at render time (before autoFocus moves focus); if it has been unmounted by
+  // the time the effect runs, whatever holds focus then is the opener instead.
+  const [opener] = useState(() => document.activeElement)
+  const restore = useRef<Element | null>(null)
+  useEffect(() => {
+    const element = box.current
+    const inside = element !== null && element.contains(document.activeElement)
+    restore.current =
+      opener instanceof HTMLElement && opener.isConnected
+        ? opener
+        : inside
+          ? opener
+          : document.activeElement
+    if (element !== null && !inside) {
+      const body = element.querySelector<HTMLElement>('.s-modal__body')
+      const first = body === null ? undefined : focusableIn(body)[0]
+      const target = first ?? element.querySelector<HTMLElement>('.s-modal__title button')
+      target?.focus()
+    }
+    return () => {
+      const target = restore.current
+      if (target instanceof HTMLElement && target.isConnected) target.focus()
+    }
+  }, [opener])
+
+  const trapTab = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== 'Tab' || box.current === null) return
+    const focusable = focusableIn(box.current)
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (first === undefined || last === undefined) return
+    const active = document.activeElement
+    if (event.shiftKey && (active === first || !box.current.contains(active))) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
   return (
     <div className="s-modal" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className={`s-modal__box${wide === true ? ' s-modal__box--wide' : ''}`}>
+      <div
+        ref={box}
+        className={`s-modal__box${wide === true ? ' s-modal__box--wide' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onKeyDown={trapTab}
+      >
         <div className="s-modal__title">
           <span>{title}</span>
           <button type="button" className="s-iconbtn" aria-label="Close" onClick={onClose}>
@@ -486,6 +560,14 @@ export function Modal({
 // handler (capture phase, runs before React's) does not steal the cancel.
 let captureActive = false
 
+/** Whether a chord capture is armed right now, for handlers that must yield Esc to it. */
+export function isCaptureActive(): boolean {
+  return captureActive
+}
+
+const LOST_CAPTURE_NOTE =
+  'The desktop took that key, or nothing arrived. Type it instead, for example Super+Shift+R.'
+
 export function HotkeyCapture({
   value,
   allowNone,
@@ -500,10 +582,21 @@ export function HotkeyCapture({
 }): React.JSX.Element {
   const [capturing, setCapturing] = useState(false)
   const [note, setNote] = useState<string | null>(null)
+  const [typed, setTyped] = useState<string | null>(null)
+  const armed = useRef(false)
   const arm = (next: boolean): void => {
     captureActive = next
+    armed.current = next
     setCapturing(next)
   }
+  // No blur fires for an element removed while focused, so an armed capture
+  // unmounted by a closing modal would otherwise leave the flag set for good.
+  useEffect(
+    () => () => {
+      if (armed.current) captureActive = false
+    },
+    []
+  )
 
   const onKeyDown = (event: React.KeyboardEvent): void => {
     if (!capturing) return
@@ -522,15 +615,31 @@ export function HotkeyCapture({
       return
     }
 
+    if (['Control', 'Alt', 'Shift', 'Meta', 'Super', 'Hyper'].includes(event.key)) return // keep waiting
     const chord = chordFrom(event)
-    if (chord === null) return // a bare modifier going down; keep waiting
+    if (chord === null) {
+      setNote(`Cannot bind ${event.key}.`)
+      return
+    }
     if (chord.mods.length === 0) {
       setNote('Add a modifier. A bare key would be taken away from every other app.')
       return
     }
     arm(false)
     setNote(null)
+    setTyped(null)
     onPick(formatHotkey(chord))
+  }
+
+  const submitTyped = (): void => {
+    const parsed = parseHotkey(typed ?? '')
+    if (parsed === null || parsed.mods.length === 0) {
+      setNote('That is not a hotkey.')
+      return
+    }
+    setNote(null)
+    setTyped(null)
+    onPick(formatHotkey(parsed))
   }
 
   return (
@@ -542,12 +651,34 @@ export function HotkeyCapture({
         onClick={() => {
           arm(true)
           setNote(null)
+          setTyped(null)
         }}
         onKeyDown={onKeyDown}
-        onBlur={() => arm(false)}
+        onBlur={() => {
+          // Focus leaving while armed means the chord went to the desktop (a
+          // global bind such as the launcher's own) and never reached us.
+          if (capturing) {
+            setNote(LOST_CAPTURE_NOTE)
+            setTyped('')
+          }
+          arm(false)
+        }}
       >
         {capturing ? 'Press the keys…' : value.length === 0 ? 'None' : value}
       </button>
+      {typed !== null && (
+        <input
+          className="s-input"
+          type="text"
+          placeholder="Super+Shift+R"
+          aria-label="Type the hotkey"
+          value={typed}
+          onChange={(event) => setTyped(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') submitTyped()
+          }}
+        />
+      )}
       {note !== null && <div className="s-error">{note}</div>}
     </div>
   )

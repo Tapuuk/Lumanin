@@ -17,7 +17,7 @@ import {
 } from '../platform/fix/index'
 import { buildAppIndex } from '../platform/apps/index'
 import { isPinKey, loadConfig, isExtensionCommandEnabled, type ResolvedConfig } from '../shared/config'
-import { parseHotkey } from '../shared/hotkey'
+import { formatHotkey, parseHotkey } from '../shared/hotkey'
 import { KEY_ACTIONS, KEY_ACTION_INFO } from '../shared/keys'
 import {
   INVOKE_CHANNEL,
@@ -99,6 +99,32 @@ export interface SettingsIpcDeps {
 /** The plugin gets 8 s daemon-side; this waits a little longer than that. */
 const ENUMERATE_TIMEOUT_MS = 10_000
 
+// Shape checks for what the renderer sends. The bridge is ours, but a method
+// that trusts its params would turn a malformed call into a raw exception.
+const MALFORMED = 'The request was malformed.'
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+const isString = (value: unknown): value is string => typeof value === 'string'
+const isStringOrNull = (value: unknown): value is string | null => value === null || typeof value === 'string'
+const isBoolean = (value: unknown): value is boolean => typeof value === 'boolean'
+const isArrayOf = <T>(value: unknown, item: (element: unknown) => element is T): value is readonly T[] =>
+  Array.isArray(value) && value.every(item)
+const isSetValue = (value: unknown): value is SettingsSetValue =>
+  value === null ||
+  isString(value) ||
+  isBoolean(value) ||
+  (typeof value === 'number' && Number.isFinite(value)) ||
+  isArrayOf(value, isString)
+const isHotkeyEntry = (value: unknown): value is HotkeyEntryDto =>
+  isRecord(value) &&
+  isString(value['hotkey']) &&
+  isString(value['target']) &&
+  (value['title'] === undefined || isString(value['title']))
+const isPinEntry = (value: unknown): value is { key: string; title: string | null } =>
+  isRecord(value) && isString(value['key']) && isStringOrNull(value['title'])
+const isPreferenceValue = (value: unknown): value is string | number | boolean =>
+  isString(value) || isBoolean(value) || (typeof value === 'number' && Number.isFinite(value))
+
 export class SettingsIpc {
   private readonly methods = new Set<string>(SETTINGS_INVOKE_METHODS)
   /** Opened on first use; the daemon shares it through SQLite's WAL. */
@@ -132,13 +158,30 @@ export class SettingsIpc {
         case 'settings.state':
           return await this.state()
         case 'settings.set':
-          return this.set(params as { path: readonly string[]; value: SettingsSetValue })
+          if (!isRecord(params) || !isArrayOf(params['path'], isString) || !isSetValue(params['value'])) {
+            return { ok: false, detail: MALFORMED }
+          }
+          return this.set({ path: params['path'], value: params['value'] })
         case 'settings.setHotkeys':
-          return this.setHotkeys(params as { entries: readonly HotkeyEntryDto[] })
+          if (!isRecord(params) || !isArrayOf(params['entries'], isHotkeyEntry)) {
+            return { ok: false, detail: MALFORMED }
+          }
+          return this.setHotkeys({ entries: params['entries'] })
         case 'settings.setPins':
-          return this.setPins(params as { entries: readonly { key: string; title: string | null }[] })
+          if (!isRecord(params) || !isArrayOf(params['entries'], isPinEntry)) {
+            return { ok: false, detail: MALFORMED }
+          }
+          return this.setPins({ entries: params['entries'] })
         case 'settings.setAlias':
-          return this.setAlias(params as { alias: string; key: string | null; title: string | null })
+          if (
+            !isRecord(params) ||
+            !isString(params['alias']) ||
+            !isStringOrNull(params['key']) ||
+            !isStringOrNull(params['title'])
+          ) {
+            return { ok: false, detail: MALFORMED }
+          }
+          return this.setAlias({ alias: params['alias'], key: params['key'], title: params['title'] })
         case 'settings.planBind':
           return await this.planBind()
         case 'settings.applyBind':
@@ -148,33 +191,61 @@ export class SettingsIpc {
         case 'settings.apps':
           return await this.apps()
         case 'settings.enumerate':
-          return await this.enumerate(params as { command: string; category: string | null })
+          if (!isRecord(params) || !isString(params['command']) || !isStringOrNull(params['category'])) return []
+          return await this.enumerate({ command: params['command'], category: params['category'] })
         case 'settings.plugins':
           return this.plugins()
-        case 'settings.setPluginEnabled': {
-          const { name, enabled } = params as { name: string; enabled: boolean }
-          return this.setDisabledEntry(name, !enabled)
-        }
-        case 'settings.setCommandEnabled': {
-          const { id, enabled } = params as { id: string; enabled: boolean }
-          return this.setDisabledEntry(id, !enabled)
-        }
+        case 'settings.setPluginEnabled':
+          if (!isRecord(params) || !isString(params['name']) || !isBoolean(params['enabled'])) {
+            return { ok: false, detail: MALFORMED }
+          }
+          return this.setDisabledEntry(params['name'], !params['enabled'])
+        case 'settings.setCommandEnabled':
+          if (!isRecord(params) || !isString(params['id']) || !isBoolean(params['enabled'])) {
+            return { ok: false, detail: MALFORMED }
+          }
+          return this.setDisabledEntry(params['id'], !params['enabled'])
         case 'settings.setPreference':
-          return this.setPreference(
-            params as { extension: string; command: string; name: string; value: string | number | boolean }
-          )
+          if (
+            !isRecord(params) ||
+            !isString(params['extension']) ||
+            !isString(params['command']) ||
+            !isString(params['name']) ||
+            !isPreferenceValue(params['value'])
+          ) {
+            return { ok: false, detail: MALFORMED }
+          }
+          return this.setPreference({
+            extension: params['extension'],
+            command: params['command'],
+            name: params['name'],
+            value: params['value']
+          })
         case 'settings.removePlugin':
-          return this.removePlugin(params as { name: string })
+          if (!isRecord(params) || !isString(params['name'])) return { ok: false, detail: MALFORMED }
+          return this.removePlugin({ name: params['name'] })
         case 'settings.exportPlugin':
-          return await this.exportPlugin(params as { name: string; license: 'mit' | null })
+          if (
+            !isRecord(params) ||
+            !isString(params['name']) ||
+            (params['license'] !== null && params['license'] !== 'mit')
+          ) {
+            return { ok: false, detail: MALFORMED }
+          }
+          return await this.exportPlugin({ name: params['name'], license: params['license'] })
         case 'settings.publishPlugin':
-          return await this.publishPlugin(params as { name: string })
+          if (!isRecord(params) || !isString(params['name'])) return { ok: false, detail: MALFORMED }
+          return await this.publishPlugin({ name: params['name'] })
         case 'settings.officialPlugins':
           return await this.officialPlugins()
         case 'settings.inspectPlugin':
-          return await this.inspectPlugin(params as { source: string })
+          if (!isRecord(params) || !isString(params['source'])) throw new Error(MALFORMED)
+          return await this.inspectPlugin({ source: params['source'] })
         case 'settings.installPlugin':
-          return await this.installPlugin(params as { source: string; allowDependencies: boolean })
+          if (!isRecord(params) || !isString(params['source']) || !isBoolean(params['allowDependencies'])) {
+            return { ok: false, detail: MALFORMED }
+          }
+          return await this.installPlugin({ source: params['source'], allowDependencies: params['allowDependencies'] })
         case 'settings.planSetup':
           return await this.planSetup()
         case 'settings.applySetup':
@@ -363,10 +434,18 @@ export class SettingsIpc {
     // Everything the loader would silently drop on the next read is refused
     // here instead — a save that reports ok and then vanishes is the worst of
     // both. Same rules as `hotkeysFrom` in shared/config.ts.
+    const bound = new Map<string, string>()
     for (const entry of params.entries) {
-      if (parseHotkey(entry.hotkey) === null) {
+      const parsed = parseHotkey(entry.hotkey)
+      if (parsed === null) {
         return { ok: false, detail: `"${entry.hotkey}" is not a hotkey` }
       }
+      const chord = formatHotkey(parsed)
+      const taken = bound.get(chord)
+      if (taken !== undefined) {
+        return { ok: false, detail: `${chord} is already bound to ${taken}.` }
+      }
+      bound.set(chord, entry.target)
       if (typeof entry.target !== 'string' || entry.target.length === 0 || entry.target.length > 1024) {
         return { ok: false, detail: 'a hotkey needs a target' }
       }
@@ -402,13 +481,17 @@ export class SettingsIpc {
         return { ok: false, detail: `"${String(entry.key)}" is not a valid pin key` }
       }
     }
+    // Pins are an ordered set: the first occurrence keeps its place.
+    const entries = params.entries.filter(
+      (entry, index) => params.entries.findIndex((candidate) => candidate.key === entry.key) === index
+    )
     return this.write((data) => {
       setValue(
         data,
         ['search', 'pins'],
-        params.entries.length === 0
+        entries.length === 0
           ? undefined
-          : params.entries.map((entry) =>
+          : entries.map((entry) =>
               entry.title === null ? entry.key : { id: entry.key, title: entry.title }
             )
       )
@@ -436,6 +519,9 @@ export class SettingsIpc {
       })
     }
     if (!isPinKey(params.key)) return { ok: false, detail: 'that target is not something the root can launch' }
+    if (params.key.startsWith('web:')) {
+      return { ok: false, detail: 'A web search takes a term, so it cannot be an alias. Pin it instead.' }
+    }
 
     const key = params.key
     const value =

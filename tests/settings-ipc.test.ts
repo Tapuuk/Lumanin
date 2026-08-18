@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -97,6 +97,66 @@ describe('settings.set', () => {
     const { handler, onWritten } = setUp()
     const result = await handler(sender, 'settings.set', { path: ['general', 'nope'], value: 1 })
     expect(result).toEqual({ ok: false, detail: 'that setting cannot be written' })
+    expect(onWritten).not.toHaveBeenCalled()
+  })
+})
+
+describe('settings.setAlias', () => {
+  it('refuses a web search: it takes a term, which an alias cannot carry', async () => {
+    const { handler, configFile } = setUp()
+    const result = (await handler(sender, 'settings.setAlias', {
+      alias: 'gg',
+      key: 'web:google',
+      title: null
+    })) as { ok: boolean; detail?: string }
+    expect(result.ok).toBe(false)
+    expect(result.detail).toContain('Pin it instead')
+    expect(existsSync(configFile) ? readFileSync(configFile, 'utf8') : '').not.toContain('[aliases]')
+  })
+})
+
+describe('settings.setPins', () => {
+  it('writes a repeated key once, keeping the first position', async () => {
+    const { handler, configFile } = setUp()
+    const result = await handler(sender, 'settings.setPins', {
+      entries: [
+        { key: 'command:settings', title: null },
+        { key: 'app:firefox', title: null },
+        { key: 'command:settings', title: null }
+      ]
+    })
+    expect(result).toEqual({ ok: true })
+    const written = readFileSync(configFile, 'utf8')
+    expect(written.match(/command:settings/g)?.length).toBe(1)
+    expect(written.indexOf('command:settings')).toBeLessThan(written.indexOf('app:firefox'))
+  })
+
+  it('answers a malformed request with a refusal, not a rejection', async () => {
+    const { handler, onWritten } = setUp()
+    await expect(handler(sender, 'settings.setPins', { entries: 'x' })).resolves.toEqual({
+      ok: false,
+      detail: 'The request was malformed.'
+    })
+    await expect(handler(sender, 'settings.setPluginEnabled', undefined)).resolves.toEqual({
+      ok: false,
+      detail: 'The request was malformed.'
+    })
+    expect(onWritten).not.toHaveBeenCalled()
+  })
+})
+
+describe('settings.setHotkeys', () => {
+  it('refuses two entries on one chord', async () => {
+    const { handler, onWritten } = setUp()
+    const result = (await handler(sender, 'settings.setHotkeys', {
+      entries: [
+        { hotkey: 'Super+G', target: 'extension:one/search' },
+        { hotkey: 'super g', target: 'extension:two/search' }
+      ]
+    })) as { ok: boolean; detail?: string }
+    expect(result.ok).toBe(false)
+    expect(result.detail).toMatch(/already bound/)
+    expect(result.detail).toContain('extension:one/search')
     expect(onWritten).not.toHaveBeenCalled()
   })
 })
