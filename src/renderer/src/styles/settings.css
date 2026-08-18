@@ -123,6 +123,7 @@ body:has(.settings) {
   min-width: 0;
   padding: 18px 22px;
   overflow-y: auto;
+  container-type: inline-size;
 }
 
 .settings__heading {
@@ -167,11 +168,11 @@ body:has(.settings) {
 /* ------------------------------------------------------------- screen pieces */
 
 .s-section {
-  margin-bottom: 26px;
+  margin-bottom: 24px;
 }
 
 .s-section__title {
-  margin: 0 0 10px;
+  margin: 0 0 6px;
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -179,16 +180,27 @@ body:has(.settings) {
 }
 
 .s-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 18px;
-  padding: 9px 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--lumanin-border) 45%, transparent);
+  display: grid;
+  grid-template-columns: minmax(150px, 200px) 1fr;
+  column-gap: 16px;
+  align-items: start;
+  padding: 6px 0;
 }
 
+/* Sits the label level with the first line of a 28px control. */
 .s-row__text {
-  flex: 1 1 auto;
   min-width: 0;
+  padding-top: 5px;
+}
+
+@container (max-width: 400px) {
+  .s-row {
+    grid-template-columns: 1fr;
+  }
+
+  .s-row__text {
+    padding-top: 0;
+  }
 }
 
 .s-row__label {
@@ -205,11 +217,10 @@ body:has(.settings) {
 }
 
 .s-row__control {
-  flex: 0 0 auto;
-  max-width: 46%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 4px;
 }
 
@@ -579,7 +590,7 @@ body:has(.settings) {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .s-chip {
