@@ -50,11 +50,25 @@ export function useBindPlan(): { plan: BindPlanDto | null; replan: () => void } 
   return { plan, replan }
 }
 
+// Applying a bind writes the desktop's files, not config.toml, so no state
+// push follows; the badges are told to re-read here instead.
+const bindListeners = new Set<() => void>()
+function notifyBindsChanged(): void {
+  for (const listener of bindListeners) listener()
+}
+
 export function useManagedBinds(): readonly ManagedBindDto[] {
   const { state } = useSettingsState()
   const [binds, setBinds] = useState<readonly ManagedBindDto[]>([])
   useEffect(() => {
-    void window.lumanin.invoke('settings.readBinds').then(setBinds)
+    const read = (): void => {
+      void window.lumanin.invoke('settings.readBinds').then(setBinds)
+    }
+    read()
+    bindListeners.add(read)
+    return () => {
+      bindListeners.delete(read)
+    }
   }, [state])
   return binds
 }
@@ -110,6 +124,7 @@ export function BindBanner(): React.JSX.Element | null {
         setApplying(false)
         setOutcome(result)
         replan()
+        notifyBindsChanged()
       })
       .catch((cause: unknown) => {
         // Without this, a rejection leaves the banner on "Writing…" forever.
@@ -125,6 +140,7 @@ export function BindBanner(): React.JSX.Element | null {
           notes: []
         })
         replan()
+        notifyBindsChanged()
       })
   }, [replan])
 

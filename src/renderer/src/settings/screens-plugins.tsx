@@ -7,7 +7,7 @@ import type {
   PluginPreferenceDto
 } from '@shared/ipc'
 import { Modal, Row, Section, TextControl, Toggle } from './controls'
-import { guarded, useSettingsState } from './useSettings'
+import { guarded, invokeChecked, useSettingsState } from './useSettings'
 
 /**
  * Installed plugins: turn one off without deleting it, choose which of its
@@ -54,11 +54,12 @@ function PluginCard({ plugin, onChanged }: { plugin: PluginDto; onChanged: () =>
         <Toggle
           checked={plugin.enabled}
           onChange={(next) => {
-            guarded(
-              window.lumanin
-                .invoke('settings.setPluginEnabled', { name: plugin.name, enabled: next })
-                .then(onChanged)
+            const work = invokeChecked(
+              () => window.lumanin.invoke('settings.setPluginEnabled', { name: plugin.name, enabled: next }),
+              'the plugin could not be switched'
             )
+            guarded(work)
+            return work
           }}
         />
         <button type="button" className="s-plugin__title" onClick={() => setOpen(!open)}>
@@ -81,11 +82,12 @@ function PluginCard({ plugin, onChanged }: { plugin: PluginDto; onChanged: () =>
                   checked={command.enabled}
                   disabled={!plugin.enabled}
                   onChange={(next) => {
-                    guarded(
-                      window.lumanin
-                        .invoke('settings.setCommandEnabled', { id: command.id, enabled: next })
-                        .then(onChanged)
+                    const work = invokeChecked(
+                      () => window.lumanin.invoke('settings.setCommandEnabled', { id: command.id, enabled: next }),
+                      'the command could not be switched'
                     )
+                    guarded(work)
+                    return work
                   }}
                 />
               </Row>

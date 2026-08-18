@@ -3,10 +3,11 @@ import type { SettingsSetValue, SettingsState } from '@shared/ipc'
 
 /**
  * The settings app's one piece of client state: the daemon-shaped snapshot of
- * `config.toml`, refreshed whenever the file changes on disk — whichever of
- * the three writers (this app, the CLI, an editor) changed it. Screens read,
- * call `setConfig`, and the round trip through the file is what redraws them:
- * there is no client-side draft to get out of sync.
+ * `config.toml`, pushed right after a save made here and whenever the file
+ * changes on disk — whichever of the three writers (this app, the CLI, an
+ * editor) changed it. Screens read, call `setConfig`, and the round trip
+ * through the file is what redraws them; `useOptimistic` only bridges the gap
+ * until that push lands, there is no client-side draft to get out of sync.
  */
 
 interface SettingsStore {
@@ -61,7 +62,38 @@ export function useSettingsState(): SettingsStore {
   return useContext(SettingsContext)
 }
 
-/** Write one setting; the file watch pushes the redraw. Throws with a sentence. */
+/**
+ * Show a value the moment it is chosen, while the file stays the truth. The
+ * pending value clears once `value` catches up with it, when `work` rejects
+ * (the control snaps back), or a second after `work` resolves without the
+ * truth ever matching (the file normalised it differently).
+ */
+export function useOptimistic<T>(
+  value: T,
+  equal: (a: T, b: T) => boolean = Object.is
+): [shown: T, commit: (next: T, work: Promise<unknown>) => void] {
+  const [pending, setPending] = useState<{ readonly value: T } | null>(null)
+  if (pending !== null && equal(pending.value, value)) setPending(null)
+
+  const commit = useCallback((next: T, work: Promise<unknown>) => {
+    const entry = { value: next }
+    setPending(entry)
+    const clear = (): void => setPending((current) => (current === entry ? null : current))
+    work.then(
+      () => setTimeout(clear, 1000),
+      () => clear()
+    )
+  }, [])
+
+  return [pending === null ? value : pending.value, commit]
+}
+
+/** Comparator for `useOptimistic` over an ordered list of primitives. */
+export function sameList<T>(a: readonly T[], b: readonly T[]): boolean {
+  return a.length === b.length && a.every((item, index) => item === b[index])
+}
+
+/** Write one setting; a successful write pushes the redraw. Throws with a sentence. */
 export async function setConfig(path: readonly string[], value: SettingsSetValue): Promise<void> {
   const result = await window.lumanin.invoke('settings.set', { path, value })
   if (!result.ok) throw new Error(result.detail ?? 'the setting could not be saved')

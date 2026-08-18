@@ -106,6 +106,23 @@ function send<E extends EventName>(event: E, payload: EventMap[E]): void {
   settingsWindow?.webContents?.send(EVENT_CHANNEL, { event, payload })
 }
 
+/**
+ * Latest wins: a write and the watcher can both push, and `ipc.state()` is
+ * async, so an older snapshot must not land after a newer one.
+ */
+let pushSequence = 0
+function pushState(): void {
+  const sequence = ++pushSequence
+  void ipc
+    .state()
+    .then((state) => {
+      if (sequence === pushSequence) send('settings.changed', state)
+    })
+    .catch((error: unknown) => {
+      logger.warn('settings state push failed', { error })
+    })
+}
+
 const ipc = new SettingsIpc({
   logger,
   paths,
@@ -115,7 +132,11 @@ const ipc = new SettingsIpc({
   senderId: () => settingsWindow?.webContents?.id ?? null,
   send,
   close: () => settingsWindow?.close(),
-  currentConfig: current
+  currentConfig: current,
+  onWritten: () => {
+    config = loadConfig({ fileContents: readConfigFile(), env: process.env })
+    pushState()
+  }
 })
 
 /**
@@ -133,7 +154,7 @@ function watchConfigFile(): void {
         void theme.refresh('config.toml changed')
         // Whoever wrote the file — this app, the CLI, an editor — the screens
         // re-draw from what is now true.
-        void ipc.state().then((state) => send('settings.changed', state))
+        pushState()
       }, 120)
     })
     configWatcher.on('error', () => undefined)
