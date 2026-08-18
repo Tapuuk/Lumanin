@@ -25,7 +25,8 @@
     "lumanin": "node ./bin/lumanin.js",
     "test:e2e": "playwright test",
     "typecheck:e2e": "tsc -p tsconfig.e2e.json --noEmit",
-    "build:plugins": "node scripts/build-plugins.mjs"
+    "build:plugins": "node scripts/build-plugins.mjs",
+    "check:refs": "node scripts/check-private-refs.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

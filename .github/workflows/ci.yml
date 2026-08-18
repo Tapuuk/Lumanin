@@ -29,6 +29,8 @@ jobs:
 
       - run: npm run typecheck
 
+      - run: npm run check:refs
+
       - name: Unit suite (Vitest)
         run: npm test
 
