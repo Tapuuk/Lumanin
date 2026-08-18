@@ -44,6 +44,7 @@ export function SearchScreen(): React.JSX.Element | null {
   const { state } = useSettingsState()
   const context = usePickerContext()
   const [picking, setPicking] = useState<'pin' | 'alias' | null>(null)
+  const [pinNote, setPinNote] = useState<string | null>(null)
   const [aliasWord, setAliasWord] = useState('')
   const resolved = state?.resolved ?? null
   const [enabledEngines, commitEngines] = useOptimistic<readonly string[]>(
@@ -188,8 +189,9 @@ export function SearchScreen(): React.JSX.Element | null {
           Always at the top of the root, in this order, matched by name like everything else.
         </p>
         <ReorderList
-          rows={pins.map((pin) => ({
+          rows={pins.map((pin, index) => ({
             id: pin.key,
+            key: `${String(index)}:${pin.key}`,
             label: describeKey(pin.key, pin.title, { ...context, state }),
             detail: pin.key
           }))}
@@ -202,7 +204,15 @@ export function SearchScreen(): React.JSX.Element | null {
           }}
           onRemove={(id) => writePins(pins.filter((pin) => pin.key !== id))}
         />
-        <button type="button" className="s-button" onClick={() => setPicking('pin')}>
+        {pinNote !== null && <div className="s-error">{pinNote}</div>}
+        <button
+          type="button"
+          className="s-button"
+          onClick={() => {
+            setPinNote(null)
+            setPicking('pin')
+          }}
+        >
           + Pin something
         </button>
       </Section>
@@ -252,10 +262,16 @@ export function SearchScreen(): React.JSX.Element | null {
 
       {picking !== null && (
         <TargetPicker
+          purpose={picking}
           onClose={() => setPicking(null)}
           onPick={(picked: PickedTarget) => {
             if (picking === 'pin') {
-              writePins([...pins, { key: picked.key, title: picked.title }])
+              if (pins.some((pin) => pin.key === picked.key)) {
+                setPinNote('Already pinned.')
+              } else {
+                setPinNote(null)
+                writePins([...pins, { key: picked.key, title: picked.title }])
+              }
             } else {
               guarded(
                 invokeChecked(
@@ -336,7 +352,7 @@ export function HotkeysScreen(): React.JSX.Element | null {
         {entries.map((entry, index) => {
           const bound = boundState(binds, normalized(entry.bind), entry.target)
           return (
-            <div key={`${entry.bind} ${entry.target}`} className="s-list__row">
+            <div key={`${String(index)}:${entry.bind}`} className="s-list__row">
               <HotkeyCapture
                 value={normalized(entry.bind)}
                 onPick={(next) => {
@@ -388,6 +404,7 @@ export function HotkeysScreen(): React.JSX.Element | null {
 
       {picking && (
         <TargetPicker
+          purpose="hotkey"
           onClose={() => setPicking(false)}
           onPick={(picked) => {
             setPicking(false)

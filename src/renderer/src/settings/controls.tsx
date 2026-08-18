@@ -394,7 +394,8 @@ export function ReorderList({
   onMove,
   onRemove
 }: {
-  rows: readonly { id: string; label: string; detail?: string; on?: boolean }[]
+  /** `key` is the React key when ids may repeat (a hand-edited duplicate pin); it defaults to `id`. */
+  rows: readonly { id: string; key?: string; label: string; detail?: string; on?: boolean }[]
   onToggle?: (id: string, next: boolean) => void
   onMove: (id: string, delta: number) => void
   onRemove?: (id: string) => void
@@ -402,7 +403,7 @@ export function ReorderList({
   return (
     <div className="s-list">
       {rows.map((row, index) => (
-        <div key={row.id} className={`s-list__row${row.on === false ? ' s-list__row--off' : ''}`}>
+        <div key={row.key ?? row.id} className={`s-list__row${row.on === false ? ' s-list__row--off' : ''}`}>
           {onToggle !== undefined && (
             <Toggle
               checked={row.on !== false}
