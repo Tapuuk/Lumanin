@@ -4,7 +4,7 @@ import { resolveBinary } from '../probe/binaries'
 import { parseDesktopEntry, type DesktopEntry, type SkipReason } from './desktop-entry'
 
 /**
- * The application index (PLATFORM-MATRIX §8).
+ * The application index.
  *
  * Freedesktop only, and therefore universal: every desktop environment on Linux
  * agrees about `.desktop` files, which is why this is the one capability with a

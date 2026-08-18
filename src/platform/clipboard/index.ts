@@ -3,7 +3,7 @@ import { createElectronClipboard, type SyncTextClipboard } from './backends/elec
 import { createWlClipboard } from './backends/wl-clipboard'
 
 /**
- * Clipboard read/write (PLATFORM-MATRIX §3), the capability behind the Raycast
+ * Clipboard read/write, the capability behind the Raycast
  * `Clipboard.copy` / `Clipboard.read` API.
  *
  * The interface says nothing about Wayland, X11 or subprocesses — that is the

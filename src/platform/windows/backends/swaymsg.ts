@@ -2,7 +2,7 @@ import type { Exec } from '../../exec'
 import type { WindowInfo, WindowsBackend } from '../index'
 
 /**
- * Sway/i3 IPC via `swaymsg -t get_tree` (PLATFORM-MATRIX §7 backend 2).
+ * Sway/i3 IPC via `swaymsg -t get_tree` (windows backend 2).
  *
  * The tree is nested — outputs contain workspaces contain containers contain
  * windows — so this walks it rather than reading a flat list, carrying the
@@ -15,7 +15,7 @@ import type { WindowInfo, WindowsBackend } from '../index'
  * them.
  *
  * UNVERIFIED: written against the sway IPC documentation. The dev machine runs
- * Hyprland, so nobody has watched this parse a real tree — see TESTING.md.
+ * Hyprland, so nobody has watched this parse a real tree.
  */
 
 interface SwayNode {

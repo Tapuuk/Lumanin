@@ -3,9 +3,9 @@ import type { BinaryMap } from '../probe/binaries'
 import { parseExec, type DesktopEntry } from './desktop-entry'
 
 /**
- * Launching an application (PLATFORM-MATRIX §8).
+ * Launching an application.
  *
- * Three strategies, in the order the matrix gives, and the order matters for a
+ * Three strategies, in priority order, and the order matters for a
  * reason that is invisible until it bites: `gio launch` and `gtk-launch` hand
  * the request to the desktop's own launcher, which means the app is started in a
  * **fresh scope**, gets startup notification, and — critically — does not become
@@ -63,7 +63,7 @@ const TERMINALS: readonly { readonly command: string; readonly flag: string }[] 
 function defaultSpawn(command: string, args: readonly string[], cwd?: string): boolean {
   try {
     // detached + ignored stdio + unref: the application must outlive the daemon
-    // and must not hold a pipe to it. SECURITY.md rule 1 — argv array, no shell.
+    // and must not hold a pipe to it. Argv array, no shell.
     const child = spawn(command, [...args], {
       detached: true,
       stdio: 'ignore',
@@ -96,7 +96,7 @@ function defaultSpawn(command: string, args: readonly string[], cwd?: string): b
  * first, so this can only ever run something the user wrote there.
  *
  * The line is passed as a **single argv element**, never concatenated into one,
- * which is the actual content of SECURITY.md rule 1.
+ * which is the actual content of the no-shell-strings rule.
  *
  * `$SHELL` rather than `/bin/sh`, with `-c` and no `-l`: the user typed this at
  * a launcher, expecting their own shell's aliases and functions to be irrelevant
