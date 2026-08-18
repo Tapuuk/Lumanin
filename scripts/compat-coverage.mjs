@@ -12,9 +12,9 @@
  * the ratio with symbols that are satisfied by definition.
  *
  * A name existing is not the same as the API being built. `pending()` returns a
- * function that throws "arrives in M5"; under a name-only count that reads as
- * implemented, and M5 duly reported 88/88 with Form, Grid, `launchCommand` and
- * six hooks unwritten. So the shim stamps every stub (`Symbol.for('lumanin.pending')`,
+ * function that throws the reason it is unbuilt; under a name-only count that
+ * reads as implemented, and the shim once reported 88/88 with Form, Grid,
+ * `launchCommand` and six hooks unwritten. So the shim stamps every stub (`Symbol.for('lumanin.pending')`,
  * `…unsupported`, `…declined`) and this script walks the export graph reading
  * those marks — top-level *and* members, which is the only way `Action.PickDate`
  * is ever counted at all.
@@ -23,7 +23,7 @@
  * "so what do I do instead":
  *
  *   built       — nothing; use it
- *   pending     — wait; it is coming, and the mark says in which milestone
+ *   pending     — wait; it is coming, and the mark says why it is not built yet
  *   unsupported — give up; Linux cannot do this (see §"macOS-only policy")
  *   declined    — take the other route; we will not build it, and the mark says
  *                 what to use instead (OAuth, since 2026-08-10)
