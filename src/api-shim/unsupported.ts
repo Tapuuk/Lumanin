@@ -94,12 +94,12 @@ export function markUnavailable<T extends object>(member: T): T {
  * platform limitation, and labelling it as one would be a claim about Linux that
  * is simply untrue.
  */
-export function pending<T>(api: string, milestone: string): T {
+export function pending<T>(api: string, reason: string): T {
   const thrower = (): never => {
-    throw new Error(`${api} is not implemented yet - it arrives in ${milestone}`)
+    throw new Error(`${api} is not implemented yet: ${reason}`)
   }
   Object.defineProperty(thrower, 'name', { value: api })
-  Object.defineProperty(thrower, PENDING, { value: milestone })
+  Object.defineProperty(thrower, PENDING, { value: reason })
   markUnavailable(thrower)
   return thrower as T
 }
@@ -141,8 +141,8 @@ export function markDeclined<T extends object>(member: T, reason: string): T {
  * Replacing it with a thrower would be worse — the card names the element and
  * says the extension is fine, which a stack trace does not.
  */
-export function markPending<T extends object>(member: T, milestone: string): T {
-  Object.defineProperty(member, PENDING, { value: milestone, configurable: true })
+export function markPending<T extends object>(member: T, reason: string): T {
+  Object.defineProperty(member, PENDING, { value: reason, configurable: true })
   return markUnavailable(member)
 }
 
