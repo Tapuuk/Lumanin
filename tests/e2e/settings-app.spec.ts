@@ -480,3 +480,66 @@ test('Escape in a text field leaves the field and keeps the window', async () =>
   await page.waitForTimeout(300)
   await expect(page.locator('.settings')).toBeVisible()
 })
+
+test('Ctrl+N switches sections from anywhere', async () => {
+  await page.keyboard.press('Control+3')
+  await expect(page.locator('.settings__heading')).toHaveText('Keys')
+  await page.keyboard.press('Control+1')
+  await expect(page.locator('.settings__heading')).toHaveText('Panel')
+})
+
+test('the filter hides what does not match, jumps to the section that does, and Esc clears it', async () => {
+  const filter = page.locator('.settings__filter')
+  await page.keyboard.press('Control+f')
+  expect(await filter.evaluate((el) => el === document.activeElement)).toBe(true)
+
+  await page.keyboard.type('focus is lost')
+  const visibleRows = page.locator('.settings__content .s-row:visible')
+  await expect(visibleRows).toHaveCount(1)
+  await expect(visibleRows.locator('.s-row__label')).toHaveText('Hide when focus is lost')
+  await expect(group('Appearance')).toBeHidden()
+
+  await filter.fill('')
+  await page.keyboard.type('action panel')
+  await expect(page.locator('.settings__heading')).toHaveText('Keys')
+
+  await page.keyboard.press('Escape')
+  await expect(filter).toHaveValue('')
+  expect(await filter.evaluate((el) => el === document.activeElement)).toBe(false)
+  await expect(page.locator('.settings')).toBeVisible()
+  await page.keyboard.press('Control+1')
+  await expect(group('Appearance')).toBeVisible()
+  expect(await page.locator('.settings__content .s-row:visible').count()).toBeGreaterThan(1)
+})
+
+test('Up and Down walk the rows, landing on the control so Space acts on it', async () => {
+  await page.keyboard.press('Control+1')
+  await page.locator('.settings__heading').click()
+  await page.keyboard.press('ArrowDown')
+  const toggle = page.locator('.s-row', { hasText: 'Hide when focus is lost' }).locator('.s-toggle')
+  expect(await toggle.evaluate((el) => el === document.activeElement)).toBe(true)
+  await page.keyboard.press('Space')
+  await expect(toggle).toHaveAttribute('aria-checked', 'false')
+  await expect.poll(config).toContain('hide_on_blur = false')
+  await page.keyboard.press('Space')
+  await expect(toggle).toHaveAttribute('aria-checked', 'true')
+  await expect.poll(config).not.toContain('hide_on_blur')
+
+  // Down again lands in the second row; its select keeps the arrows from there.
+  await page.keyboard.press('ArrowDown')
+  const rows = page.locator('.settings__content .s-row:visible')
+  expect(await rows.nth(1).evaluate((el) => el.contains(document.activeElement))).toBe(true)
+  await page.keyboard.press('Escape')
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true)
+})
+
+test('a slash typed in a text field is a character, not the filter key', async () => {
+  await section('Search').click()
+  const input = page.locator('.s-section', { hasText: 'Aliases' }).locator('input')
+  await input.click()
+  await input.type('a/b')
+  await expect(input).toHaveValue('a/b')
+  expect(await input.evaluate((el) => el === document.activeElement)).toBe(true)
+  await input.fill('')
+  await page.keyboard.press('Escape')
+})
