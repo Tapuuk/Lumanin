@@ -73,7 +73,7 @@ const section = (title: string): ReturnType<Page['locator']> =>
 
 test('a fresh home opens the first-run wizard; dismissing it writes the marker', async () => {
   // No config.toml has ever existed here, so the wizard fronts the window.
-  await expect(page.locator('.wiz__title')).toContainText('Hey there')
+  await expect(page.locator('.wiz__title')).toContainText('Set up Lumanin')
 
   // Walk into the theme step and pick the default. "Follow the desktop"
   // writes nothing, which is the point — an untouched wizard leaves an

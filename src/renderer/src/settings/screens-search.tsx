@@ -84,8 +84,8 @@ export function SearchScreen(): React.JSX.Element | null {
     plugins: 'Your plugins’ own commands',
     apps: 'Installed applications',
     commands: 'The launcher’s own commands',
-    calculator: 'Nothing - the calculator is always first',
-    files: 'Nothing - file search is a plugin, listed under plugins',
+    calculator: 'Nothing. The calculator is always first.',
+    files: 'Nothing. File search is a plugin, listed under plugins.',
     web: 'The enabled search engines'
   }
 
@@ -109,7 +109,7 @@ export function SearchScreen(): React.JSX.Element | null {
           label={GLOBAL_HOTKEY.label}
           help={
             resolved.general.hotkey.layer === 'env' || resolved.general.hotkey.layer === 'flag'
-              ? 'Set by the environment - editing the file cannot change it.'
+              ? 'Set by the environment. Editing the file cannot change it.'
               : GLOBAL_HOTKEY.help
           }
         >
@@ -208,7 +208,7 @@ export function SearchScreen(): React.JSX.Element | null {
       </Section>
 
       <Section title="Aliases">
-        <p className="s-help">Type the word, get the thing - `ff` for Firefox.</p>
+        <p className="s-help">Type the word, get the thing: <code>ff</code> for Firefox.</p>
         {aliases.map(([alias, entry]) => (
           <div key={alias} className="s-list__row">
             <span className="s-chip">{alias}</span>
@@ -329,9 +329,9 @@ export function HotkeysScreen(): React.JSX.Element | null {
     <>
       <Section>
         <p className="s-help">
-          A global key bound straight to one thing your plugins offer - a command, a category, a
-          row, or one action on it. The key is written into this desktop&apos;s own shortcut
-          config, with the diff shown first.
+          A global key bound to one thing a plugin offers: a command, a category, a row, or one
+          action on a row. The key is written into this desktop&apos;s own shortcut config, with
+          the diff shown first.
         </p>
         {entries.map((entry, index) => {
           const bound = boundState(binds, normalized(entry.bind), entry.target)

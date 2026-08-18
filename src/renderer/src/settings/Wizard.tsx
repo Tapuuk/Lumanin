@@ -115,18 +115,17 @@ function Welcome({ onNext, onSkip }: { onNext: () => void; onSkip: () => void })
       <div className="wiz__glyph">
         <Logo className="wiz__logo" />
       </div>
-      <h1 className="wiz__title">Hey there</h1>
+      <h1 className="wiz__title">Set up Lumanin</h1>
       <p className="wiz__lead">
-        Let&apos;s get you all set up and ready. A few quick steps, and every one of them can be
-        skipped: skipping just keeps the default, which is always a fine answer.
+        A few steps. Skip any of them and the default stays.
       </p>
       <div className="wiz__buttons wiz__buttons--center">
         <button type="button" className="s-button s-button--primary wiz__next" onClick={onNext}>
-          Let&apos;s go
+          Start
         </button>
       </div>
       <button type="button" className="wiz__skip" onClick={onSkip}>
-        I&apos;ll set things up myself
+        Skip setup
       </button>
     </>
   )
@@ -141,8 +140,8 @@ function ThemeStep({ onBack, onNext }: { onBack: () => void; onNext: () => void 
     <>
       <h1 className="wiz__title">Pick a look</h1>
       <p className="wiz__lead">
-        Tap around, this window updates as you go. &ldquo;Follow the desktop&rdquo; keeps Lumanin
-        matched to your system theme and follows it when it changes.
+        The window updates as you pick. &ldquo;Follow the desktop&rdquo; keeps Lumanin matched to
+        the system theme when it changes.
       </p>
       <div className="wiz__choices">
         <button
@@ -177,8 +176,8 @@ function HotkeyStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
     <>
       <h1 className="wiz__title">Your search key</h1>
       <p className="wiz__lead">
-        The key that summons the launcher from anywhere. Super+R is the default, and honestly a
-        good one. Click below and press a combination if you want your own.
+        The key that opens the launcher from anywhere. Super+R is the default. Click below and
+        press a combination to choose your own.
       </p>
       <div className="wiz__center">
         <HotkeyCapture
@@ -201,8 +200,8 @@ function FileKeyStep({ onBack, onNext }: { onBack: () => void; onNext: () => voi
     <>
       <h1 className="wiz__title">Your file search key</h1>
       <p className="wiz__lead">
-        File search is its own thing, on its own key, so your files never crowd the app list.
-        Super+Shift+R is the default. Backspace while capturing means no key at all.
+        File search has its own key, so files never crowd the app list. Super+Shift+R is the
+        default. Backspace while capturing removes the key.
       </p>
       <div className="wiz__center">
         <HotkeyCapture
@@ -240,8 +239,8 @@ function OrderStep({ onBack, onNext }: { onBack: () => void; onNext: () => void 
     <>
       <h1 className="wiz__title">What wins a search</h1>
       <p className="wiz__lead">
-        When kinds of result tie, the higher one here goes first. The default puts your plugins
-        on top, then apps. Reorder if you feel strongly, skip if you don&apos;t.
+        When kinds of result tie, the higher one here goes first. The default puts plugins first,
+        then apps.
       </p>
       <div className="wiz__list">
         <ReorderList
@@ -285,8 +284,7 @@ function FileOrderStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
     <>
       <h1 className="wiz__title">What wins a file search</h1>
       <p className="wiz__lead">
-        Same idea, for files: when names tie, the higher kind here ranks first. Pictures before
-        folders, folders before code, or however you like it.
+        When file names tie, the higher kind here ranks first.
       </p>
       <div className="wiz__list">
         <ReorderList
@@ -360,11 +358,11 @@ function SetupStep({ onBack, onNext }: { onBack: () => void; onNext: () => void 
   if (confirmingSkip) {
     return (
       <>
-        <h1 className="wiz__title">Hold on a second</h1>
+        <h1 className="wiz__title">Keys not applied yet</h1>
         <p className="wiz__lead">
-          Your keys are saved, but they are not written into this desktop&apos;s shortcut config
-          yet, so pressing them will not do anything. You can always come back:{' '}
-          <code>lumanin doctor --fix</code> or the Global Search screen do the same thing.
+          Your keys are saved but not yet written into this desktop&apos;s shortcut config, so
+          pressing them does nothing. Apply them later with{' '}
+          <code>lumanin doctor --fix</code> or from the Global Search screen.
         </p>
         <div className="wiz__buttons wiz__buttons--center">
           <button type="button" className="s-button" onClick={onNext}>
@@ -386,21 +384,26 @@ function SetupStep({ onBack, onNext }: { onBack: () => void; onNext: () => void 
     <>
       <h1 className="wiz__title">Make it stick</h1>
 
-      {plan === null && <p className="wiz__lead">Having a look at your desktop&hellip;</p>}
+      {plan === null && <p className="wiz__lead">Checking your desktop&hellip;</p>}
 
       {plan !== null && applied === null && (
         <>
           {plan.pending ? (
             <p className="wiz__lead">
-              Lumanin writes a few lines into your desktop&apos;s own config so your keys work
-              everywhere and the launcher starts with your session. Every touched file gets a
-              backup first.
+              Lumanin writes a few lines into your desktop&apos;s own config so the keys work
+              everywhere and the launcher starts with your session. Every touched file is backed
+              up first.
             </p>
           ) : (
             <p className="wiz__lead">
-              {state.bindable
-                ? 'Good news: everything is already in place. Nothing to write.'
-                : 'This desktop keeps shortcuts in its own settings. Add one there that runs `lumanin toggle` and you are done; everything else already works.'}
+              {state.bindable ? (
+                'Everything is already in place. Nothing to write.'
+              ) : (
+                <>
+                  This desktop keeps shortcuts in its own settings. Add one there that runs{' '}
+                  <code>lumanin toggle</code>. Everything else already works.
+                </>
+              )}
             </p>
           )}
 
@@ -500,9 +503,8 @@ function Done({ onFinish }: { onFinish: () => void }): React.JSX.Element {
       </div>
       <h1 className="wiz__title">All set</h1>
       <p className="wiz__lead">
-        That&apos;s everything. Press <span className="s-chip">{key}</span> and start typing.
-        Everything you just chose lives in this window if you change your mind. Good luck out
-        there.
+        Press <span className="s-chip">{key}</span> and start typing. Change any of this later in
+        Settings.
       </p>
       <div className="wiz__buttons wiz__buttons--center">
         <button type="button" className="s-button s-button--primary wiz__next" onClick={onFinish}>

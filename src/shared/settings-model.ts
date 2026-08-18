@@ -65,7 +65,7 @@ export interface Setting {
 export const GLOBAL_HOTKEY: Setting = {
   path: ['general', 'hotkey'],
   label: 'Hotkey',
-  help: 'What opens the panel. Writes the bind wherever this desktop keeps them.',
+  help: 'The key that opens the panel. Written into this desktop’s shortcut settings where Lumanin can reach them.',
   // Not a plain text field: a hotkey typed as prose is a hotkey that silently
   // does not work. Each frontend owns its capture flow — the terminal builds
   // one from lists, the GUI can capture a chord — and both end in the same
@@ -75,11 +75,15 @@ export const GLOBAL_HOTKEY: Setting = {
   envKey: 'HOTKEY'
 }
 
+// Copy rules for every label, option and help string in this file: labels are
+// noun phrases or imperatives, options are sentence case, help is one or two
+// plain sentences with no config keys, no markdown and no dashes. Enforced by
+// tests/settings-model-copy.test.ts.
 export const GENERAL_SETTINGS: readonly Setting[] = [
   {
     path: ['general', 'hide_on_blur'],
     label: 'Hide when focus is lost',
-    help: 'Turn off while debugging, or if your compositor steals focus.',
+    help: 'Off keeps the panel open when another window takes focus.',
     editor: { kind: 'boolean' },
     read: (c) => c.general.hideOnBlur,
     envKey: 'HIDE_ON_BLUR'
@@ -87,13 +91,13 @@ export const GENERAL_SETTINGS: readonly Setting[] = [
   {
     path: ['general', 'esc_at_root'],
     label: 'Escape at the root',
-    help: 'What Esc does when there is nothing left to back out of.',
+    help: 'What Esc does with nothing left to back out of.',
     editor: {
       kind: 'enum',
       options: ESC_AT_ROOT_VALUES.map((value) => ({
         value,
         label:
-          value === 'hide' ? 'hide the panel' : value === 'clear' ? 'clear the query' : 'do nothing'
+          value === 'hide' ? 'Hide panel' : value === 'clear' ? 'Clear query' : 'Do nothing'
       }))
     },
     read: (c) => c.general.escAtRoot,
@@ -102,17 +106,17 @@ export const GENERAL_SETTINGS: readonly Setting[] = [
   {
     path: ['general', 'open_on_monitor'],
     label: 'Open on monitor',
-    help: 'Advisory: ignored where the compositor owns placement.',
+    help: 'Ignored where the compositor decides placement.',
     editor: {
       kind: 'enum',
       options: OPEN_ON_MONITOR_VALUES.map((value) => ({
         value,
         label:
           value === 'cursor'
-            ? 'the one with the pointer'
+            ? 'Pointer monitor'
             : value === 'focused'
-              ? 'the one with the focused window'
-              : 'the primary one'
+              ? 'Focused monitor'
+              : 'Primary monitor'
       }))
     },
     read: (c) => c.general.openOnMonitor,
@@ -121,7 +125,7 @@ export const GENERAL_SETTINGS: readonly Setting[] = [
   {
     path: ['general', 'width'],
     label: 'Panel width',
-    help: 'How wide the panel is, at the design text size. Applied the next time it opens; clamped to the screen.',
+    help: 'Width at the design text size. Applied the next time the panel opens and clamped to the screen.',
     editor: {
       kind: 'number',
       min: 320,
@@ -140,7 +144,7 @@ export const GENERAL_SETTINGS: readonly Setting[] = [
   {
     path: ['general', 'height'],
     label: 'Panel height',
-    help: 'How far it may grow - a ceiling, not a fixed height. Applied the next time it opens; clamped to the screen.',
+    help: 'A ceiling, not a fixed height. Applied the next time the panel opens and clamped to the screen.',
     editor: {
       kind: 'number',
       min: 240,
@@ -170,7 +174,7 @@ export function appearanceSettings(
     {
       path: ['appearance', 'theme'],
       label: 'Theme',
-      help: 'Leave unset to follow the desktop - Omarchy, KDE, GNOME, COSMIC, niri.',
+      help: 'Default follows the desktop theme.',
       editor: { kind: 'enum', options: themes },
       // The listed packs are suggestions; an Omarchy theme or a pack under
       // `~/.config/lumanin/themes/` is named the same way and is equally valid.
@@ -180,8 +184,8 @@ export function appearanceSettings(
     },
     {
       path: ['appearance', 'follow_system'],
-      label: 'Follow the system light/dark',
-      help: 'Uses the desktop portal’s colour-scheme and accent.',
+      label: 'Follow the desktop light or dark mode',
+      help: 'Tracks the desktop’s light or dark setting and its accent colour.',
       editor: { kind: 'boolean' },
       read: (c) => c.appearance.followSystem,
       envKey: 'FOLLOW_SYSTEM'
@@ -189,7 +193,7 @@ export function appearanceSettings(
     {
       path: ['appearance', 'animations'],
       label: 'Animations',
-      help: 'ANDed with prefers-reduced-motion and the theme’s own flag.',
+      help: 'Off also when the desktop asks for reduced motion.',
       editor: { kind: 'boolean' },
       read: (c) => c.appearance.animations,
       envKey: 'ANIMATIONS'
@@ -197,7 +201,7 @@ export function appearanceSettings(
     {
       path: ['appearance', 'text_scale'],
       label: 'Text size',
-      help: 'Leave unset to follow the desktop - Omarchy’s text size, GNOME’s text scaling. A number fixes it.',
+      help: 'Default follows the desktop text size. A number fixes it.',
       editor: {
         kind: 'number',
         min: 0.5,
@@ -231,16 +235,16 @@ export function appearanceSettings(
  * migration nobody asked for.
  */
 export const HABIT_LEVELS: readonly { readonly value: number; readonly label: string; readonly detail: string }[] = [
-  { value: 0, label: 'Off', detail: 'The name match alone decides' },
-  { value: 0.3, label: 'A little', detail: 'Habit breaks ties' },
-  { value: 0.6, label: 'Balanced', detail: 'The default' },
-  { value: 0.9, label: 'A lot', detail: 'What you open most wins whenever it matches' }
+  { value: 0, label: 'Off', detail: 'name match alone decides' },
+  { value: 0.3, label: 'A little', detail: 'habit breaks ties' },
+  { value: 0.6, label: 'Balanced', detail: 'default' },
+  { value: 0.9, label: 'A lot', detail: 'what you use most wins whenever it matches' }
 ]
 
 export const HABIT_SETTING: Setting = {
   path: ['search', 'frecency_weight'],
   label: 'Favour what you use',
-  help: 'How much your habits reorder what you typed. Written as `frecency_weight` in the file.',
+  help: 'How much your habits reorder results.',
   editor: { kind: 'number', min: 0, max: 1, integer: false, presets: HABIT_LEVELS },
   read: (c) => c.search.frecencyWeight,
   envKey: 'FRECENCY_WEIGHT'
@@ -259,7 +263,7 @@ export function habitLabel(weight: number): string {
 export const FILE_SEARCH_HIDE_ON_OPEN: Setting = {
   path: ['file_search', 'hide_on_open'],
   label: 'Close the panel when a file opens',
-  help: 'Opening a file hands it the keyboard; a panel left up looks broken.',
+  help: 'The opened file takes the keyboard, so the panel closes with it.',
   editor: { kind: 'boolean' },
   read: (c) => c.fileSearch.hideOnOpen
 }
