@@ -11,7 +11,7 @@ import { effectiveTokens, tokensToCssVars, type Theme } from '../shared/theme/to
 import type { Logger } from '../node/logger'
 
 /**
- * The theme resolution chain from THEMING.md §"Theme resolution chain".
+ * The theme resolution chain.
  *
  *   1. a theme forced in `config.toml`
  *   2. the desktop's appearance source — Omarchy's palette, or the portal's
@@ -20,7 +20,7 @@ import type { Logger } from '../node/logger'
  *
  * First hit wins, every source is watched, and a change re-resolves and pushes
  * new CSS custom properties to the renderer without a reload. That last part is
- * the whole point: THEMING.md asks for theme switching to *feel instant*, and a
+ * the whole point: theme switching has to *feel instant*, and a
  * launcher that has to restart to follow `omarchy theme set` is not integrated
  * with the desktop, it merely knows about it.
  *
@@ -200,7 +200,7 @@ export class ThemeService {
    * Apply the settings that override whatever the theme said.
    *
    * `[appearance].animations = false` is a user instruction, not a suggestion,
-   * and THEMING.md has it OR together with the theme's own flag and with
+   * and it ORs together with the theme's own flag and with
    * `prefers-reduced-motion` (which the renderer applies in CSS). Somebody who
    * turned motion off must not have it turned back on by switching themes.
    */

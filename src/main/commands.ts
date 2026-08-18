@@ -10,7 +10,7 @@ import type { RootCommand } from './root-search'
  * look like more progress and be worth less than nothing — the whole value of a
  * command palette is that what it lists, it does.
  *
- * Ids follow CONFIG.md's `builtin/<name>` form so `[aliases]` can name them.
+ * Ids follow the config's `builtin/<name>` form so `[aliases]` can name them.
  */
 
 export interface CommandHandlers {

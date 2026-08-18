@@ -2,7 +2,7 @@ import { session } from 'electron'
 import { ICON_SCHEME } from '../shared/identity'
 
 /**
- * Content Security Policy, per SECURITY.md §Renderer. Applied as a response
+ * Content Security Policy for the renderer. Applied as a response
  * header rather than a `<meta>` tag so it also covers the dev server, and so a
  * future extension-supplied `Detail` view cannot relax it from inside the page.
  *

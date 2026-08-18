@@ -296,11 +296,11 @@ export class SearchService {
   /**
    * An alias target: `builtin/<name>` for a command, or a desktop-file id.
    *
-   * CONFIG.md writes the alias table as pointing at command ids. Accepting an
+   * The alias table is documented as pointing at command ids. Accepting an
    * application id too is an addition rather than a reinterpretation, and an
-   * obvious one — until extensions land in M4 there are five commands to alias
+   * obvious one — without extensions there are five commands to alias
    * and several hundred applications, so a table that could only name the former
-   * would be a feature nobody could use yet.
+   * would be a feature nobody could use.
    */
   private resolveAlias(target: string): ResultItem | null {
     // The one alias target that is not an id: `shell:<command line>` carries the
@@ -336,7 +336,7 @@ export class SearchService {
     // every time, then collapse on the first keystroke.
     //
     // `rank()` still handles an empty needle by falling through to frecency
-    // alone; that is what M3's root command list will use.
+    // alone; that is what the root command list uses.
     if (needle.length === 0) return []
 
     const now = Date.now()
@@ -454,7 +454,7 @@ export class SearchService {
       case 'web': {
         // Re-checked here even though the template was validated when it was
         // read from config: this string arrives from the renderer, and the
-        // renderer is untrusted input by design (SECURITY.md §Renderer).
+        // renderer is untrusted input by design.
         if (!isOpenableUrl(payload)) {
           this.deps.logger.warn('refused to open a non-web url', { id })
           return { ok: false, detail: 'that is not a web address' }
@@ -472,15 +472,15 @@ export class SearchService {
    *
    * **The command is checked against the config before it is run**, and that
    * check is the whole security story here. This id came from the renderer, and
-   * `activate`'s own comment says the renderer is untrusted input by design
-   * (SECURITY.md §Renderer) — so without this, a compromised renderer could
+   * `activate`'s own comment says the renderer is untrusted input by design,
+   * so without this, a compromised renderer could
    * spawn anything at all just by sending `shell:<whatever>`. With it, the worst
    * it can do is run something the user already wrote down and asked for.
    *
    * The line then goes to `sh -c` as a *single* argv element. Nothing is
    * concatenated into it and nothing from the query reaches it, which is what
-   * keeps SECURITY.md rule 1 satisfied: the rule is about shell strings *built*
-   * from parts, and this one is a literal read back out of `config.toml`.
+   * keeps the no-shell-strings rule satisfied: the rule is about shell strings
+   * *built* from parts, and this one is a literal read back out of `config.toml`.
    */
   private runShell(command: string): LaunchOutcome {
     if (!this.configuredShellCommands().has(command)) {

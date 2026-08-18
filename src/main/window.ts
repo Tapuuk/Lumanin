@@ -10,7 +10,7 @@ import { applyTextScale } from './text-scale'
  * The panel window.
  *
  * It is created once at daemon start and then only hidden and shown — never
- * closed, never re-created. ARCHITECTURE.md's latency budget (toggle → painted
+ * closed, never re-created. The latency budget (toggle → painted
  * ≤ 80 ms p95) is only achievable because nothing here is on the toggle path.
  */
 
@@ -79,8 +79,8 @@ export class PanelWindow {
     this.createdSize = size
     const window = new BrowserWindow({
       width: size.width,
-      // The window is the panel's *maximum* extent, not its content. See §"Panel
-      // sizing" — the panel draws itself as tall as it needs at the top of this
+      // The window is the panel's *maximum* extent, not its content. The
+      // panel draws itself as tall as it needs at the top of this
       // box and leaves the rest transparent. Its size changes only when the
       // reasons for it change: `config.toml`, the desktop's text size, or the
       // display it has to fit on (`fit()`), and never while it is visible.
@@ -93,7 +93,7 @@ export class PanelWindow {
       // sizes the surface's *content* in DIPs times the toolkit's text scale
       // (Omarchy at 14px text: 1.19). The compositor honours the hint, the
       // content is 19% wider than the surface, and the right border and a
-      // sixth of every row are simply not on screen. Measured 2026-08-16 on
+      // sixth of every row are simply not on screen. Measured on
       // Hyprland, Electron 43: `resizable: false` → 1100 logical for 1100 DIP,
       // clipped; `resizable: true` → 1306 logical, whole. Since the window is
       // only ever resized by being re-created (`fit()`), nothing is lost.
@@ -107,7 +107,7 @@ export class PanelWindow {
       autoHideMenuBar: true,
       // Load-bearing, not decoration. The window is the panel's full extent and
       // the panel usually fills only the top of it; everything below has to be
-      // genuinely absent, not painted. It is also what THEMING.md's Glass themes
+      // genuinely absent, not painted. It is also what Glass themes
       // need, so one switch serves both.
       transparent: true,
       backgroundColor: '#00000000',
@@ -121,7 +121,7 @@ export class PanelWindow {
         // shape. Our hidden window is not a background tab; it is a window
         // waiting to be needed.
         backgroundThrottling: false,
-        // SECURITY.md §Renderer. None of these three is negotiable.
+        // None of these three is negotiable: contextIsolation on, nodeIntegration off, sandbox on.
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
@@ -284,8 +284,8 @@ export class PanelWindow {
    * Bring the window to `fittedSize()` if it is not there already - only while
    * hidden; a visible panel keeps its size and gets it on the next hide.
    *
-   * By re-creating it. A Wayland toplevel does not own its geometry
-   * (ARCHITECTURE.md §"Resizing a Wayland surface"), and the one way to make a
+   * By re-creating it. A Wayland toplevel does not own its geometry,
+   * and the one way to make a
    * resize land without size hints - which are what break under the toolkit's
    * text scale, see `resizable` above - is to map a new surface at the new
    * size. Measured: `setSize`/`setBounds` on a hidden resizable window change
@@ -393,7 +393,7 @@ export class PanelWindow {
   }
 
   /**
-   * Placement per PLATFORM-MATRIX §2. On Wayland this is intentionally a no-op:
+   * Placement. On Wayland this is intentionally a no-op:
    * `setPosition`/`center` are unsupported there and calling them would be a lie
    * in the log rather than a bug the user can see. X11 centres on the display
    * under the cursor.
@@ -438,7 +438,7 @@ export class PanelWindow {
 }
 
 /**
- * SECURITY.md: block `window.open` and all in-page navigation. Extension-supplied
+ * Block `window.open` and all in-page navigation. Extension-supplied
  * markdown renders in the panel, and a renderer that can be navigated is a
  * renderer that can be replaced. Shared with the settings window — same
  * renderer privileges, same rule.

@@ -51,8 +51,8 @@ import type { RootCommand } from './root-search'
  * Electron main: the daemon.
  *
  * The window is created once at startup and thereafter only hidden and shown.
- * Nothing on the toggle path allocates, reads config, or touches disk — see
- * ARCHITECTURE.md's performance budget for why that constraint exists.
+ * Nothing on the toggle path allocates, reads config, or touches disk: the
+ * toggle has a latency budget of a few milliseconds and that is what keeps it.
  */
 
 // The application's name, class and ozone hint are set by the entry dispatcher
@@ -84,7 +84,7 @@ for (const dir of [paths.config, paths.data, paths.cache, paths.state, paths.log
 // Electron derives `userData` from XDG_CONFIG_HOME on Linux, so naming the app
 // `lumanin` silently makes `~/.config/lumanin/` Chromium's profile directory —
 // Cache/, GPUCache/, Local Storage/, Crashpad/, SingletonLock and friends land
-// next to `config.toml`. CONFIG.md promises that directory is user-authored and
+// next to `config.toml`. That directory is promised to be user-authored and
 // safe to copy between machines, so the profile is moved to where its contents
 // actually belong: regenerable caches under the cache dir, profile state under
 // the state dir.
@@ -111,7 +111,7 @@ function readConfigFile(): string | null {
  * watched: saving `config.toml` — from an editor or from `lumanin config` —
  * re-resolves it in place. Everything that reads a setting takes {@link current}
  * and calls it at the point of use, so nobody is holding a snapshot from
- * startup. CONFIG.md described this reload; until now it only described it.
+ * startup.
  */
 let config: ResolvedConfig = loadConfig({ fileContents: readConfigFile(), env: process.env })
 const current = (): ResolvedConfig => config
@@ -130,9 +130,9 @@ reportConfig(config)
 /**
  * Settings the window was built around, which a reload therefore cannot change.
  *
- * The panel window is created once and never resized — that is the whole of
- * ARCHITECTURE.md §"Panel sizing" — so new dimensions need a new window, which
- * means a restart. Reload says so rather than pretending it applied them.
+ * The panel window is created once and never resized, so new dimensions need
+ * a new window, which means a restart. Reload says so rather than pretending
+ * it applied them.
  */
 function needsRestart(_before: ResolvedConfig, _after: ResolvedConfig): readonly string[] {
   // Width and height were the two entries here until the panel learned to refit
@@ -238,7 +238,7 @@ const theme = new ThemeService({
 })
 
 // ---------------------------------------------------------------------------
-// Extensions (M4). The store and the index are cheap and eager; the host process
+// Extensions. The store and the index are cheap and eager; the host process
 // is not, and starts on the first launch.
 // ---------------------------------------------------------------------------
 
@@ -342,8 +342,8 @@ function watchExtensionsDir(): void {
 /**
  * Open a file with the application the desktop associates with it.
  *
- * `gio` first, Electron's `shell.openPath` second — `platform/apps/launch.ts`
- * §`openPath` has the whole reason, which is that `xdg-open` decides a file's
+ * `gio` first, Electron's `shell.openPath` second — `openPath` in
+ * `platform/apps/launch.ts` has the whole reason, which is that `xdg-open` decides a file's
  * type by sniffing its *contents* and so opens a zstd-compressed `.blend` in the
  * file manager rather than in Blender.
  *
@@ -380,7 +380,7 @@ const commands: readonly RegisteredCommand[] = rootCommands({
  *
  * One list, so the ranking sees them together — an extension's command competes
  * with an application and with `Reload Theme` on the same scale rather than in a
- * section of its own (`root-search.ts` §"ranked together").
+ * section of its own (see "ranked together" in `root-search.ts`).
  */
 function allCommands(): readonly RootCommand[] {
   // Read per call rather than captured: `[extensions].disabled` is watched like
@@ -704,7 +704,7 @@ function quit(): void {
 
 // ---------------------------------------------------------------------------
 // Renderer IPC. Method names are checked against an allow-list before dispatch;
-// the renderer is untrusted input by design (SECURITY.md §Renderer).
+// the renderer is untrusted input by design.
 // ---------------------------------------------------------------------------
 
 // The daemon's renderer is the panel and only the panel: `settings.close`
@@ -1046,7 +1046,7 @@ app.whenReady().then(async () => {
       },
       selection: async () => (await (await platformReady)?.selection.readText()) ?? '',
       open: async (target, application) => {
-        void application // `OpenWith` is M5; `open()` uses the desktop's default.
+        void application // `OpenWith` is not built; `open()` uses the desktop's default.
         if (/^[a-z][a-z0-9+.-]*:/i.test(target)) await shell.openExternal(target)
         else await openFile(target)
       },
@@ -1056,7 +1056,7 @@ app.whenReady().then(async () => {
       applications: async (query) => {
         void query
         await Promise.resolve()
-        // Backed by the `.desktop` index M2 already builds, so an extension's
+        // Backed by the `.desktop` index the launcher already builds, so an extension's
         // `getApplications()` sees exactly what the launcher does.
         return search?.applications() ?? []
       },
