@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useTheme } from '../useTheme'
 import { BindBanner } from './bind'
@@ -8,6 +8,7 @@ import { KeysScreen, PanelScreen } from './screens-basic'
 import { PluginsScreen } from './screens-plugins'
 import { SearchScreen } from './screens-search'
 import { firstSectionMatching, matchesFilter, SECTIONS, sectionIndex, type SectionId } from './sections'
+import { focusRow, useShellKeyboard } from './shell-keys'
 import { SettingsProvider, useSettingsState } from './useSettings'
 import { Wizard } from './Wizard'
 
@@ -23,24 +24,6 @@ import { Wizard } from './Wizard'
 
 export function SettingsApp(): React.JSX.Element {
   useTheme()
-
-  // Esc closes the window, matching the panel's habit — unless a modal is up,
-  // which handles Esc itself in the capture phase, or a field has focus, where
-  // Esc means "leave the field" (its blur is what commits it).
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return
-      event.preventDefault()
-      const active = document.activeElement
-      if (active instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) {
-        active.blur()
-        return
-      }
-      void window.lumanin.invoke('settings.close')
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
 
   return (
     <SettingsProvider>
@@ -68,6 +51,7 @@ function Shell(): React.JSX.Element {
   const [active, setActive] = useState<SectionId>('panel')
   const [filter, setFilter] = useState('')
   const filterInput = useRef<HTMLInputElement>(null)
+  const content = useRef<HTMLElement>(null)
   // Latched, not live: the first thing anyone does in the wizard creates
   // `config.toml`, which flips `firstRun` false on the next state push — and
   // an un-latched wizard vanished under the very click that used it. Once
@@ -80,13 +64,19 @@ function Shell(): React.JSX.Element {
 
   // A filter the open section cannot answer jumps to the first section that
   // can. Clearing it changes nothing: whatever was open stays open.
-  const applyFilter = (next: string): void => {
-    setFilter(next)
-    if (state === null || next.trim().length === 0) return
-    if (matchesFilter(next, ...sectionIndex(state.themes)[active])) return
-    const first = firstSectionMatching(next, state.themes)
-    if (first !== null) setActive(first)
-  }
+  const themes = state?.themes
+  const applyFilter = useCallback(
+    (next: string): void => {
+      setFilter(next)
+      if (themes === undefined || next.trim().length === 0) return
+      setActive((current) => {
+        if (matchesFilter(next, ...sectionIndex(themes)[current])) return current
+        return firstSectionMatching(next, themes) ?? current
+      })
+    },
+    [themes]
+  )
+  useShellKeyboard({ enabled: wizard !== true, filter, setFilter: applyFilter, filterInput, content, setActive })
 
   return (
     <div className="settings">
@@ -121,6 +111,19 @@ function Shell(): React.JSX.Element {
             aria-label="Filter settings"
             value={filter}
             onChange={(event) => applyFilter(event.target.value)}
+            onKeyDown={(event) => {
+              // Esc with text clears it and leaves; the shell's Esc order
+              // then continues from an empty filter next time. Down enters
+              // the rows.
+              if (event.key === 'Escape' && filter.length > 0) {
+                event.preventDefault()
+                event.stopPropagation()
+                applyFilter('')
+                event.currentTarget.blur()
+              } else if (event.key === 'ArrowDown') {
+                if (focusRow(content.current, 1)) event.preventDefault()
+              }
+            }}
           />
           {SECTIONS.map((candidate, index) => (
             <button
@@ -137,7 +140,7 @@ function Shell(): React.JSX.Element {
         </nav>
 
         <FilterContext.Provider value={filter}>
-          <main className="settings__content">
+          <main ref={content} className="settings__content">
             <h1 className="settings__heading">{section.title}</h1>
 
             {state !== null && state.parseError !== null ? (
