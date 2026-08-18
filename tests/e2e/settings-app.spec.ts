@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
+import type { LumaninBridge } from '@shared/ipc'
 
 /**
  * The settings app, end to end: a real second Electron application (launched
@@ -141,6 +142,50 @@ test('a toggled setting lands in config.toml, and toggling back to the default d
   // default stays free to improve underneath this config.
   await row.locator('.s-toggle').click()
   await expect.poll(config).not.toContain('hide_on_blur')
+})
+
+type WriteTiming = { clickedAt: number | null; pushedAt: number | null }
+declare global {
+  interface Window {
+    readonly lumanin: LumaninBridge
+    __writeTiming?: WriteTiming
+  }
+}
+
+test('a save pushes the new state itself, well inside the file watcher debounce', async () => {
+  const row = page.locator('.s-row', { hasText: 'Hide when focus is lost' })
+  await page.evaluate(() => {
+    const timing: WriteTiming = { clickedAt: null, pushedAt: null }
+    window.__writeTiming = timing
+    document.addEventListener('click', () => {
+      if (timing.clickedAt === null) timing.clickedAt = performance.now()
+    }, { capture: true, once: true })
+    window.lumanin.on('settings.changed', () => {
+      if (timing.clickedAt !== null && timing.pushedAt === null) timing.pushedAt = performance.now()
+    })
+  })
+
+  await row.locator('.s-toggle').click()
+  await expect.poll(config).toContain('hide_on_blur = false')
+  await expect
+    .poll(() => page.evaluate(() => window.__writeTiming?.pushedAt ?? null))
+    .not.toBeNull()
+  const timing = await page.evaluate(() => window.__writeTiming)
+  const delta = (timing?.pushedAt ?? 0) - (timing?.clickedAt ?? 0)
+  // Below the watcher's 120 ms debounce: this push came from the write itself.
+  expect(delta).toBeLessThan(100)
+
+  await row.locator('.s-toggle').click()
+  await expect.poll(config).not.toContain('hide_on_blur')
+})
+
+test('two clicks back to back count as two: the second sees the first', async () => {
+  const row = page.locator('.s-row', { hasText: 'Hide when focus is lost' })
+  await expect(row.locator('.s-toggle')).toHaveAttribute('aria-checked', 'true')
+  await row.locator('.s-toggle').click()
+  await row.locator('.s-toggle').click()
+  await expect.poll(config).not.toContain('hide_on_blur')
+  await expect(row.locator('.s-toggle')).toHaveAttribute('aria-checked', 'true')
 })
 
 test('an enum writes its value and the screen redraws from the file', async () => {
