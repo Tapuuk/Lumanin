@@ -50,7 +50,7 @@ function PluginCard({ plugin, onChanged }: { plugin: PluginDto; onChanged: () =>
   const [problem, setProblem] = useState<string | null>(null)
 
   return (
-    <Section>
+    <Section keywords={`${plugin.title} ${plugin.name}`}>
       <div className="s-plugin__head">
         <Toggle
           checked={plugin.enabled}
@@ -533,7 +533,7 @@ function InstallSection({ onInstalled }: { onInstalled: () => void }): React.JSX
   }
 
   return (
-    <Section title="Install a plugin">
+    <Section title="Install a plugin" keywords="repository url directory fetch">
       <p className="s-help">
         From any public git repository over https: <code>owner/name</code>, a GitHub URL, or a
         directory path on this machine.

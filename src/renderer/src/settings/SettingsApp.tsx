@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { useTheme } from '../useTheme'
 import { BindBanner } from './bind'
+import { FilterContext } from './controls'
 import { Logo } from './Logo'
 import { KeysScreen, PanelScreen } from './screens-basic'
 import { PluginsScreen } from './screens-plugins'
 import { SearchScreen } from './screens-search'
-import { SECTIONS, type SectionId } from './sections'
+import { firstSectionMatching, matchesFilter, SECTIONS, sectionIndex, type SectionId } from './sections'
 import { SettingsProvider, useSettingsState } from './useSettings'
 import { Wizard } from './Wizard'
 
@@ -65,6 +66,8 @@ function SaveErrorBanner(): React.JSX.Element | null {
 function Shell(): React.JSX.Element {
   const { state, refresh } = useSettingsState()
   const [active, setActive] = useState<SectionId>('panel')
+  const [filter, setFilter] = useState('')
+  const filterInput = useRef<HTMLInputElement>(null)
   // Latched, not live: the first thing anyone does in the wizard creates
   // `config.toml`, which flips `firstRun` false on the next state push — and
   // an un-latched wizard vanished under the very click that used it. Once
@@ -74,6 +77,16 @@ function Shell(): React.JSX.Element {
     if (wizard === null && state !== null) setWizard(state.firstRun)
   }, [wizard, state])
   const section = SECTIONS.find((candidate) => candidate.id === active) ?? SECTIONS[0]
+
+  // A filter the open section cannot answer jumps to the first section that
+  // can. Clearing it changes nothing: whatever was open stays open.
+  const applyFilter = (next: string): void => {
+    setFilter(next)
+    if (state === null || next.trim().length === 0) return
+    if (matchesFilter(next, ...sectionIndex(state.themes)[active])) return
+    const first = firstSectionMatching(next, state.themes)
+    if (first !== null) setActive(first)
+  }
 
   return (
     <div className="settings">
@@ -100,6 +113,15 @@ function Shell(): React.JSX.Element {
 
       <div className="settings__body">
         <nav className="settings__sidebar" aria-label="Sections">
+          <input
+            ref={filterInput}
+            className="settings__filter"
+            type="search"
+            placeholder="Filter settings"
+            aria-label="Filter settings"
+            value={filter}
+            onChange={(event) => applyFilter(event.target.value)}
+          />
           {SECTIONS.map((candidate, index) => (
             <button
               key={candidate.id}
@@ -114,28 +136,30 @@ function Shell(): React.JSX.Element {
           ))}
         </nav>
 
-        <main className="settings__content">
-          <h1 className="settings__heading">{section.title}</h1>
+        <FilterContext.Provider value={filter}>
+          <main className="settings__content">
+            <h1 className="settings__heading">{section.title}</h1>
 
-          {state !== null && state.parseError !== null ? (
-            <div className="s-error">
-              {state.configPath} does not parse, so it cannot be edited safely: {state.parseError}
-              <br />
-              Fix it by hand, or move it aside and reopen this window.
-            </div>
-          ) : (
-            <>
-              <SaveErrorBanner />
-              {/* Not while the wizard is up: its "Make it stick" step is the
-                  one place first-run compositor writes happen. */}
-              {wizard !== true && <BindBanner visible={active === 'keys'} />}
-              {active === 'panel' && <PanelScreen />}
-              {active === 'search' && <SearchScreen />}
-              {active === 'keys' && <KeysScreen />}
-              {active === 'plugins' && <PluginsScreen />}
-            </>
-          )}
-        </main>
+            {state !== null && state.parseError !== null ? (
+              <div className="s-error">
+                {state.configPath} does not parse, so it cannot be edited safely: {state.parseError}
+                <br />
+                Fix it by hand, or move it aside and reopen this window.
+              </div>
+            ) : (
+              <>
+                <SaveErrorBanner />
+                {/* Not while the wizard is up: its "Make it stick" step is the
+                    one place first-run compositor writes happen. */}
+                {wizard !== true && <BindBanner visible={active === 'keys'} />}
+                {active === 'panel' && <PanelScreen />}
+                {active === 'search' && <SearchScreen />}
+                {active === 'keys' && <KeysScreen />}
+                {active === 'plugins' && <PluginsScreen />}
+              </>
+            )}
+          </main>
+        </FilterContext.Provider>
       </div>
     </div>
   )

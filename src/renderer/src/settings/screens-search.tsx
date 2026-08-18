@@ -34,6 +34,9 @@ function usePickerContext(): {
 
 const NONE: readonly never[] = []
 
+const ENGINE_KEYWORDS = ['engine', ...BUILTIN_ENGINES.map((engine) => engine.name)].join(' ')
+const RESULT_KEYWORDS = ['ranking', ...Object.values(RESULT_GROUP_LABELS)].join(' ')
+
 function samePins(
   a: readonly { key: string; title: string | null }[],
   b: readonly { key: string; title: string | null }[]
@@ -110,7 +113,7 @@ export function SearchScreen(): React.JSX.Element | null {
         <SettingControl setting={HABIT_SETTING} />
       </Section>
 
-      <Section title="Web search engines">
+      <Section title="Web search engines" keywords={ENGINE_KEYWORDS}>
         <p className="s-help">
           Every engine enabled here is offered under every query, in this order. Custom engines can
           be added in <code>lumanin config</code> for now.
@@ -140,7 +143,7 @@ export function SearchScreen(): React.JSX.Element | null {
         />
       </Section>
 
-      <Section title="Result order">
+      <Section title="Result order" keywords={RESULT_KEYWORDS}>
         <p className="s-help">Which kinds of result appear, and where the unranked ones sit.</p>
         <ReorderList
           rows={[
@@ -167,7 +170,7 @@ export function SearchScreen(): React.JSX.Element | null {
         />
       </Section>
 
-      <Section title="Pins">
+      <Section title="Pins" keywords="pinned top of the root">
         <p className="s-help">
           Always at the top of the root, in this order, matched by name like everything else.
         </p>
@@ -199,7 +202,7 @@ export function SearchScreen(): React.JSX.Element | null {
         </button>
       </Section>
 
-      <Section title="Aliases">
+      <Section title="Aliases" keywords="alias short word target">
         <p className="s-help">Type the word, get the thing: <code>ff</code> for Firefox.</p>
         {aliases.map(([alias, entry]) => (
           <div key={alias} className="s-list__row">
@@ -327,7 +330,7 @@ export function PluginHotkeysGroup(): React.JSX.Element | null {
 
   return (
     <>
-      <Section title="Plugin hotkeys">
+      <Section title="Plugin hotkeys" keywords="global key bind command category row action">
         <p className="s-help">
           A global key bound to one thing a plugin offers: a command, a category, a row, or one
           action on a row. The key is written into this desktop&apos;s own shortcut config, with

@@ -96,6 +96,23 @@ body:has(.settings) {
   overflow-y: auto;
 }
 
+.settings__filter {
+  margin: 0 0 8px;
+  padding: 5px 9px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--s-radius);
+  background: var(--lumanin-bg-hover);
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text);
+  user-select: text;
+  cursor: text;
+}
+
+.settings__filter::placeholder {
+  color: var(--lumanin-text-faint);
+}
+
 .settings__section {
   display: flex;
   align-items: center;
@@ -169,6 +186,12 @@ body:has(.settings) {
 
 .s-section {
   margin-bottom: 24px;
+}
+
+/* Filtered out. Stated here because .s-row sets its own display. */
+.s-section[hidden],
+.s-row[hidden] {
+  display: none;
 }
 
 .s-section__title {
