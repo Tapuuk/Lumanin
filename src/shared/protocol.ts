@@ -6,7 +6,7 @@
  *   2. Electron's `second-instance` argv forwarding (running the binary directly),
  *   3. user scripts writing to the socket.
  *
- * SECURITY.md: the verb set is a closed allow-list and is never eval-shaped. A
+ * The verb set is a closed allow-list and is never eval-shaped. A
  * request that does not parse into one of these is rejected without side effects.
  */
 

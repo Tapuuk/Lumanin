@@ -8,8 +8,8 @@ import type { EscAtRoot } from './config'
  * the default (`hide`) throw away a half-typed query on the first Esc, which is
  * the opposite of what every launcher does and made the key's name a lie.
  *
- * Away from the root, Esc always backs out one step. Today the only step is the
- * query; from M4 the extension navigation stack sits above it, and `atRoot` is
+ * Away from the root, Esc always backs out one step. The first step is the
+ * query; the extension navigation stack sits above it, and `atRoot` is
  * how the renderer reports that there is nothing above the root left to pop.
  */
 export function escapeAction(setting: EscAtRoot, atRoot: boolean): EscAtRoot {

@@ -4,7 +4,7 @@
  * An extension renders in a worker and is displayed in the renderer, two v8
  * isolates with no shared memory and — deliberately — no shared code. What
  * crosses between them is this: a JSON document, diffed with JSON Patch
- * (ARCHITECTURE.md §"The reconciler"). Both ends compile against this file, so
+ * by the reconciler. Both ends compile against this file, so
  * the producer and the player cannot disagree about the shape.
  *
  * Renderer-safe by construction: no `node:*` imports, no React import, nothing

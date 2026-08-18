@@ -11,7 +11,7 @@
  * table is deliberately *not* here. A plugin is a program that talks to the
  * launcher through `lumanin` and nothing else, and one reaching into the app's
  * own modules would be a plugin nobody could copy. The contract between the two
- * halves is these eight ids and CONFIG.md §`[file_search]`.
+ * halves is these eight ids and the `[file_search]` config section.
  */
 
 export const FILE_CATEGORIES = [

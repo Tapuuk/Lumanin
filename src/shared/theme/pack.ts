@@ -2,7 +2,7 @@ import { parse as parseToml } from 'smol-toml'
 import { COLOUR_TOKENS, type MutableUi, type SeedColours, type ThemeSeed, type UiTokens } from './derive'
 
 /**
- * The `lumanin.toml` theme-pack format from THEMING.md §"Theme pack format".
+ * The `lumanin.toml` theme-pack format.
  *
  * ```toml
  * [meta]   name = "Tokyo Night"  variant = "dark"  author = "…"
@@ -11,8 +11,8 @@ import { COLOUR_TOKENS, type MutableUi, type SeedColours, type ThemeSeed, type U
  * ```
  *
  * This is also the file third-party Omarchy theme authors are meant to drop into
- * their theme directories, which is why the filename is fixed (see the name note
- * at the top of CLAUDE.md) and why the parser is forgiving: an unknown key is
+ * their theme directories, which is why the filename is fixed and why the
+ * parser is forgiving: an unknown key is
  * ignored, a malformed value falls back to derivation, and nothing here can stop
  * the launcher from starting. Keys are snake_case in the file and camelCase in
  * the token set, and that mapping is spelled out rather than computed so adding a

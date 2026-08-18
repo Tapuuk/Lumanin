@@ -4,9 +4,8 @@ import type { MutableUi, SeedColours, UiTokens } from './derive'
 /**
  * Reading an Omarchy theme's palette.
  *
- * **Verified against Omarchy on 2026-08-08, because the format moved and
- * THEMING.md's original description of it is no longer true.** What is actually
- * on disk today:
+ * **Verified against Omarchy, because the format moved and the original
+ * description of it is no longer true.** What is actually on disk today:
  *
  *  - Every theme's applied copy lives in `~/.config/omarchy/current/theme/`, and
  *    `omarchy-theme-set` guarantees a **`colors.toml`** in it: if the theme
@@ -18,7 +17,7 @@ import type { MutableUi, SeedColours, UiTokens } from './derive'
  *    alacritty reader below stays: it covers a theme installed before the format
  *    changed, and a generator that bailed out because the palette was incomplete.
  *  - `colors.toml` names an `accent` explicitly, which is strictly better than
- *    THEMING.md's "use `colors.normal.blue`" — that rule survives here only as
+ *    the older "use `colors.normal.blue`" rule — that rule survives here only as
  *    the fallback the generator itself uses (`accent = color4`).
  *
  * These functions are pure text-in/palette-out so they can be golden-tested
@@ -173,8 +172,8 @@ const ALACRITTY_SLOTS = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', '
  * Also where a theme's translucency comes from: `[window].opacity` is Omarchy's
  * only expression of "this theme is meant to be see-through" (the `-glass`
  * variants set it), and mapping it onto our Glass exception is what makes a glass
- * Omarchy theme feel like one here. See THEMING.md §"Blur / Glass themes" for why
- * that still renders near-opaque until the compositor actually grants blur.
+ * Omarchy theme feel like one here. It still renders near-opaque until the
+ * compositor actually grants blur, because transparency without blur is unreadable.
  */
 export function parseAlacritty(text: string): OmarchyPalette | null {
   const file = parse(text)

@@ -19,7 +19,7 @@ import { ENV_PREFIX } from './identity'
 import { normalizeSearchTemplate } from './websearch'
 
 /**
- * `config.toml` loading and the precedence chain from `docs/CONFIG.md`:
+ * `config.toml` loading and the precedence chain:
  *
  *     CLI flag → env var (LUMANIN_*) → config.toml → detected default
  *
@@ -28,10 +28,9 @@ import { normalizeSearchTemplate } from './websearch'
  * and `lumanin doctor` is required to answer it. That provenance is the reason
  * this is a resolver rather than an `Object.assign` of defaults.
  *
- * M0 resolves the `[general]` and `[appearance]` keys the window needs. The
- * remaining sections (`[search]`, `[aliases]`, `[hotkeys]`, `[clipboard]`,
- * `[extensions]`, `[platform]`) are preserved verbatim in `raw` and reported as
- * recognised-but-unused, so a later milestone can adopt them without a migration.
+ * The `[general]` and `[appearance]` keys the window needs are resolved here.
+ * Sections not yet read by anything are preserved verbatim in `raw` and reported
+ * as recognised-but-unused, so a later feature can adopt them without a migration.
  */
 
 export type Layer = 'flag' | 'env' | 'file' | 'default'
@@ -50,11 +49,11 @@ export const OPEN_ON_MONITOR_VALUES = ['cursor', 'focused', 'primary'] as const
 export type OpenOnMonitor = (typeof OPEN_ON_MONITOR_VALUES)[number]
 
 /**
- * The result groups the root search can produce, in the order CONFIG.md's
+ * The result groups the root search can produce, in the order the default
  * `fallback_order` lists them. Every value here is accepted; not every value
  * still fills anything — see `INERT_RESULT_GROUPS`. A config naming a group the
  * root cannot fill must not be an error, or a user's config breaks on the
- * milestone that moves one.
+ * release that moves one.
  *
  * `plugins` is first, and that is a decision rather than an accident of
  * alphabet. A plugin's view command is the *specific* answer to the query that
@@ -88,7 +87,7 @@ export const RESULT_GROUP_LABELS: Readonly<Record<ResultGroup, string>> = {
  * now (`plugins/files/`), reached as its own view rather than mixed into the
  * root, because a filesystem is neither small enough to rank against a few
  * thousand application names nor fast enough to re-scan on every keystroke.
- * `calculator` stopped being a position (2026-08-11, user decision): a query
+ * `calculator` stopped being a position (user decision): a query
  * that is a calculation has exactly one right answer, so the row sits above
  * everything, always, and offering a lever to move it was offering a way to
  * make the launcher worse.
@@ -169,8 +168,8 @@ export interface SearchRule {
  *
  * `shell` is a command line the user typed into the config themselves. It is the
  * one kind whose payload is not an id looked up somewhere: it is the thing to
- * run. See SECURITY.md §"A `shell:` pin runs a command" for why that is checked
- * against this list again before anything is spawned.
+ * run, which is why it is checked against this list again before anything is
+ * spawned.
  */
 const PINNABLE_KINDS = new Set(['app', 'command', 'web', 'extension', 'shell'])
 
@@ -232,8 +231,8 @@ export interface ResolvedConfig {
    * `[file_search]`: the one plugin that is also a section of the settings.
    *
    * File search ships inside the application and is reached by a key of its own
-   * rather than through the root list — CLAUDE.md §"Search Files is its own
-   * search" — which makes it the launcher's second search surface rather than a
+   * rather than through the root list, which makes it the launcher's second
+   * search surface rather than a
    * plugin the user happens to have. Both halves of it that a person wants to
    * change are here: the key that opens it, and the order its results come back
    * in.
@@ -300,7 +299,7 @@ export interface ResolvedConfig {
   readonly problems: readonly string[]
 }
 
-/** Sections defined by CONFIG.md, whether or not this milestone reads them. */
+/** The sections `config.toml` may contain, whether or not anything reads them yet. */
 const KNOWN_SECTIONS = new Set([
   'general',
   'appearance',
@@ -1153,7 +1152,7 @@ export function loadConfig(options: LoadOptions): ResolvedConfig {
        * on screen behind it is a window that looks alive and is not: its arrow
        * keys do nothing, because the keyboard is somewhere else. That was the
        * reported bug, and hiding is the answer to it rather than trying to take
-       * the focus back (which was tried, and removed — PLATFORM-MATRIX §2b).
+       * the focus back (which was tried, and removed).
        *
        * Off is for browsing: open a few images in turn without the panel
        * disappearing between them.

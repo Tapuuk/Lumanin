@@ -1,5 +1,5 @@
 /**
- * The fixed identifier set. See CLAUDE.md §"Identifiers are fixed".
+ * The fixed identifier set. Never invent variants of these.
  *
  * These strings are matched literally by things outside this repository —
  * compositor window rules (`class:^(lumanin)$`), third-party Omarchy theme files
@@ -32,7 +32,7 @@ export const SOCKET_BASENAME = 'lumanin.sock'
  *
  * On Wayland every surface of a process shares one app_id, and the compositor
  * rules that float and pin the panel match `^(lumanin)$` exactly. Scoping those
- * rules to spare a second in-process window was tried (2026-08-11) and broke
+ * rules to spare a second in-process window was tried and broke
  * the panel's `no_blur`; the settings app therefore runs as its own process
  * under this class, and the panel's rules are never touched. Fixed for the same
  * reason every identifier here is: users may write their own compositor rules
@@ -72,7 +72,7 @@ export const ICON_SCHEME = `${APP_ID}-icon`
  *
  * Extensions do compare against it — usually to decide whether an API exists —
  * so it has to be the version whose *shape* we reproduce, which is the one
- * pinned in `spec/` (RAYCAST-COMPAT.md §"Spec baseline"). Reporting our own
+ * pinned in `spec/`. Reporting our own
  * version number here would answer a question nobody asked.
  */
 export const RAYCAST_API_VERSION = '1.104.24'
