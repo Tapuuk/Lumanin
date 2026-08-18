@@ -8,10 +8,10 @@ import { THEME_FILE_BASENAME } from '../../shared/identity'
 import type { AppearanceBackend, AppearanceSignal } from './index'
 
 /**
- * Omarchy as an appearance source — the flagship integration in THEMING.md §2.
+ * Omarchy as an appearance source — the flagship integration.
  *
- * **The layout on disk, verified against `omarchy-theme-set` on 2026-08-08 and
- * again against Omarchy 4 on 2026-08-16.** THEMING.md originally described a
+ * **The layout on disk, verified against `omarchy-theme-set` and again against
+ * Omarchy 4.** Older Omarchy had a
  * symlink at `~/.config/omarchy/current/theme` and derivation from
  * `alacritty.toml`; neither is true of current Omarchy, and both mattered:
  *
@@ -41,7 +41,7 @@ import type { AppearanceBackend, AppearanceSignal } from './index'
  *
  * Priority within a theme directory: a `lumanin.toml` the theme author wrote
  * beats anything we would infer. That file is the zero-config adoption path
- * THEMING.md promises third-party theme authors, so it has to actually win.
+ * promised to third-party theme authors, so it has to actually win.
  */
 
 /** Debounce for the watch. A theme swap touches several files in quick succession. */

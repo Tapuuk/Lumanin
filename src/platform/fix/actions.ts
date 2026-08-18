@@ -144,7 +144,7 @@ export function usesHyprlandLua(configDir: string, exists: (path: string) => boo
  * transparent — the panel occupies the top of a fixed box — and a compositor
  * with blur enabled treats that emptiness as glass: Omarchy's defaults blur it
  * at `brightness = 0.60`, which paints a dimmed, smeared rectangle over half the
- * screen around a panel that is supposed to be a bar. THEMING.md makes blur
+ * screen around a panel that is supposed to be a bar. Blur is
  * opt-in and reports `blurGranted: false` until it is granted, so a compositor
  * granting it unasked is a bug we can see. The Glass themes will turn this rule
  * off through the `windowEffects` backend rather than by leaving it out here.
@@ -167,12 +167,12 @@ export function usesHyprlandLua(configDir: string, exists: (path: string) => boo
  *
  * So the compositor stops rounding a shape that is not the panel, and the panel
  * draws its own radius from `--lumanin-radius-outer` — which is also what
- * THEMING.md already asks for: colours follow the desktop, spacing and radius
+ * the theming rule already asks for: colours follow the desktop, spacing and radius
  * stay ours. Verified on 0.56: `rounding` is an accepted field name (a bogus one
  * is rejected with `invalid field type`).
  *
  * These rules match by class **only** — do not scope them by title. That was
- * tried (2026-08-11) so the settings window, which shares the process's app_id
+ * tried so the settings window, which shares the process's app_id
  * on Wayland, would escape them: `float` and `pin` behaved under the
  * multi-match syntax, but `no_blur`/`no_shadow` stopped applying to the panel,
  * which brought Omarchy's blur back as a smeared red rectangle over half the
@@ -336,7 +336,7 @@ function formatForProse(hotkey: Hotkey): string {
 // exists the `.conf` is never read, so on such a system the actions above bind
 // nothing and these apply instead ({@link usesHyprlandLua} is the gate, on both
 // sides). Verified against the wiki's Binds/Window-Rules/Dispatchers pages and
-// Hyprland's own example config, 2026-08-14.
+// Hyprland's own example config.
 //
 // The shape is different from the `.conf` on purpose: our lines live in a file
 // of their own (`hypr/lumanin.lua`) and `hyprland.lua` gets a single guarded
@@ -449,8 +449,8 @@ const hyprlandLuaRequire: FixAction = {
 }
 
 /**
- * Sway's equivalents. Verified against sway master source and sway(5)
- * (2026-08-13), not yet against a live session. `no_focus` is deliberately
+ * Sway's equivalents. Verified against sway master source and sway(5),
+ * not yet against a live session. `no_focus` is deliberately
  * absent: sway has no `stay_focused` equivalent, and asking for the
  * closest-looking directive would be guessing at semantics rather than
  * translating them. `move position center` is equally absent because
@@ -528,10 +528,10 @@ function swayRules(choice: HotkeyChoice): FixAction {
  * There is no equivalent of Hyprland's `move`: KWin's `position` rule takes
  * absolute pixels, and nothing at `--fix` time knows which monitor the panel will
  * open on or how big it is. Centred is the honest best available, and
- * PLATFORM-MATRIX's placement capability already says so.
+ * the placement capability already says so.
  *
- * **UNVERIFIED** — written against `rulesettings.kcfg` (KWin master, checked
- * 2026-08-10); never run on KDE.
+ * **UNVERIFIED** — written against `rulesettings.kcfg` (KWin master); never
+ * run on KDE.
  */
 const KWIN_RULE_GROUP = '{6f2a1c34-9d5e-4b71-8a0c-3e5f7b9d1a24}'
 
@@ -792,7 +792,7 @@ function kdeDesktopEntry(spec: BindSpec): FixAction {
  * friendly name is the `.desktop` file's `Name=`; a `_k_friendly_name` here is
  * ignored for services. Verified against kglobalacceld master and the
  * Plasma/6.0–6.5 branches (`GlobalShortcutsRegistry::loadSettings`,
- * `KServiceActionComponent::loadSettings`), 2026-08-13.
+ * `KServiceActionComponent::loadSettings`).
  *
  * The Plasma 5 shape — a top-level `[name.desktop]` group with a
  * `shortcut,default,name` triplet — must not be written here: the daemon's
@@ -999,7 +999,7 @@ export const FIX_ACTIONS: readonly FixAction[] = fixActions()
 /**
  * Things `--fix` will not do for you, with the exact command to do them yourself.
  *
- * SECURITY.md is explicit that the input-injection path is the user's decision to
+ * The input-injection path is the user's decision to
  * make knowingly. `ydotool` reads and writes `/dev/uinput`, which means anything
  * in the `input` group can synthesise and observe input system-wide — so this
  * prints, and stops.

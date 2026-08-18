@@ -4,7 +4,7 @@ import { CAPABILITIES, selectBackend, type CapabilityReport, type Status } from 
 import { describePlatform, type PlatformProfile } from './detect'
 
 /**
- * `lumanin doctor` — the capability report (PLATFORM-MATRIX §`lumanin doctor`).
+ * `lumanin doctor` — the capability report.
  *
  * The point of this command is to answer two questions without the user reading
  * any source: *what did you pick for each capability*, and *why not the other

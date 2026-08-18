@@ -2,19 +2,19 @@ import type { BinaryMap } from './binaries'
 import { run } from './run'
 
 /**
- * D-Bus probe (PLATFORM-MATRIX §Detection step 4).
+ * D-Bus probe (detection step 4).
  *
  * Deliberately shells out to `busctl`/`gdbus` rather than taking a D-Bus client
- * dependency. We need four yes/no answers at startup, and SECURITY.md asks for a
- * deliberately small dependency set around anything touching the session bus.
+ * dependency. We need four yes/no answers at startup, and the dependency set
+ * around anything touching the session bus is kept deliberately small.
  * The real D-Bus traffic (portal GlobalShortcuts binds, Settings subscriptions)
  * is a separate concern from *detection* and can take a proper client later.
  */
 
 /**
  * A probe that could not run is not the same answer as a probe that ran and found
- * nothing. PLATFORM-MATRIX is explicit: a missing probe must never look like
- * "absent", so every finding is three-valued.
+ * nothing. A missing probe must never look like "absent", so every finding is
+ * three-valued.
  */
 export type Tri = true | false | 'UNKNOWN'
 

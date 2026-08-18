@@ -3,7 +3,7 @@ import type { Exec } from '../exec'
 /**
  * The text scale the toolkit under Chromium has *already* applied.
  *
- * Measured on Omarchy 4 / Hyprland, Electron 43, 2026-08-16: with GNOME's
+ * Measured on Omarchy 4 / Hyprland, Electron 43: with GNOME's
  * `text-scaling-factor` at 1.18 (what `omarchy display text size 14` writes,
  * beside the shell's `base-size = 14`) the renderer reports
  * `devicePixelRatio = 1.25 × 1.18 × zoom` on a 1.25-scale output. Chromium's

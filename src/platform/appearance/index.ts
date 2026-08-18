@@ -13,7 +13,7 @@ import { omarchyCurrentCandidates } from '../probe/appearance'
 import { PortalAppearance } from './portal'
 
 /**
- * The `appearance` capability (PLATFORM-MATRIX §10): where the desktop says what
+ * The `appearance` capability: where the desktop says what
  * it wants to look like.
  *
  * Two shapes of answer, and the difference is the whole design:
@@ -50,8 +50,8 @@ export interface AppearanceSignal {
    * Which built-in base fits this desktop when only a preference is available —
    * `adwaita` on GNOME, so a GNOME user gets GNOME's greys rather than ours.
    * Only colours follow the desktop; our spacing, radius and typography stay
-   * ours (THEMING.md is explicit about that for the Glass exception, and the
-   * reasoning is identical here).
+   * ours (the Glass exception follows the same rule, and the reasoning is
+   * identical here).
    */
   readonly preferBase?: string
   /**

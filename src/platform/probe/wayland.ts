@@ -3,9 +3,9 @@ import type { Tri } from './dbus'
 import { run } from './run'
 
 /**
- * Wayland protocol probe (PLATFORM-MATRIX §Detection step 3).
+ * Wayland protocol probe (detection step 3).
  *
- * PLATFORM-MATRIX planned a native addon as the primary path with `wayland-info`
+ * The plan was a native addon as the primary path with `wayland-info`
  * as fallback. The addon does not exist yet, so this is the fallback only — and
  * `wayland-info` is *not installed by default* on any of the target distros
  * (Arch: `wayland-utils`), so `UNKNOWN` is the common case rather than the edge

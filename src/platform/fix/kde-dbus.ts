@@ -17,7 +17,7 @@ import type { CommandFix } from './gnome'
  * same calls with `busctl` (which ships with systemd everywhere; `qdbus` is
  * `qdbus6` on Arch and `qdbus-qt6` on Fedora). Verified against the daemon's
  * source (kglobalacceld.cpp, kserviceactioncomponent.cpp) and the Shortcuts
- * KCM (plasma-desktop kcms/keys/globalaccelmodel.cpp), 2026-08-14:
+ * KCM (plasma-desktop kcms/keys/globalaccelmodel.cpp):
  *
  * 1. `doRegister(["<name>.desktop", "", "Lumanin", ""])` - the **dummy**
  *    registration. Naming a `.desktop` component makes the daemon materialise

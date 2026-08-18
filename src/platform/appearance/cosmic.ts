@@ -16,8 +16,8 @@ import type { AppearanceBackend, AppearanceSignal } from './index'
  * com.system76.CosmicTheme.Dark.Builder/v2/bg_color         Some("#1e1e1eff")
  * ```
  *
- * Three findings from the cosmic-theme / cosmic-settings sources (re-checked
- * 2026-08-13) shape this file:
+ * Three findings from the cosmic-theme / cosmic-settings sources shape this
+ * file:
  *
  *  - **User colour customisations live under the `.Builder` config ids**
  *    (`ThemeBuilder`), not under `CosmicTheme.Dark` itself — the built theme's

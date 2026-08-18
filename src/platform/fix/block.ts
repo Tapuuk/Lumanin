@@ -1,7 +1,7 @@
 /**
  * Marked-block editing for the config files `lumanin doctor --fix` touches.
  *
- * PLATFORM-MATRIX's rules for every `--fix` action: idempotent, inside a marked
+ * The rules for every `--fix` action: idempotent, inside a marked
  * block, reversible by `--unfix`, and shown as a diff before it is applied. All
  * four of those are properties of *this file*, which is why it is pure functions
  * over strings rather than something that opens files — the risky part is the

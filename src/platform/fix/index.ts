@@ -21,7 +21,7 @@ import { parseHotkey, type Hotkey } from '../../shared/hotkey'
 /**
  * `lumanin doctor --fix` / `--unfix`.
  *
- * Planning and applying are separate on purpose. PLATFORM-MATRIX requires every
+ * Planning and applying are separate on purpose. Every
  * change to be shown as a diff *before* it happens and to be consented to in the
  * same run — which is only possible if the whole set of edits can be computed
  * without performing any of them. So `planFixes` reads and returns; `applyPlan`
@@ -571,7 +571,7 @@ export function applyPlan(edits: readonly PlannedEdit[], stamp: string): readonl
  * failure would produce exactly that state, so it stops.
  *
  * Nothing here is a shell string and nothing here needs root — both are
- * SECURITY.md requirements for anything `--fix` may run rather than print.
+ * requirements for anything `--fix` may run rather than print.
  */
 export async function runCommands(
   commands: readonly (readonly string[])[],

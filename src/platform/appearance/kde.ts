@@ -20,7 +20,7 @@ import type { AppearanceBackend, AppearanceSignal } from './index'
  * watch on the file path dies after the first one.
  *
  * **UNVERIFIED** — written against the Breeze scheme format (checked against
- * `KDE/breeze` on 2026-08-08) and unit-tested against real scheme text, but never
+ * `KDE/breeze`) and unit-tested against real scheme text, but never
  * run in a Plasma session. `doctor` says so until a human confirms it in a VM.
  */
 export class KdeAppearance implements AppearanceBackend {

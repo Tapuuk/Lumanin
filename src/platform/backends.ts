@@ -2,7 +2,7 @@ import type { Backend, Capability } from './capability'
 import { maybe, placementMode, type PlatformProfile } from './detect'
 
 /**
- * Backend definitions, in the priority order PLATFORM-MATRIX gives each capability.
+ * Backend definitions, in priority order per capability.
  *
  * These are *probes*, deciding what is available and what `doctor` reports. The
  * implementations hang off the chosen id. Splitting it this way is what lets the
@@ -12,7 +12,7 @@ import { maybe, placementMode, type PlatformProfile } from './detect'
  * `verifiedOn` is the honesty mechanism. The dev machine is Arch + Hyprland, so
  * only `hyprland/wayland` entries can claim to be verified; everything else is
  * written against documentation and reports UNVERIFIED until a human confirms it
- * in a VM per TESTING.md.
+ * in a VM.
  */
 
 const HYPRLAND = 'hyprland/wayland'
@@ -28,7 +28,7 @@ const hotkey: Backend[] = [
   {
     id: 'portal-global-shortcuts',
     summary: 'XDG portal GlobalShortcuts (one system consent dialog, token persisted)',
-    // M1 continues here: the BindShortcuts flow and token persistence are not written yet.
+    // The BindShortcuts flow and token persistence are not written yet.
     implemented: false,
     // The interface is present here, but we have not driven a real bind yet.
     verifiedOn: [],
@@ -106,10 +106,10 @@ const hotkey: Backend[] = [
   {
     id: 'evdev',
     summary: 'evdev reader (opt-in only; sees every keystroke system-wide)',
-    // Opt-in only per SECURITY.md, and nothing to opt into yet.
+    // Opt-in only, and nothing to opt into yet.
     implemented: false,
     verifiedOn: [],
-    // SECURITY.md: never auto-selected during probing. It is listed so `doctor`
+    // Never auto-selected during probing. It is listed so `doctor`
     // can explain that it exists and what it costs, not so it can be chosen.
     probe: () => ({
       usable: false,
@@ -203,14 +203,14 @@ const clipboard: Backend[] = [
 ]
 
 // ---------------------------------------------------------------------------
-// 4. Clipboard history — cut (2026-08-11)
+// 4. Clipboard history — cut
 // ---------------------------------------------------------------------------
 //
 // Was a capability with three backends and no implementation. Dropped with the
 // feature at the user's request, rather than left as a chain reporting PLANNED
 // for something nobody is going to build — `doctor` promising a feature is a
-// promise. The numbering below is left alone so PLATFORM-MATRIX's section
-// numbers still line up.
+// promise. The numbering below is left alone so the capability numbers stay
+// stable.
 
 // ---------------------------------------------------------------------------
 // 5. Paste into the previously focused app
@@ -256,7 +256,7 @@ const paste: Backend[] = [
     id: 'copy-and-prompt',
     summary: 'Copy to the clipboard and show "Press Ctrl+V"',
     verifiedOn: [HYPRLAND],
-    // PLATFORM-MATRIX: none of the injection helpers ships by default, so this is
+    // None of the injection helpers ships by default, so this is
     // the *default experience*, not a rare edge case. It must never fail silently.
     probe: () => ({
       usable: true,
@@ -379,7 +379,7 @@ const files: Backend[] = [
   {
     id: 'fd',
     summary: 'fd (fast, respects ignore files)',
-    // File search is M7.
+    // File search is the bundled files plugin, not this capability.
     implemented: false,
     verifiedOn: [HYPRLAND],
     probe: (p) =>
@@ -390,7 +390,7 @@ const files: Backend[] = [
   {
     id: 'plocate',
     summary: 'plocate / locate index',
-    // File search is M7.
+    // File search is the bundled files plugin, not this capability.
     implemented: false,
     verifiedOn: [],
     probe: (p) => {
@@ -403,7 +403,7 @@ const files: Backend[] = [
   {
     id: 'builtin-index',
     summary: 'Our own walker + SQLite FTS5 index',
-    // File search is M7.
+    // File search is the bundled files plugin, not this capability.
     implemented: false,
     verifiedOn: [],
     probe: () => ({ usable: true, degraded: true, detail: 'not implemented' })
@@ -523,7 +523,7 @@ const tray: Backend[] = [
   {
     id: 'status-notifier-item',
     summary: "StatusNotifierItem via Electron's Tray",
-    // MenuBarExtra mapping is M8.
+    // MenuBarExtra mapping is not built yet.
     implemented: false,
     verifiedOn: [],
     probe: (p) =>
@@ -534,7 +534,7 @@ const tray: Backend[] = [
   {
     id: 'waybar-feed',
     summary: 'Write JSON to $XDG_RUNTIME_DIR/lumanin-menubar.json for a waybar module',
-    // MenuBarExtra mapping is M8.
+    // MenuBarExtra mapping is not built yet.
     implemented: false,
     verifiedOn: [],
     probe: (p) =>
@@ -545,7 +545,7 @@ const tray: Backend[] = [
   {
     id: 'headless',
     summary: 'Run menu-bar commands in-app with results shown in the panel',
-    // MenuBarExtra mapping is M8.
+    // MenuBarExtra mapping is not built yet.
     implemented: false,
     verifiedOn: [],
     probe: () => ({ usable: true, degraded: true, detail: 'no system tray; MenuBarExtra runs in-app' })

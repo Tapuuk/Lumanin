@@ -5,7 +5,6 @@ import { probeWaylandProtocols, type WaylandProtocols } from './probe/wayland'
 
 /**
  * The only file allowed to know desktop-environment names.
- * See `docs/PLATFORM-MATRIX.md` §Detection.
  *
  * Two layers, deliberately separated:
  *  - {@link detectPlatform} is synchronous and reads only the environment. The
@@ -14,8 +13,8 @@ import { probeWaylandProtocols, type WaylandProtocols } from './probe/wayland'
  *    Those cost subprocesses, so they happen once at daemon start and are cached
  *    on the profile.
  *
- * Everything takes an injected environment and injectable probe results: CLAUDE.md
- * requires platform probes to be mockable so the whole DE matrix can be tested
+ * Everything takes an injected environment and injectable probe results:
+ * platform probes must be mockable so the whole DE matrix can be tested
  * from Arch + Hyprland.
  */
 
@@ -23,7 +22,7 @@ export type SessionType = 'wayland' | 'x11' | 'unknown'
 
 /**
  * How the panel ends up where it does. Reported by `lumanin doctor` as the
- * `windowPlacement` capability. See PLATFORM-MATRIX §2 — this is a capability,
+ * `windowPlacement` capability. This is a capability,
  * not a guarantee, and "centered on the focused monitor" is not always available.
  */
 export type PlacementMode = 'COMPOSITOR_RULE' | 'SELF' | 'DEFAULT_PLACEMENT'
@@ -55,7 +54,7 @@ export interface PlatformEnv {
 
 /**
  * The full profile: env hints plus everything the probes found. Startup-static —
- * PLATFORM-MATRIX notes a re-probe on theme change is unnecessary.
+ * a re-probe on theme change is unnecessary.
  */
 export interface PlatformProfile extends PlatformEnv {
   readonly binaries: BinaryMap
@@ -143,8 +142,8 @@ function desktopLabel(profile: PlatformEnv): string {
 /**
  * Run the probes and return the full profile. Called once at daemon start.
  *
- * A probe that cannot run yields `UNKNOWN`, never `false` — PLATFORM-MATRIX is
- * explicit that "we could not check" and "it is not there" must stay
+ * A probe that cannot run yields `UNKNOWN`, never `false` — "we could not
+ * check" and "it is not there" must stay
  * distinguishable, because backends select differently on each.
  */
 export async function probePlatform(
@@ -184,7 +183,7 @@ export async function probePlatform(
  * recorded in the one file allowed to know desktop names, with `probed` left
  * false so `doctor` still says the enumeration never ran.
  *
- * Re-checked 2026-08-13: nothing merged through mutter 51.beta, and no merge
+ * Re-checked: nothing merged through mutter 51.beta, and no merge
  * request for either protocol exists — the 2019 upstream wontfix stands.
  */
 function withKnownGaps(base: PlatformEnv, protocols: WaylandProtocols): WaylandProtocols {
