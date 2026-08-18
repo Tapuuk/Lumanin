@@ -487,18 +487,29 @@ export function Modal({
   }, [onClose])
 
   // Focus moves into the box on open and back to the opener on close. A child
-  // that already took focus with `autoFocus` keeps it.
+  // that already took focus with `autoFocus` keeps it. The opener is captured
+  // at render time (before autoFocus moves focus); if it has been unmounted by
+  // the time the effect runs, whatever holds focus then is the opener instead.
   const [opener] = useState(() => document.activeElement)
+  const restore = useRef<Element | null>(null)
   useEffect(() => {
     const element = box.current
-    if (element !== null && !element.contains(document.activeElement)) {
+    const inside = element !== null && element.contains(document.activeElement)
+    restore.current =
+      opener instanceof HTMLElement && opener.isConnected
+        ? opener
+        : inside
+          ? opener
+          : document.activeElement
+    if (element !== null && !inside) {
       const body = element.querySelector<HTMLElement>('.s-modal__body')
       const first = body === null ? undefined : focusableIn(body)[0]
       const target = first ?? element.querySelector<HTMLElement>('.s-modal__title button')
       target?.focus()
     }
     return () => {
-      if (opener instanceof HTMLElement && opener.isConnected) opener.focus()
+      const target = restore.current
+      if (target instanceof HTMLElement && target.isConnected) target.focus()
     }
   }, [opener])
 
