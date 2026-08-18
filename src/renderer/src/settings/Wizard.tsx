@@ -7,7 +7,7 @@ import {
   type FileCategory
 } from '@shared/files'
 import type { SetupPlanDto } from '@shared/ipc'
-import { HotkeyCapture, ReorderList } from './controls'
+import { HotkeyCapture, isCaptureActive, ReorderList } from './controls'
 import { Logo } from './Logo'
 import { move } from './screens-basic'
 import { guarded, setConfig, useSettingsState } from './useSettings'
@@ -35,13 +35,6 @@ export function Wizard({ onDone }: { onDone: () => void }): React.JSX.Element {
   const { state } = useSettingsState()
   const [step, setStep] = useState<Step>('welcome')
 
-  if (state === null) return <></>
-
-  const at = ORDER.indexOf(step)
-  const go = (delta: number): void => {
-    const next = ORDER[at + delta]
-    if (next !== undefined) setStep(next)
-  }
   const finish = (): void => {
     // `.finally`: even if marking first-run done fails, the wizard must close
     // rather than trap the user in it.
@@ -49,6 +42,28 @@ export function Wizard({ onDone }: { onDone: () => void }): React.JSX.Element {
       .invoke('settings.finishFirstRun')
       .catch(() => undefined)
       .finally(onDone)
+  }
+
+  // Esc never reaches the app's close handler while the wizard is up. On the
+  // first and last screens it is the same answer as "Skip setup"; in between,
+  // the visible buttons decide.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || isCaptureActive()) return
+      event.stopPropagation()
+      event.preventDefault()
+      if (step === 'welcome' || step === 'done') finish()
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  })
+
+  if (state === null) return <></>
+
+  const at = ORDER.indexOf(step)
+  const go = (delta: number): void => {
+    const next = ORDER[at + delta]
+    if (next !== undefined) setStep(next)
   }
 
   return (

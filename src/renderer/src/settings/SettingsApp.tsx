@@ -36,11 +36,17 @@ export function SettingsApp(): React.JSX.Element {
   useTheme()
 
   // Esc closes the window, matching the panel's habit — unless a modal is up,
-  // which handles Esc itself in the capture phase.
+  // which handles Esc itself in the capture phase, or a field has focus, where
+  // Esc means "leave the field" (its blur is what commits it).
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return
       event.preventDefault()
+      const active = document.activeElement
+      if (active instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) {
+        active.blur()
+        return
+      }
       void window.lumanin.invoke('settings.close')
     }
     window.addEventListener('keydown', onKeyDown)
