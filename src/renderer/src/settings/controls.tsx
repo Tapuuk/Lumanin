@@ -436,6 +436,14 @@ export function ReorderList({
   )
 }
 
+const FOCUSABLE = 'button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
+
+function focusableIn(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+    (element) => !(element as HTMLButtonElement).disabled
+  )
+}
+
 export function Modal({
   title,
   onClose,
@@ -447,6 +455,8 @@ export function Modal({
   children: ReactNode
   wide?: boolean
 }): React.JSX.Element {
+  const box = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
@@ -462,9 +472,48 @@ export function Modal({
     return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [onClose])
 
+  // Focus moves into the box on open and back to the opener on close. A child
+  // that already took focus with `autoFocus` keeps it.
+  useEffect(() => {
+    const opener = document.activeElement
+    const element = box.current
+    if (element !== null && !element.contains(document.activeElement)) {
+      const body = element.querySelector<HTMLElement>('.s-modal__body')
+      const first = body === null ? undefined : focusableIn(body)[0]
+      const target = first ?? element.querySelector<HTMLElement>('.s-modal__title button')
+      target?.focus()
+    }
+    return () => {
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus()
+    }
+  }, [])
+
+  const trapTab = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== 'Tab' || box.current === null) return
+    const focusable = focusableIn(box.current)
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (first === undefined || last === undefined) return
+    const active = document.activeElement
+    if (event.shiftKey && (active === first || !box.current.contains(active))) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
   return (
     <div className="s-modal" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className={`s-modal__box${wide === true ? ' s-modal__box--wide' : ''}`}>
+      <div
+        ref={box}
+        className={`s-modal__box${wide === true ? ' s-modal__box--wide' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onKeyDown={trapTab}
+      >
         <div className="s-modal__title">
           <span>{title}</span>
           <button type="button" className="s-iconbtn" aria-label="Close" onClick={onClose}>
@@ -485,6 +534,11 @@ export function Modal({
 // Whether any HotkeyCapture is armed right now — `Modal` reads it so its Esc
 // handler (capture phase, runs before React's) does not steal the cancel.
 let captureActive = false
+
+/** Whether a chord capture is armed right now, for handlers that must yield Esc to it. */
+export function isCaptureActive(): boolean {
+  return captureActive
+}
 
 export function HotkeyCapture({
   value,
