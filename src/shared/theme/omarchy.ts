@@ -4,8 +4,8 @@ import type { MutableUi, SeedColours, UiTokens } from './derive'
 /**
  * Reading an Omarchy theme's palette.
  *
- * **Verified against Omarchy, because the format moved and the original
- * description of it is no longer true.** What is actually on disk today:
+ * **Verified against Omarchy, because the format moved.** What is actually on
+ * disk today:
  *
  *  - Every theme's applied copy lives in `~/.config/omarchy/current/theme/`, and
  *    `omarchy-theme-set` guarantees a **`colors.toml`** in it: if the theme

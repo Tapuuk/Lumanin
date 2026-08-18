@@ -8,8 +8,8 @@ import { INTERNAL_TYPES, type RenderNode } from '../src/shared/render-tree'
 /**
  * The reconciler, as a black box: render something, look at the JSON.
  *
- * These are the golden tests the design asks for "early", and early is the
- * point — everything downstream (patches, the renderer's player, every component)
+ * These are the golden tests, and they came early on purpose — everything
+ * downstream (patches, the renderer's player, every component)
  * is built on the assumption that a React tree becomes exactly one predictable
  * document. A regression here is invisible in every other suite and looks like a
  * rendering bug in all of them.

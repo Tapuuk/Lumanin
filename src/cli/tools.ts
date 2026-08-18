@@ -45,7 +45,7 @@ export async function runConfig(): Promise<number> {
     const paths = resolvePaths()
     process.stderr.write(
       `${APP_ID}: config needs a terminal.\n` +
-        `Edit ${paths.configFile} directly - see the CONFIG documentation.\n`
+        `Edit ${paths.configFile} directly, or run \`lumanin config\` from a terminal.\n`
     )
     return 1
   }

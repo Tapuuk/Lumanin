@@ -18,8 +18,8 @@ import { declined, pending, unsupported } from './unsupported'
  * This package was once filed as a later addition, and that turned out to be
  * wrong about one thing: the extension host's gate is "an unmodified simple
  * store extension runs", and the store's idea of a simple List-and-fetch extension
- * includes `usePromise`. Hacker News — the doc's own example — is four lines of
- * `@raycast/api` and one `usePromise`. Without this the gate is unreachable, not
+ * includes `usePromise`. Hacker News, the canonical simple store extension, is
+ * four lines of `@raycast/api` and one `usePromise`. Without this the gate is unreachable, not
  * because anything in the host is missing but because no real extension is
  * written the way the gate imagines.
  *

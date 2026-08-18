@@ -86,7 +86,7 @@ function stripNewline<D extends string | Buffer>(value: D, strip: boolean): D {
 /**
  * Run one command to completion.
  *
- * The first process rule — *"anything that spawns a process takes an argv array,
+ * The process rule — *"anything that spawns a process takes an argv array,
  * never a shell string built by concatenation"* — is why the argv form is the
  * primary shape and `shell` is opt-in with the spec's own warning attached. The
  * extension host is explicitly not a security boundary (a plugin already has

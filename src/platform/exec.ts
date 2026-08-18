@@ -3,7 +3,7 @@ import { execFile, spawn } from 'node:child_process'
 /**
  * The one place the platform layer spawns processes.
  *
- * Rule 1: an argv array, never a shell string. Nothing here ever
+ * The process rule: an argv array, never a shell string. Nothing here ever
  * reaches `/bin/sh`, so no amount of quoting in a clipboard payload or a window
  * title can turn into a command.
  *
