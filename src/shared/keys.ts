@@ -58,7 +58,7 @@ export const KEY_ACTION_INFO: Readonly<Record<KeyAction, KeyActionInfo>> = {
   secondary: {
     setting: 'secondary',
     title: 'Open (secondary)',
-    help: 'Run the second action. In file search that opens the file where Enter browses.'
+    help: 'Run the second action. In file search that opens the folder in the file manager where Enter enters it.'
   },
   next: { setting: 'next', title: 'Next result', help: 'Move down the list.' },
   previous: { setting: 'previous', title: 'Previous result', help: 'Move up the list.' },

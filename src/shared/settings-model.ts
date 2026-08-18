@@ -65,7 +65,7 @@ export interface Setting {
 export const GLOBAL_HOTKEY: Setting = {
   path: ['general', 'hotkey'],
   label: 'Hotkey',
-  help: 'The key that opens the panel. Written into this desktop’s own shortcut settings.',
+  help: 'The key that opens the panel. Written into this desktop’s shortcut settings where Lumanin can reach them.',
   // Not a plain text field: a hotkey typed as prose is a hotkey that silently
   // does not work. Each frontend owns its capture flow — the terminal builds
   // one from lists, the GUI can capture a chord — and both end in the same
@@ -174,7 +174,7 @@ export function appearanceSettings(
     {
       path: ['appearance', 'theme'],
       label: 'Theme',
-      help: 'Unset follows the desktop theme.',
+      help: 'Default follows the desktop theme.',
       editor: { kind: 'enum', options: themes },
       // The listed packs are suggestions; an Omarchy theme or a pack under
       // `~/.config/lumanin/themes/` is named the same way and is equally valid.
@@ -201,7 +201,7 @@ export function appearanceSettings(
     {
       path: ['appearance', 'text_scale'],
       label: 'Text size',
-      help: 'Unset follows the desktop text size. A number fixes it.',
+      help: 'Default follows the desktop text size. A number fixes it.',
       editor: {
         kind: 'number',
         min: 0.5,

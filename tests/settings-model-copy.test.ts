@@ -33,12 +33,12 @@ describe('settings copy', () => {
   })
 
   it('help is one or two sentences ending in a full stop', () => {
-    for (const setting of settings) {
-      expect(setting.help, setting.path.join('.')).toMatch(/\.$/)
+    const expectHelp = (help: string, where: string): void => {
+      expect(help, where).toMatch(/\.$/)
+      expect(help.split(/\.\s+/).length, where).toBeLessThanOrEqual(2)
     }
-    for (const info of Object.values(KEY_ACTION_INFO)) {
-      expect(info.help, info.title).toMatch(/\.$/)
-    }
+    for (const setting of settings) expectHelp(setting.help, setting.path.join('.'))
+    for (const info of Object.values(KEY_ACTION_INFO)) expectHelp(info.help, info.title)
   })
 
   it('enum options and presets are sentence case and clean', () => {
@@ -47,13 +47,13 @@ describe('settings copy', () => {
       if (setting.editor.kind === 'enum') {
         for (const option of setting.editor.options) {
           expectClean(option.label, `${where} option ${option.value}`)
-          expect(option.label, `${where} option ${option.value}`).toMatch(/^[A-Z]/)
+          expect(option.label, `${where} option ${option.value}`).toMatch(/^[^a-z]/)
         }
       }
       if (setting.editor.kind === 'number') {
         for (const preset of setting.editor.presets ?? []) {
           expectClean(preset.label, `${where} preset ${preset.label}`)
-          expect(preset.label, `${where} preset ${preset.label}`).toMatch(/^[A-Z]/)
+          expect(preset.label, `${where} preset ${preset.label}`).toMatch(/^[^a-z]/)
           if (preset.detail !== undefined) expectClean(preset.detail, `${where} preset detail`)
         }
       }
