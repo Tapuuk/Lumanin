@@ -35,7 +35,7 @@ function usePickerContext(): {
 const NONE: readonly never[] = []
 
 const ENGINE_KEYWORDS = ['engine', ...BUILTIN_ENGINES.map((engine) => engine.name)].join(' ')
-const RESULT_KEYWORDS = ['ranking', ...Object.values(RESULT_GROUP_LABELS)].join(' ')
+const RESULT_KEYWORDS = ['ranking', ...OFFERED_RESULT_GROUPS.map((group) => RESULT_GROUP_LABELS[group])].join(' ')
 
 function samePins(
   a: readonly { key: string; title: string | null }[],
