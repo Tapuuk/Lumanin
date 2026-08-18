@@ -114,7 +114,7 @@ export const Grid = markPending(withMembers(hostComponent<SpecGrid.Props>('Grid'
   Inset: GridInset,
   Fit: GridFit,
   ItemSize: GridItemSize
-}), 'M7')
+}), 'the renderer draws no Grid; use a List with icons')
 
 // --- Form --------------------------------------------------------------------
 
