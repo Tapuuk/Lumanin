@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ENV_PREFIX } from '@shared/identity'
-import { formatHotkey, KEY_ALIASES, MODIFIERS, type Hotkey, type Modifier } from '@shared/hotkey'
+import { formatHotkey, KEY_ALIASES, MODIFIERS, parseHotkey, type Hotkey, type Modifier } from '@shared/hotkey'
 import type { Setting } from '@shared/settings-model'
 import { setConfig, useOptimistic, useSettingsState } from './useSettings'
 
@@ -241,13 +241,35 @@ function NumberControl({
   const [text, setText] = useState<string>(value === null ? '' : String(value))
   const [problem, setProblem] = useState<string | null>(null)
   // Follow a value changed by another writer (CLI, editor) — same reason as
-  // EnumControl above.
+  // EnumControl above — unless the field has focus and holds a draft.
+  const focused = useRef(false)
   const [seen, setSeen] = useState(value)
   if (seen !== value) {
     setSeen(value)
-    setText(value === null ? '' : String(value))
-    setCustom(presets.length > 0 && value !== null && preset === undefined)
+    if (!focused.current) {
+      setText(value === null ? '' : String(value))
+      setCustom(presets.length > 0 && value !== null && preset === undefined)
+      setProblem(null)
+    }
+  }
+
+  const commitDraft = (): void => {
+    if (text.trim().length === 0) {
+      setProblem(null)
+      save(null)
+      return
+    }
+    const parsed = Number(text)
+    if (!Number.isFinite(parsed) || (integer && !Number.isInteger(parsed))) {
+      setProblem(integer ? 'Must be a whole number' : 'Not a number')
+      return
+    }
+    if (parsed < min || parsed > max) {
+      setProblem(`Must be between ${String(min)} and ${String(max)}`)
+      return
+    }
     setProblem(null)
+    save(parsed)
   }
 
   if (presets.length === 0 || custom) {
@@ -262,23 +284,15 @@ function NumberControl({
           value={text}
           disabled={disabled}
           onChange={(event) => setText(event.target.value)}
+          onFocus={() => {
+            focused.current = true
+          }}
           onBlur={() => {
-            if (text.trim().length === 0) {
-              setProblem(null)
-              save(null)
-              return
-            }
-            const parsed = Number(text)
-            if (!Number.isFinite(parsed) || (integer && !Number.isInteger(parsed))) {
-              setProblem(integer ? 'Must be a whole number' : 'Not a number')
-              return
-            }
-            if (parsed < min || parsed > max) {
-              setProblem(`Must be between ${String(min)} and ${String(max)}`)
-              return
-            }
-            setProblem(null)
-            save(parsed)
+            focused.current = false
+            commitDraft()
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') (event.target as HTMLInputElement).blur()
           }}
         />
         {presets.length > 0 && (
@@ -540,6 +554,9 @@ export function isCaptureActive(): boolean {
   return captureActive
 }
 
+const LOST_CAPTURE_NOTE =
+  'The desktop took that key, or nothing arrived. Type it instead, for example Super+Shift+R.'
+
 export function HotkeyCapture({
   value,
   allowNone,
@@ -554,6 +571,7 @@ export function HotkeyCapture({
 }): React.JSX.Element {
   const [capturing, setCapturing] = useState(false)
   const [note, setNote] = useState<string | null>(null)
+  const [typed, setTyped] = useState<string | null>(null)
   const arm = (next: boolean): void => {
     captureActive = next
     setCapturing(next)
@@ -576,15 +594,31 @@ export function HotkeyCapture({
       return
     }
 
+    if (['Control', 'Alt', 'Shift', 'Meta', 'Super', 'Hyper'].includes(event.key)) return // keep waiting
     const chord = chordFrom(event)
-    if (chord === null) return // a bare modifier going down; keep waiting
+    if (chord === null) {
+      setNote(`Cannot bind ${event.key}.`)
+      return
+    }
     if (chord.mods.length === 0) {
       setNote('Add a modifier. A bare key would be taken away from every other app.')
       return
     }
     arm(false)
     setNote(null)
+    setTyped(null)
     onPick(formatHotkey(chord))
+  }
+
+  const submitTyped = (): void => {
+    const parsed = parseHotkey(typed ?? '')
+    if (parsed === null || parsed.mods.length === 0) {
+      setNote('That is not a hotkey.')
+      return
+    }
+    setNote(null)
+    setTyped(null)
+    onPick(formatHotkey(parsed))
   }
 
   return (
@@ -596,12 +630,34 @@ export function HotkeyCapture({
         onClick={() => {
           arm(true)
           setNote(null)
+          setTyped(null)
         }}
         onKeyDown={onKeyDown}
-        onBlur={() => arm(false)}
+        onBlur={() => {
+          // Focus leaving while armed means the chord went to the desktop (a
+          // global bind such as the launcher's own) and never reached us.
+          if (capturing) {
+            setNote(LOST_CAPTURE_NOTE)
+            setTyped('')
+          }
+          arm(false)
+        }}
       >
         {capturing ? 'Press the keys…' : value.length === 0 ? 'None' : value}
       </button>
+      {typed !== null && (
+        <input
+          className="s-input"
+          type="text"
+          placeholder="Super+Shift+R"
+          aria-label="Type the hotkey"
+          value={typed}
+          onChange={(event) => setTyped(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') submitTyped()
+          }}
+        />
+      )}
       {note !== null && <div className="s-error">{note}</div>}
     </div>
   )
