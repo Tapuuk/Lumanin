@@ -13,11 +13,11 @@ import { NO_OAUTH } from './namespaces'
 import { declined, pending, unsupported } from './unsupported'
 
 /**
- * `@raycast/utils`, as far as M4 needs it.
+ * `@raycast/utils`, as far as the extension host needs it.
  *
- * RAYCAST-COMPAT.md files this package under Wave 3, and that turned out to be
- * wrong about one thing: the **M4 gate** is "an unmodified simple store
- * extension runs", and the store's idea of a simple List-and-fetch extension
+ * This package was once filed as a later addition, and that turned out to be
+ * wrong about one thing: the extension host's gate is "an unmodified simple
+ * store extension runs", and the store's idea of a simple List-and-fetch extension
  * includes `usePromise`. Hacker News — the doc's own example — is four lines of
  * `@raycast/api` and one `usePromise`. Without this the gate is unreachable, not
  * because anything in the host is missing but because no real extension is
@@ -26,7 +26,7 @@ import { declined, pending, unsupported } from './unsupported'
  * So the hooks that a data-loading extension cannot do without are implemented
  * here, and the rest still throw. What is real: `usePromise`, `useCachedPromise`,
  * `useCachedState`, `useLocalStorage`, `useFetch`, `showFailureToast` and the
- * three icon helpers — plus `useExec`, added at M5 for a reason particular to
+ * three icon helpers — plus `useExec`, added for a reason particular to
  * this platform. A Linux launcher plugin is usually a face for a CLI, so running
  * a program and rendering its output is not a convenience here the way it is on
  * a Mac full of scriptable apps; it is the common case. Its non-React half lives
@@ -370,7 +370,7 @@ export function getAvatarIcon(
  * Not a favicon *service*. The usual implementation proxies through a third
  * party, which means every URL an extension renders is reported to someone who
  * was never part of the transaction. Asking the site itself is the version that
- * matches SECURITY.md's privacy posture: the only host contacted is the one the
+ * matches the privacy posture: the only host contacted is the one the
  * extension is already about.
  */
 export function getFavicon(
@@ -434,7 +434,7 @@ interface ExecHookOptions<T> extends PromiseOptions<T> {
  * usually a face for a CLI — `systemctl`, `git`, `pacman`, `docker`, `godot` —
  * and without this every one of them hand-rolls `child_process`, a loading flag,
  * an error path and a cancel-the-stale-run guard. Getting that right once here
- * is worth more than any other API in this milestone.
+ * is worth more than any other API in this package.
  *
  * Both spec call shapes work. `useExec('git', ['status'])` is the one to write:
  * arguments as an array need no quoting and cannot be re-parsed. `useExec('git
@@ -502,7 +502,7 @@ export const executeSQL = pending<never>('executeSQL', 'no SQLite query API is e
 export const withAccessToken = declined<never>('withAccessToken', NO_OAUTH)
 export const getAccessToken = declined<never>('getAccessToken', NO_OAUTH)
 export const withCache = pending<never>('withCache', 'unwritten; useCachedPromise caches a promise today')
-// Cut at M5: `lumanin open '<key>'` already does the deeplink's job on Linux,
+// Cut: `lumanin open '<key>'` already does the deeplink's job on Linux,
 // and building a second URL scheme for it would be a worse spelling of the same thing.
 const NO_DEEPLINKS = 'there is no deeplink URL scheme; `lumanin open` launches any command from a shell'
 export const createDeeplink = declined<never>('createDeeplink', NO_DEEPLINKS)

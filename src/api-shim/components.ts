@@ -102,8 +102,8 @@ const GridDropdown = withMembers(hostComponent<SpecGrid.Dropdown.Props>('Grid.Dr
  * the shim can tell you that, and a coverage number that counts it as built is
  * counting a name.
  *
- * Deferred out of M5 deliberately — Grid is List with bigger pictures, and the
- * first thing that genuinely wants it is M7's emoji picker. Building it there,
+ * Deferred deliberately — Grid is List with bigger pictures, and the
+ * first thing that genuinely wants it is an emoji picker. Building it there,
  * against a real consumer, beats guessing at column and inset behaviour now.
  */
 export const Grid = markPending(withMembers(hostComponent<SpecGrid.Props>('Grid'), {
@@ -170,10 +170,10 @@ export const ActionPanel = withMembers(hostComponent<SpecActionPanel.Props>('Act
    *
    * Found by running `markdown-reference`, which uses it and did nothing but
    * fail with "Element type is invalid … got: undefined". The top-level alias
-   * `ActionPanelItem` was already exported; this member was not, and the M4
+   * `ActionPanelItem` was already exported; this member was not, and the early
    * coverage number could not see the difference because it counted **top-level**
    * exports. A deprecated member of a live component is invisible to that count
-   * and just as load-bearing — see RAYCAST-COMPAT §Wave 1.5.
+   * and just as load-bearing.
    */
   Item: Action
 })
@@ -181,8 +181,8 @@ export const ActionPanel = withMembers(hostComponent<SpecActionPanel.Props>('Act
 // --- MenuBarExtra ------------------------------------------------------------
 
 /**
- * `MenuBarExtra` exists so importing it is not a crash. What it *does* is M8's
- * tray/waybar mapping (PLATFORM-MATRIX §11); until then the renderer draws an
+ * `MenuBarExtra` exists so importing it is not a crash. What it *does* is a
+ * tray/waybar mapping, not built yet; until then the renderer draws an
  * explicit card rather than nothing, because a menu-bar command that silently
  * renders empty looks like our bug and is a missing feature.
  */

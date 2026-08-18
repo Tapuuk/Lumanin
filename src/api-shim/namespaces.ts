@@ -22,8 +22,8 @@ export const Image = { Mask: ImageMask } as const
 /**
  * `BrowserExtension` ⛔.
  *
- * Needs a companion browser extension we do not ship. RAYCAST-COMPAT is explicit
- * that this must throw rather than return `[]`: an empty tab list reads as "no
+ * Needs a companion browser extension we do not ship. This must throw rather
+ * than return `[]`: an empty tab list reads as "no
  * tabs are open", and an extension told that will go on to do something wrong
  * with complete confidence.
  */
@@ -45,10 +45,10 @@ export const BrowserExtension = markUnsupported(
 /**
  * `WindowManagement` — cut, not impossible.
  *
- * The `windows` capability can list and focus windows on Hyprland, Sway and X11
- * (PLATFORM-MATRIX §7), so Linux could carry this API — but driving other apps'
+ * The `windows` capability can list and focus windows on Hyprland, Sway and X11,
+ * so Linux could carry this API — but driving other apps'
  * windows is a window manager's job, not a launcher's, and the feature was cut
- * with the rest of the plugin-author sugar when the ship plan was drawn. It is
+ * with the rest of the plugin-author sugar when the release scope was drawn. It is
  * `declined` so the message says "we chose not to", not "Linux cannot".
  */
 const NO_WINDOW_MANAGEMENT =
@@ -86,8 +86,7 @@ export const NO_OAUTH =
 /**
  * `OAuth` — the namespace, with a client that will not be built.
  *
- * **Declined, not pending** (user decision, 2026-08-10: zero online services,
- * fully local). PKCE is not hard and Linux does it fine; the objection is what
+ * **Declined, not pending**: zero online services, fully local. PKCE is not hard and Linux does it fine; the objection is what
  * it drags in. A redirect flow means a loopback HTTP server inside the daemon, a
  * browser handing a code back to it, a token exchange against somebody else's
  * authorization server, refresh timers, and a store of live credentials that has
@@ -118,8 +117,8 @@ export const OAuth = markDeclined(
  *
  * `Tool.Confirmation<T>` is a *type*, so the namespace has no runtime members at
  * all. It is exported anyway because `import { Tool } from "@raycast/api"` in a
- * tool entry file must resolve, and RAYCAST-COMPAT is clear that the manifest and
- * install path have to parse `tools[]` even while the AI side is inert.
+ * tool entry file must resolve, and the manifest and install path have to parse
+ * `tools[]` even while the AI side is inert.
  */
 export const Tool = {} as const
 

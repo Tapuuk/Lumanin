@@ -4,7 +4,7 @@ import { markUnavailable } from './unsupported'
 /**
  * `AI` — present, and off.
  *
- * RAYCAST-COMPAT.md §Wave 3: no AI provider ships with Lumanin, and there is no
+ * No AI provider ships with Lumanin, and there is no
  * hosted service behind us to call. The namespace exists so that importing it is
  * not a crash and so `environment.canAccess(AI)` can answer **false** — which is
  * the whole point of that API: extensions call it to choose a fallback, and an

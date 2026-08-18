@@ -50,7 +50,7 @@ import {
  * surface an extension can reach. An export that is missing does not fail
  * gracefully — a CommonJS bundle destructures the whole namespace at load, so one
  * absent name takes the extension down before any of it runs. That is why the
- * deprecated third of the spec is not optional (RAYCAST-COMPAT §Wave 1.5) and why
+ * deprecated third of the spec is not optional and why
  * things we cannot do are exported as members that throw rather than left out.
  */
 
@@ -108,7 +108,7 @@ export {
 }
 
 // ---------------------------------------------------------------------------
-// Wave 1.5 — the deprecated surface.
+// The deprecated surface.
 //
 // 189 of the spec's exports are `@deprecated` and every one of them still works
 // in Raycast, so a large share of the older store depends on them. They are all

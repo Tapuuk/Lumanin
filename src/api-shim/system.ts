@@ -169,8 +169,8 @@ export const Clipboard = {
  * `LocalStorage` — namespaced per extension, in main's SQLite.
  *
  * Namespacing is done by main from the session it already knows, never from a
- * name the worker sends: SECURITY.md's threat table has "extension reading
- * another extension's secrets", and a namespace the caller chooses is not a
+ * name the worker sends: "extension reading another extension's secrets" is a
+ * threat we guard against, and a namespace the caller chooses is not a
  * namespace.
  */
 export const LocalStorage = {
@@ -375,11 +375,11 @@ export async function getDefaultApplication(path: string | URL): Promise<Applica
 /**
  * `getSelectedText()` — the PRIMARY selection.
  *
- * 🟡 by RAYCAST-COMPAT's rating: on X11 and Wayland the "currently selected
+ * Partial by design: on X11 and Wayland the "currently selected
  * text" is the PRIMARY selection, which is a different thing from macOS's
  * accessibility read — it is whatever was last selected anywhere, and it is
  * empty when the selection was made in an application that does not export one.
- * Documented rather than silently different (PLATFORM-MATRIX §6).
+ * Documented rather than silently different.
  */
 export async function getSelectedText(): Promise<string> {
   return await requireRuntime().call(APP_METHODS.SELECTION_READ)
@@ -420,7 +420,7 @@ export async function updateCommandMetadata(metadata: { subtitle?: string | null
 /**
  * `captureException` — **local only**.
  *
- * SECURITY.md §Privacy posture: no telemetry, no crash reporting to any remote
+ * The privacy posture: no telemetry, no crash reporting to any remote
  * endpoint, and no opt-in to build because there is no collection. This writes to
  * the extension's log and nowhere else.
  */
@@ -450,7 +450,7 @@ export const getSelectedFinderItems = unsupported<() => Promise<never>>(
  *
  * "The focused window's application" is a real question on Linux, just a
  * compositor-dependent one: the `windows` capability answers it on Hyprland,
- * Sway and X11 and reports itself unavailable elsewhere (PLATFORM-MATRIX §7).
+ * Sway and X11 and reports itself unavailable elsewhere.
  * So it is an RPC that may reject, not a member that always throws — the
  * difference matters, because declaring it unsupported would also make
  * `environment.canAccess` say so on the desktops where it works.
