@@ -169,7 +169,7 @@ export default function Compose() {
 const MANIFEST = {
   name: 'fruit',
   title: 'Fruit',
-  description: 'A fixture extension for the M4 gate',
+  description: 'A fixture extension for the extension-host end-to-end suite',
   author: 'lumanin',
   license: 'MIT',
   categories: ['Other'],

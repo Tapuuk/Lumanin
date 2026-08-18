@@ -321,7 +321,7 @@ const InstallMCPServer = throwingAction(
  * wants it.
  */
 const PickDate = withMembers(
-  throwingAction('Pick Date', pending<() => never>('Action.PickDate', 'M7')),
+  throwingAction('Pick Date', pending<() => never>('Action.PickDate', 'no date picker is drawn; use Form.DatePicker')),
   { Type: DatePickerType }
 )
 

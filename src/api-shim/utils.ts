@@ -492,16 +492,16 @@ export function useExec<T = string>(
 
 // --- not implemented ---------------------------------------------------------
 
-export const useSQL = pending<never>('useSQL', 'M5')
-export const useForm = pending<never>('useForm', 'M5')
-export const useAI = pending<never>('useAI', 'Wave 3')
-export const useStreamJSON = pending<never>('useStreamJSON', 'Wave 3')
-export const useFrecencySorting = pending<never>('useFrecencySorting', 'M5')
-export const executeSQL = pending<never>('executeSQL', 'M5')
+export const useSQL = pending<never>('useSQL', 'no SQLite query API is exposed to plugins')
+export const useForm = pending<never>('useForm', 'Form itself is real; this helper over it is not')
+export const useAI = pending<never>('useAI', 'no AI provider ships with Lumanin')
+export const useStreamJSON = pending<never>('useStreamJSON', 'streaming JSON pagination is unwritten')
+export const useFrecencySorting = pending<never>('useFrecencySorting', 'frecency ranking is internal to the launcher')
+export const executeSQL = pending<never>('executeSQL', 'no SQLite query API is exposed to plugins')
 // Declined with the OAuth client they wrap — see `namespaces.ts` for the why.
 export const withAccessToken = declined<never>('withAccessToken', NO_OAUTH)
 export const getAccessToken = declined<never>('getAccessToken', NO_OAUTH)
-export const withCache = pending<never>('withCache', 'M5')
+export const withCache = pending<never>('withCache', 'unwritten; useCachedPromise caches a promise today')
 // Cut at M5: `lumanin open '<key>'` already does the deeplink's job on Linux,
 // and building a second URL scheme for it would be a worse spelling of the same thing.
 const NO_DEEPLINKS = 'there is no deeplink URL scheme; `lumanin open` launches any command from a shell'
