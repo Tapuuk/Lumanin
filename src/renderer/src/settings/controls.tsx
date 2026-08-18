@@ -88,7 +88,7 @@ export function SettingControl({ setting }: { setting: Setting }): React.JSX.Ele
   }
 
   const help = overridden
-    ? `Set by ${ENV_PREFIX}${setting.envKey ?? ''} - editing the file cannot change it.`
+    ? `Set by ${ENV_PREFIX}${setting.envKey ?? ''}. Editing the file cannot change it.`
     : setting.help
 
   return (
@@ -195,7 +195,7 @@ function EnumControl({
           save(next)
         }}
       >
-        <option value="">Default - follow the desktop</option>
+        <option value="">Default</option>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -314,7 +314,7 @@ function NumberControl({
       {presets.map((candidate) => (
         <option key={candidate.value} value={String(candidate.value)}>
           {candidate.label}
-          {candidate.detail === undefined ? '' : ` - ${candidate.detail}`}
+          {candidate.detail === undefined ? '' : ` (${candidate.detail})`}
         </option>
       ))}
       <option value={CUSTOM}>Type a number…</option>
@@ -525,7 +525,7 @@ export function HotkeyCapture({
     const chord = chordFrom(event)
     if (chord === null) return // a bare modifier going down; keep waiting
     if (chord.mods.length === 0) {
-      setNote('Add a modifier - a bare key would be taken away from every other app')
+      setNote('Add a modifier. A bare key would be taken away from every other app.')
       return
     }
     arm(false)
