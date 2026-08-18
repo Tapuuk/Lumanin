@@ -590,8 +590,8 @@ export class ExtensionHost {
       [APP_METHODS.FORM_RESET]: (params) => this.formCommand(params, 'resetField'),
       [APP_METHODS.OPEN_PREFERENCES]: (params) => {
         const session = this.owner(params)
-        // The preferences UI is M5's Form work. Saying so beats a menu that does
-        // not open and gives no reason.
+        // Nothing here opens the settings window; the message names the two
+        // places that do.
         logger.info('an extension asked to open its preferences', {
           extension: session.info.extensionName
         })
