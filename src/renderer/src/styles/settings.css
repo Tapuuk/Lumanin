@@ -234,6 +234,7 @@ body:has(.settings) {
 
 .s-help code,
 .s-banner code {
+  font: inherit;
   font-size: 0.95em;
   background: var(--lumanin-bg-hover);
   padding: 1px 4px;
@@ -547,6 +548,7 @@ body:has(.settings) {
 
 .s-diff__body,
 .s-progress {
+  font: inherit;
   margin: 0;
   padding: 9px 12px;
   border-radius: var(--s-radius);
@@ -803,6 +805,7 @@ body:has(.settings) {
 
 .wiz__lead code,
 .wiz__lead .s-chip {
+  font: inherit;
   color: var(--lumanin-text);
 }
 
