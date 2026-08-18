@@ -157,7 +157,7 @@ export async function startDaemon(socketPath: string): Promise<boolean> {
   // yields a path string instead of the API, so `app` is undefined and it dies
   // before it can listen. The symptom is "none could be started" with no clue.
   // `LUMANIN_SETTINGS` must go too: this module also runs *inside* the settings
-  // app (restartDaemon, enumerate's start-on-demand), whose environment carries
+  // app (updateApply, enumerate's start-on-demand), whose environment carries
   // that flag — inherited, the "daemon" would boot as a second settings app,
   // lose the settings single-instance lock, and exit.
   const { ELECTRON_RUN_AS_NODE: _runAsNode, LUMANIN_SETTINGS: _settings, ...env } = process.env

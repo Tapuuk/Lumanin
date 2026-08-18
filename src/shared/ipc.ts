@@ -281,8 +281,6 @@ export interface SettingsState {
   readonly desktop: string
   /** Whether this desktop has a bind mechanism we know how to write. */
   readonly bindable: boolean
-  /** Whether a daemon answered the socket just now. */
-  readonly daemonRunning: boolean
   /**
    * True on a machine that has never been set up: no `config.toml`, and the
    * wizard has not been completed or dismissed. What opens the first-run flow.
@@ -519,8 +517,6 @@ export interface SettingsInvokeMap {
     params: { source: string; allowDependencies: boolean }
     result: { ok: boolean; detail: string }
   }
-  /** For the width/height notice — the panel window is created once. */
-  'settings.restartDaemon': { params: undefined; result: { ok: boolean } }
   /** The wizard's desktop-integration step: the full `doctor --fix` plan. */
   'settings.planSetup': { params: undefined; result: SetupPlanDto }
   /** Apply it — file edits, commands, and enabling the systemd unit. */
@@ -610,7 +606,6 @@ export const SETTINGS_INVOKE_METHODS = [
   'settings.officialPlugins',
   'settings.inspectPlugin',
   'settings.installPlugin',
-  'settings.restartDaemon',
   'settings.planSetup',
   'settings.applySetup',
   'settings.finishFirstRun',

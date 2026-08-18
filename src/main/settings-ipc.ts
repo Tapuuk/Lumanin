@@ -92,6 +92,8 @@ export interface SettingsIpcDeps {
   readonly send: <E extends EventName>(event: E, payload: EventMap[E]) => void
   readonly close: () => void
   readonly currentConfig: () => ResolvedConfig
+  /** Called after every successful config write, so the new state is pushed without waiting for the file watcher. */
+  readonly onWritten: () => void
 }
 
 /** The plugin gets 8 s daemon-side; this waits a little longer than that. */
@@ -173,19 +175,6 @@ export class SettingsIpc {
           return await this.inspectPlugin(params as { source: string })
         case 'settings.installPlugin':
           return await this.installPlugin(params as { source: string; allowDependencies: boolean })
-        case 'settings.restartDaemon': {
-          await request(this.deps.paths.socket, { kind: 'quit' })
-          // Wait for the old process to actually be gone before starting the
-          // next one: started too early it loses the still-held single-instance
-          // lock and exits — and an early ping in startDaemon's poll can be
-          // answered by the *dying* daemon, reporting ok for a ghost.
-          const gone = Date.now() + 5000
-          while (Date.now() < gone) {
-            if ((await request(this.deps.paths.socket, { kind: 'ping' })) === null) break
-            await new Promise((r) => setTimeout(r, 100))
-          }
-          return { ok: await startDaemon(this.deps.paths.socket) }
-        }
         case 'settings.planSetup':
           return await this.planSetup()
         case 'settings.applySetup':
@@ -245,7 +234,6 @@ export class SettingsIpc {
   async state(): Promise<SettingsState> {
     const document = readConfigDocument(this.deps.paths.configFile)
     const profile = await this.deps.profile()
-    const daemonRunning = (await request(this.deps.paths.socket, { kind: 'ping' })) !== null
 
     return {
       resolved: this.deps.currentConfig(),
@@ -254,7 +242,6 @@ export class SettingsIpc {
       themes: this.themeList(),
       desktop: describePlatform(profile),
       bindable: bindable(profile),
-      daemonRunning,
       // First run: nothing configured yet and the wizard never finished. The
       // marker is state, not config — config.toml stays entirely the user's.
       firstRun: !document.existed && !existsSync(this.wizardMarker())
@@ -474,8 +461,9 @@ export class SettingsIpc {
     edit(data)
     const result = writeConfigDocument(document, data, stamp())
     this.deps.logger.info('config written', { changed: result.changed, backup: result.backup })
-    // The daemon and our own watcher both pick the file change up; the watcher
-    // also pushes `settings.changed` to the renderer.
+    // The daemon follows the file through its watcher; the settings renderer
+    // is pushed the new state right away, and again when the watcher fires.
+    this.deps.onWritten()
     return { ok: true }
   }
 
