@@ -189,9 +189,8 @@ export function SearchScreen(): React.JSX.Element | null {
           Always at the top of the root, in this order, matched by name like everything else.
         </p>
         <ReorderList
-          rows={pins.map((pin, index) => ({
+          rows={pins.map((pin) => ({
             id: pin.key,
-            key: `${String(index)}:${pin.key}`,
             label: describeKey(pin.key, pin.title, { ...context, state }),
             detail: pin.key
           }))}
@@ -352,7 +351,7 @@ export function HotkeysScreen(): React.JSX.Element | null {
         {entries.map((entry, index) => {
           const bound = boundState(binds, normalized(entry.bind), entry.target)
           return (
-            <div key={`${String(index)}:${entry.bind}`} className="s-list__row">
+            <div key={String(index)} className="s-list__row">
               <HotkeyCapture
                 value={normalized(entry.bind)}
                 onPick={(next) => {

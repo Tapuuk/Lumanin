@@ -394,8 +394,7 @@ export function ReorderList({
   onMove,
   onRemove
 }: {
-  /** `key` is the React key when ids may repeat (a hand-edited duplicate pin); it defaults to `id`. */
-  rows: readonly { id: string; key?: string; label: string; detail?: string; on?: boolean }[]
+  rows: readonly { id: string; label: string; detail?: string; on?: boolean }[]
   onToggle?: (id: string, next: boolean) => void
   onMove: (id: string, delta: number) => void
   onRemove?: (id: string) => void
@@ -403,7 +402,7 @@ export function ReorderList({
   return (
     <div className="s-list">
       {rows.map((row, index) => (
-        <div key={row.key ?? row.id} className={`s-list__row${row.on === false ? ' s-list__row--off' : ''}`}>
+        <div key={row.id} className={`s-list__row${row.on === false ? ' s-list__row--off' : ''}`}>
           {onToggle !== undefined && (
             <Toggle
               checked={row.on !== false}
@@ -489,8 +488,8 @@ export function Modal({
 
   // Focus moves into the box on open and back to the opener on close. A child
   // that already took focus with `autoFocus` keeps it.
+  const [opener] = useState(() => document.activeElement)
   useEffect(() => {
-    const opener = document.activeElement
     const element = box.current
     if (element !== null && !element.contains(document.activeElement)) {
       const body = element.querySelector<HTMLElement>('.s-modal__body')
@@ -501,7 +500,7 @@ export function Modal({
     return () => {
       if (opener instanceof HTMLElement && opener.isConnected) opener.focus()
     }
-  }, [])
+  }, [opener])
 
   const trapTab = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'Tab' || box.current === null) return
@@ -573,10 +572,20 @@ export function HotkeyCapture({
   const [capturing, setCapturing] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const [typed, setTyped] = useState<string | null>(null)
+  const armed = useRef(false)
   const arm = (next: boolean): void => {
     captureActive = next
+    armed.current = next
     setCapturing(next)
   }
+  // No blur fires for an element removed while focused, so an armed capture
+  // unmounted by a closing modal would otherwise leave the flag set for good.
+  useEffect(
+    () => () => {
+      if (armed.current) captureActive = false
+    },
+    []
+  )
 
   const onKeyDown = (event: React.KeyboardEvent): void => {
     if (!capturing) return

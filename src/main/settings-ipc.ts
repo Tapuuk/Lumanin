@@ -230,7 +230,7 @@ export class SettingsIpc {
             !isString(params['name']) ||
             (params['license'] !== null && params['license'] !== 'mit')
           ) {
-            throw new Error(MALFORMED)
+            return { ok: false, detail: MALFORMED }
           }
           return await this.exportPlugin({ name: params['name'], license: params['license'] })
         case 'settings.publishPlugin':
