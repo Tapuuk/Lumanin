@@ -6,7 +6,7 @@ import { sameTree, serializeTree } from '../src/host/tree'
 import { actionHandlerOf, listItemsOf, emptyTree, type RenderNode } from '../src/shared/render-tree'
 
 /**
- * The patch round-trip, which ARCHITECTURE.md asks for by name:
+ * The patch round-trip, which the design asks for by name:
  *
  * > render fixture components in-worker, snapshot trees, apply patches in a mock
  * > player, assert deep-equality with a fresh render.

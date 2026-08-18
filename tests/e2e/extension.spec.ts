@@ -6,9 +6,9 @@ import { build } from 'esbuild'
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
 
 /**
- * The M4 gate, driven through the real window.
+ * The extension host, driven through the real window.
  *
- * Historically this was the M4 gate ("an unmodified simple store extension
+ * Historically this was the host's gate ("an unmodified simple store extension
  * runs"). Since the API became the single `lumanin` module the claim it makes
  * is: a plugin written against `lumanin`, knowing nothing about the app's
  * internals, is built with our own build path, installed into a throwaway XDG
@@ -359,7 +359,7 @@ test('Ctrl+K opens the action panel and lists the shortcut', async () => {
     'Show Details',
     'Write Marker'
   ])
-  // `{modifiers: ["cmd"], key: "d"}` — cmd maps to Ctrl on Linux (CLAUDE.md §Keys).
+  // `{modifiers: ["cmd"], key: "d"}` — cmd maps to Ctrl on Linux.
   await expect(page.locator('.overlay__key')).toHaveText('Ctrl+D')
 
   await page.locator('.overlay__panel').press('Escape')
@@ -551,7 +551,7 @@ test('submitting sends every value in the type the extension declared', async ()
   await page.locator('[data-field="urgent"] .form__control').check()
   await page.locator('[data-field="colour"] .form__control').selectOption('red')
   await page.locator('.form__tag', { hasText: 'Two' }).click()
-  await page.locator('[data-field="due"] .form__control').fill('2026-08-10')
+  await page.locator('[data-field="due"] .form__control').fill('2031-04-05')
 
   await page.locator('[data-field="name"] .form__control').focus()
   await page.keyboard.press('Enter')

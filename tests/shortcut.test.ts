@@ -11,8 +11,8 @@ import {
 /**
  * `Keyboard.Shortcut`, mapped onto a Linux keyboard.
  *
- * The mapping is a product decision as much as a technical one (CLAUDE.md
- * §Keys), and it is invisible in the UI until it is wrong: a shortcut that
+ * The mapping is a product decision as much as a technical one, and it is
+ * invisible in the UI until it is wrong: a shortcut that
  * silently maps to a modifier the window manager owns simply never fires, and
  * the extension looks broken.
  */

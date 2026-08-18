@@ -11,7 +11,7 @@ import { coalesceToggle, TOGGLE_COALESCE_MS } from '../src/shared/toggle'
 
 /**
  * Integration coverage for the control socket. This is the app's only local IPC
- * surface and SECURITY.md treats it as an attack surface, so the tests here are
+ * surface and it is treated as an attack surface, so the tests here are
  * about what it *refuses* as much as what it accepts.
  */
 

@@ -312,9 +312,8 @@ describe('the unsupported surface', () => {
   })
 
   /**
-   * The registry is not decoration: RAYCAST-COMPAT §"Signal 2" builds the store's
-   * compatibility scanner out of exactly this set, derived at scan time so the
-   * two cannot drift.
+   * The registry is not decoration: the store's compatibility scanner is built
+   * out of exactly this set, derived at scan time so the two cannot drift.
    */
   it('records every unsupported member with a reason', () => {
     const apis = unsupportedApis()
@@ -341,8 +340,8 @@ describe('the unsupported surface', () => {
  * A stub is only honest if something outside it can see that it is one.
  *
  * `scripts/compat-coverage.mjs` reads these marks to separate *built* from
- * *named*. Without them the ratio counts names, which is how M5 once reported
- * 88/88 with `Form`, `Grid`, `launchCommand` and six hooks unwritten — the
+ * *named*. Without them the ratio counts names, which is how the coverage number
+ * once reported 88/88 with `Form`, `Grid`, `launchCommand` and six hooks unwritten — the
  * exact hole the number existed to prevent.
  */
 describe('stubs are marked so coverage cannot be fooled', () => {
@@ -354,7 +353,7 @@ describe('stubs are marked so coverage cannot be fooled', () => {
     expect((shim.Action.PickDate as unknown as Record<symbol, string>)[PENDING]).toMatch(
       /date picker/
     )
-    // And what was cut carries the declined mark, not a milestone.
+    // And what was cut carries the declined mark, not the pending one.
     expect(
       (shim.WindowManagement.getActiveWindow as unknown as Record<symbol, string>)[DECLINED]
     ).toMatch(/window manager/)
@@ -404,7 +403,7 @@ describe('stubs are marked so coverage cannot be fooled', () => {
 })
 
 /**
- * No sign-in (user decision, 2026-08-10): zero online services, fully local.
+ * No sign-in: zero online services, fully local.
  *
  * The point of these is that OAuth is *declined*, not pending. A `pending` mark
  * would tell a plugin author to wait for something that is never coming, and

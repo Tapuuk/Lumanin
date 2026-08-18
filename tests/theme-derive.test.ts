@@ -4,7 +4,7 @@ import { contrastProblems, resolveTheme, type ThemeSeed } from '../src/shared/th
 import { tokensToCssVars, type ThemeTokens } from '../src/shared/theme/tokens'
 
 /**
- * The derivation goldens THEMING.md asks for: *"deterministic derivation
+ * The derivation goldens: *"deterministic derivation
  * function, golden-tested against 3 sample palettes"*.
  *
  * The palettes are inlined rather than read from the machine's Omarchy install

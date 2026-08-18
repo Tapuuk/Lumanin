@@ -28,7 +28,7 @@ describe('tokensToCssVars', () => {
   it('emits a custom property for every token', () => {
     const vars = tokensToCssVars(tokyoNight.tokens)
 
-    // THEMING.md: the renderer must never read an undefined custom property —
+    // The renderer must never read an undefined custom property —
     // that yields invisible text, the worst failure mode there is.
     for (const key of Object.keys(tokyoNight.tokens)) {
       if (key === 'ansi') continue

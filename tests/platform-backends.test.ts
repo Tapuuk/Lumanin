@@ -198,7 +198,7 @@ describe('paste', () => {
   })
 
   it('falls back to the prompt when the injector fails, keeping the text', async () => {
-    // PLATFORM-MATRIX §5: never fail silently. The clipboard write already
+    // Never fail silently. The clipboard write already
     // happened, so a dead ydotoold costs the user one Ctrl+V, not their snippet.
     const { exec, clipboard } = withClipboard({ ydotool: { ok: false, stderr: 'no daemon' } })
     const written: string[] = []

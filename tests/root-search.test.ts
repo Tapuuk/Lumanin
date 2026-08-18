@@ -165,7 +165,7 @@ describe('composeRoot', () => {
   })
 
   it('omits a group the user left out entirely — except the calculator', () => {
-    // `calculator` stopped being a position (2026-08-11): a query that *is* a
+    // `calculator` stopped being a position: a query that *is* a
     // calculation has one right answer, so the row shows regardless of the
     // order — while `web`, genuinely left out here, stays gone.
     const rows = compose('2+2', { file: '[search]\nfallback_order = ["apps"]\n' })

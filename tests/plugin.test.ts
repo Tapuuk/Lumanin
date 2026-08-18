@@ -216,7 +216,7 @@ describe('provenance', () => {
       ref: 'main',
       subdirectory: null,
       commit: 'abc123def456',
-      installedAt: '2026-08-09T00:00:00.000Z'
+      installedAt: '2031-04-05T00:00:00.000Z'
     })
     expect(readProvenance(directory)?.label).toBe('github.com/o/r')
     expect(readProvenance(directory)?.commit).toBe('abc123def456')
@@ -306,9 +306,9 @@ describe('the plugin API is the lumanin module', () => {
 
   /**
    * The refusal is name-free on purpose: the person who pasted the URL never
-   * typed the old ecosystem's module names, so the error must not either.
+   * typed the @raycast module names, so the error must not either.
    */
-  it('refuses a plugin declaring the old ecosystem, in one honest sentence', async () => {
+  it('refuses a plugin declaring @raycast packages, in one sentence that does not name them', async () => {
     const directory = scaffold(
       { ...manifest, dependencies: { '@raycast/api': '^1.0.0' } },
       'export default function C() { return null }\n'
@@ -319,7 +319,7 @@ describe('the plugin API is the lumanin module', () => {
     expect(FOREIGN_PLUGIN_MESSAGE).not.toMatch(/raycast/i)
   })
 
-  it('turns an undeclared old-ecosystem import into the same sentence', async () => {
+  it('turns an undeclared @raycast import into the same sentence', async () => {
     const directory = scaffold(
       manifest,
       'import { List } from "@raycast/api"\nexport default function C() { return <List /> }\n'

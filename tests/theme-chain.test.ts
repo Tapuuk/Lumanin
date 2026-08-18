@@ -10,7 +10,7 @@ import { contrast, parseHex } from '../src/shared/theme/colour'
 import type { ThemePayload } from '../src/shared/ipc'
 
 /**
- * The resolution chain from THEMING.md: forced theme → desktop appearance →
+ * The theme resolution chain: forced theme → desktop appearance →
  * built-in default, first hit wins, live-swapped on change.
  */
 
@@ -235,7 +235,7 @@ describe('ThemeService', () => {
   })
 
   it('keeps motion off when the user turned it off, whatever the theme says', async () => {
-    // THEMING.md ORs the user setting with the theme flag and with
+    // The user setting is ORed with the theme flag and with
     // prefers-reduced-motion. Switching themes must not turn motion back on.
     const { theme } = service({ file: '[appearance]\nanimations = false\n' })
     await theme.attach(new FakeAppearance(OMARCHY_SIGNAL), false)

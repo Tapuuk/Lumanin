@@ -9,7 +9,7 @@ import type { WaylandProtocols } from '../src/platform/probe/wayland'
 
 /**
  * The dev machine is Arch + Hyprland, so every other desktop exists here only as
- * a synthesised profile. That is exactly why CLAUDE.md requires probes to be
+ * a synthesised profile. That is exactly why probes are
  * injectable: without it, the KDE/GNOME/X11 branches would have no coverage at
  * all until someone booted a VM.
  */
@@ -146,7 +146,7 @@ describe('selectBackend', () => {
 
 describe('real backend chains across simulated desktops', () => {
   it('always resolves a paste backend, because falling back to a prompt is one', () => {
-    // PLATFORM-MATRIX §5: never fail silently. With no helper installed the user
+    // Never fail silently. With no helper installed the user
     // still gets their text on the clipboard and a "press Ctrl+V" toast.
     for (const env of [HYPRLAND, GNOME, XFCE]) {
       const report = selectBackend('paste', BACKENDS.paste, profile(env))
@@ -190,7 +190,7 @@ describe('real backend chains across simulated desktops', () => {
   })
 
   it('does not select the evdev hotkey backend automatically', () => {
-    // SECURITY.md: it sees every keystroke system-wide and is opt-in only.
+    // It sees every keystroke system-wide and is opt-in only.
     for (const env of [HYPRLAND, GNOME, XFCE]) {
       const report = selectBackend('hotkey', BACKENDS.hotkey, profile(env))
       expect(report.chosen, JSON.stringify(env)).not.toBe('evdev')
@@ -205,7 +205,7 @@ describe('real backend chains across simulated desktops', () => {
     selectBackend(capability, BACKENDS[capability], p).candidates.find((c) => c.usable)?.id
 
   it('treats an unrunnable probe as "might work", never as absent', () => {
-    // PLATFORM-MATRIX: UNKNOWN and false are different states. With protocols
+    // UNKNOWN and false are different states. With protocols
     // unprobed, wl-clipboard must still be offered.
     const unprobed = profile(HYPRLAND, { binaries: binaries(['wl-copy', 'wl-paste']) })
     expect(firstUsable('clipboard', unprobed)).toBe('wl-clipboard')
