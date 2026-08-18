@@ -2,7 +2,7 @@
  * Base styles.
  *
  * Every colour, radius, font and duration here is a semantic token set by the
- * theme runtime (see docs/THEMING.md). There are no hex values in this file and
+ * theme runtime. There are no hex values in this file and
  * there must never be one: components may only use tokens, and a raw colour here
  * is a colour that no theme can change.
  */
@@ -35,8 +35,8 @@ body {
   cursor: default;
 }
 
-/* The system signal ORs with the theme's `animations = false` flag — THEMING.md
-   treats a user who asked for less motion as authoritative over a theme. */
+/* The system signal ORs with the theme's `animations = false` flag — a user
+   who asked for less motion is authoritative over a theme. */
 @media (prefers-reduced-motion: reduce) {
   :root {
     --lumanin-motion-duration: 0ms;
@@ -44,7 +44,7 @@ body {
 }
 
 /* The window is a fixed box the size of the panel at its fullest, and it never
-   resizes — ARCHITECTURE.md §"Panel sizing" has the why. The panel sits at the
+   resizes, so the search field never moves as results appear. The panel sits at the
    top of that box and the rest of it is the backdrop: genuinely transparent, and
    a click there dismisses.
 
@@ -69,8 +69,8 @@ body {
    is everything below it — with no measurement round-trip to get there.
 
    The panel hugs its content and grows and shrinks with the results. "Fill the
-   window once there is anything to show" was tried (2026-08-10) and reverted on
-   the user's call (2026-08-11): on a theme with any translucency the filled
+   window once there is anything to show" was tried and reverted on
+   the user's call: on a theme with any translucency the filled
    region reads as a washed-out slab over the desktop, and the resizing panel is
    the look the launcher is wanted to have. */
 .panel {
@@ -84,8 +84,8 @@ body {
   /* Translucency belongs to the *surface*, not to the panel. `opacity` here
      faded the text, the border and every result row along with the background,
      so a theme with `opacity = 0.7` produced washed-out grey text over the
-     wallpaper instead of solid text on a translucent panel — THEMING.md asks for
-     "bg at theme opacity", which is a background colour, not a layer alpha.
+     wallpaper instead of solid text on a translucent panel — the theme contract
+     is "bg at theme opacity", which is a background colour, not a layer alpha.
      Verified in Chromium 150: the calc'd percentage resolves to a real alpha. */
   background: color-mix(
     in srgb,
@@ -608,7 +608,7 @@ body {
   border-radius: var(--lumanin-radius-inner);
 }
 
-/* A button, not an anchor: in-page navigation is blocked (SECURITY.md), so a
+/* A button, not an anchor: in-page navigation is blocked in the renderer, so a
    real link would either do nothing or need an exception carved for it. */
 .md__link {
   background: none;

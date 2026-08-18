@@ -29,7 +29,7 @@ import {
 /**
  * The panel, while an extension is showing.
  *
- * The renderer is still dumb here (ARCHITECTURE.md §"Renderer ↔ main"): it plays
+ * The renderer is still dumb here: it plays
  * the tree the worker sent and forwards what the user did to it. It makes exactly
  * two decisions on its own, and both are ones Raycast's own renderer makes:
  * **which items a `<List filtering>` shows**, and **which item is selected**.
@@ -471,8 +471,8 @@ function Body({ view, list, selected, extension, send }: BodyProps): React.JSX.E
     case 'Detail':
       return <DetailBody node={view} extension={extension} />
     default:
-      // ARCHITECTURE.md: an unknown type gets a visible card naming it, never a
-      // blank screen. It is also how a half-implemented milestone tells the truth
+      // An unknown type gets a visible card naming it, never a blank screen.
+      // It is also how a half-implemented feature tells the truth
       // — `Form` and `Grid` land here today and say so.
       return (
         <div className="ext-unsupported" role="alert">
@@ -557,8 +557,8 @@ interface ListModel {
  * extension owns the query and filtering defaults **off** — filtering its results
  * again would hide rows it deliberately returned.
  *
- * *How* it filters follows the launcher's own search, not a substring scan
- * (user decision, 2026-08-10): the item's **title**, plus its explicit
+ * *How* it filters follows the launcher's own search, not a substring scan:
+ * the item's **title**, plus its explicit
  * `keywords`, with the same one forgiven typo as the root list — and **never
  * the subtitle**. A subtitle is a description; matching it made every row
  * whose description contained the query look like a result. Title matches

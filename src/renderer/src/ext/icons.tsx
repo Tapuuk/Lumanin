@@ -12,8 +12,7 @@ import { objectProp, str, type RenderValue } from './tree'
  * cannot be resolved must produce a placeholder, never a broken-image glyph or a
  * missing box that shifts the row's text out of column.
  *
- * A full icon set is Wave 2 (RAYCAST-COMPAT §"Icon library": lucide, mapped
- * name→glyph). Until then the mapping below covers the icons that actually turn
+ * A full icon set is not built yet (lucide, mapped name→glyph). Until then the mapping below covers the icons that actually turn
  * up in list rows, and everything else falls back to a dot — recessive on
  * purpose, because a wrong-but-confident glyph is worse than an obvious
  * placeholder.
@@ -38,8 +37,8 @@ export interface ResolvedIcon {
  * written out by hand, and each wrong entry is an accessory that silently
  * renders as a placeholder dot.
  *
- * Deliberately partial. A full set is Wave 2 (RAYCAST-COMPAT §"Icon library":
- * lucide, mapped name→glyph); these are the ones that turn up in list rows and
+ * Deliberately partial. A full set is not built yet (lucide, mapped
+ * name→glyph); these are the ones that turn up in list rows and
  * accessories often enough that a generic dot would make a list unreadable.
  */
 const GLYPHS: Readonly<Record<string, string>> = {
@@ -126,7 +125,7 @@ const FALLBACK = '•'
  *
  * `extension` is needed because an asset path is relative to *that* extension's
  * `assets/` directory, and the renderer must never be handed a filesystem path
- * (SECURITY.md §Renderer). It builds a `lumanin-icon://ext/<name>/<path>` URL and
+ * It builds a `lumanin-icon://ext/<name>/<path>` URL and
  * main decides what it is willing to serve.
  */
 export function resolveIcon(value: RenderValue | undefined, extension: string): ResolvedIcon | null {
@@ -226,7 +225,7 @@ export function assetUrl(extension: string, path: string): string {
 /**
  * Map a `Color.*` value onto a theme token.
  *
- * Semantic tokens rather than fixed hexes, per THEMING.md: an extension asking
+ * Semantic tokens rather than fixed hexes: an extension asking
  * for `Color.Red` means "the danger colour", and on a light theme that is a
  * different red from the one on a dark theme. Anything unrecognised is passed
  * through as CSS — the spec allows a raw colour string, and refusing it would

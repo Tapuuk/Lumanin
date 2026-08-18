@@ -5,7 +5,7 @@ import type { ThemePayload } from '@shared/ipc'
  * Applies the resolved theme's tokens as CSS custom properties on `:root` and
  * keeps them in sync with the daemon.
  *
- * THEMING.md requires live hot-swapping without a reload, which is why tokens
+ * Themes hot-swap live without a reload, which is why tokens
  * arrive as custom properties rather than being compiled into the stylesheet —
  * swapping a theme is one write per token, not a rebuild.
  */

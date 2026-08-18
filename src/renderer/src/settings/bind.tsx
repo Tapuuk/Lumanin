@@ -8,8 +8,8 @@ import { useSettingsState } from './useSettings'
  * wants, and a file the *desktop* owns says what actually fires. The two are
  * never assumed to agree — this banner exists exactly when they differ.
  *
- * In this app the difference is applied **automatically** (user decision,
- * 2026-08-11): changing a hotkey in a settings window *is* the consent, and a
+ * In this app the difference is applied **automatically**: changing a hotkey
+ * in a settings window *is* the consent, and a
  * second "Review & apply" click on top of it was a step nobody wanted. The
  * banner therefore reports what happened — written, or failed and why — rather
  * than asking permission. The CLI keeps its explicit consent flow (a terminal

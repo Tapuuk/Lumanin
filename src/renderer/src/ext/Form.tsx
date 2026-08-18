@@ -18,7 +18,7 @@ export type { Field, FieldKind, FieldValue, FormModel, Values } from './form-mod
  * `<Form>` — the one view where the renderer holds state.
  *
  * Everywhere else the worker is the single source of truth and this side is a
- * player (ARCHITECTURE.md §"Renderer ↔ main"). A form cannot work that way: a
+ * player. A form cannot work that way: a
  * keystroke would have to cross two process boundaries and come back before the
  * character appeared, and the caret would jump every time a patch landed. So the
  * field values live here, the worker is *told* about changes, and what it sends

@@ -27,7 +27,7 @@ import { useLayoutEffect } from 'react'
  * so the surface size in CSS pixels is `outer / zoom`, floored so the last
  * fractional pixel is left empty rather than painted off the edge. Sizing to
  * the bare `outerWidth` under a 1.17 zoom made the panel 17% wider than the
- * viewport and took the right border with it (2026-08-16).
+ * viewport and took the right border with it.
  */
 export function useSurfaceSize(zoom: number): void {
   useLayoutEffect(() => {
