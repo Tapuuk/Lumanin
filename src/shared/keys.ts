@@ -53,12 +53,12 @@ export const KEY_ACTION_INFO: Readonly<Record<KeyAction, KeyActionInfo>> = {
   open: {
     setting: 'open',
     title: 'Open',
-    help: 'Run the first action - launch the app, open the file, enter the folder.'
+    help: 'Run the first action: launch the app, open the file, enter the folder.'
   },
   secondary: {
     setting: 'secondary',
     title: 'Open (secondary)',
-    help: 'Run the *second* action instead. In file search that is "open" where Enter browses.'
+    help: 'Run the second action. In file search that opens the file where Enter browses.'
   },
   next: { setting: 'next', title: 'Next result', help: 'Move down the list.' },
   previous: { setting: 'previous', title: 'Previous result', help: 'Move up the list.' },
