@@ -4,7 +4,7 @@ import { createHyprctl } from './backends/hyprctl'
 import { createSwaymsg } from './backends/swaymsg'
 
 /**
- * Window listing and focusing (PLATFORM-MATRIX §7) — what backs
+ * Window listing and focusing — what backs
  * `getFrontmostApplication` in the api shim.
  *
  * Every backend answers the same two questions ("what is open" and "focus that")
@@ -49,7 +49,7 @@ export function createWindows(id: string | null, exec: Exec): WindowsBackend {
 }
 
 /**
- * PLATFORM-MATRIX §7 backend 6: GNOME Wayland hides the window list from clients
+ * Windows backend 6: GNOME Wayland hides the window list from clients
  * entirely, and reading it needs a companion shell extension we do not ship yet.
  * An empty list is the truthful answer — the switcher hides itself rather than
  * showing a window list that is wrong.

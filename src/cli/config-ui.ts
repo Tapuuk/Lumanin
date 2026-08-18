@@ -101,7 +101,7 @@ function reorder<T>(items: readonly T[], value: T, delta: number): T[] | null {
  *    free to improve underneath a config that never disagreed with them.
  *
  * Nothing is written until Save. The document is parsed, edited in memory, and
- * re-rendered, which is how keys belonging to milestones we have not built yet
+ * re-rendered, which is how keys for features not built yet
  * survive a round trip.
  */
 
@@ -831,7 +831,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
       // The two inert groups never reach the screen — `OFFERED_RESULT_GROUPS`
       // filters both directions — but the map is total so the type checks.
       // `files` moved into `plugins`; the calculator is always first and is not
-      // a setting at all. CONFIG.md §`files` and §`calculator`.
+      // a setting at all.
       calculator: 'Nothing - the calculator is always first',
       files: 'Nothing - file search is a plugin, listed under plugins',
       web: 'The enabled search engines'
@@ -1343,7 +1343,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
    * never dead-ends.
    *
    * Its result is a `shell:` key rather than an id, because a command line is
-   * not something to look up — it *is* the thing to run. See CONFIG.md.
+   * not something to look up — it *is* the thing to run.
    */
   const pickCommand = async (): Promise<string | null> => {
     const TYPE_ONE = '\u0000shell'
@@ -1622,7 +1622,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
 
       // Pin down what is *currently* enabled before adding to it.
       //
-      // CONFIG.md's rule is that setting either `engines` or `web_searches`
+      // The config rule is that setting either `engines` or `web_searches`
       // replaces the default selection — so on a config that has never named an
       // engine, adding your own search would silently take Google away. That
       // rule is right for a hand-written file, where writing either key is a
@@ -1892,7 +1892,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
      * A picked entry as an `[aliases]` value.
      *
      * A plain application or command stays a bare id — `firefox.desktop`,
-     * `hacker-news/frontpage` — because that is what CONFIG.md wrote and what a
+     * `hacker-news/frontpage` — because that is what the config documents and what a
      * person types by hand. `shell:` keeps its prefix, since its payload is a
      * command line rather than an id and the two would otherwise be
      * indistinguishable. Anything inside a plugin keeps the whole key, and

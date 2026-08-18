@@ -42,7 +42,7 @@ import { buildSearchUrl, matchKeyword } from '../shared/websearch'
  * The calculator and the web searches are not scored — a sum is either the
  * answer or it is not, and a search is always a valid thing to do. The web rows
  * keep positional placement; the calculator does not participate in ordering at
- * all (2026-08-11, user decision): a query that is a calculation has one right
+ * all (user decision): a query that is a calculation has one right
  * answer, so it sits above everything, always, and is not a setting.
  *
  * Five things override the ranking, each because the user said something more
@@ -63,7 +63,7 @@ import { buildSearchUrl, matchKeyword } from '../shared/websearch'
 export interface RootCommand {
   /**
    * `builtin/<name>` for ours, `<extension>/<command>` for an extension's —
-   * both matching CONFIG.md's alias target syntax, so either can be aliased or
+   * both matching the config's alias target syntax, so either can be aliased or
    * pinned by writing the same string a person would read off the row.
    */
   readonly id: string
@@ -526,8 +526,8 @@ export function composeRoot(input: RootSearchInput): readonly ResultItem[] {
         for (const entry of pluginSurvivors) push(entry.row)
         break
       case 'calculator':
-        // Nothing: the calculator stopped being orderable (2026-08-11, user
-        // decision) and is emitted above everything, unconditionally — see the
+        // Nothing: the calculator stopped being orderable (user decision)
+        // and is emitted above everything, unconditionally — see the
         // top of this function. The value is still accepted because it was in
         // the default order we shipped; see `INERT_RESULT_GROUPS`.
         break

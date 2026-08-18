@@ -6,7 +6,7 @@ import { createXdotool } from './backends/xdotool'
 import { createYdotool } from './backends/ydotool'
 
 /**
- * Paste-into-the-previous-app (PLATFORM-MATRIX §5) — what `Clipboard.paste`
+ * Paste-into-the-previous-app — what `Clipboard.paste`
  * maps to.
  *
  * The sequence is the same on every backend: hide the panel, let focus return to
@@ -14,7 +14,7 @@ import { createYdotool } from './backends/ydotool'
  * is why `hideAndRestoreFocus` is the caller's job and this interface starts
  * after it.
  *
- * PLATFORM-MATRIX's hard rule for this capability: **never fail silently.** The
+ * The hard rule for this capability: **never fail silently.** The
  * chain therefore ends in a backend that cannot fail — it puts the text on the
  * clipboard and tells the user to press Ctrl+V — and on the dev machine, with
  * none of ydotool/wtype/xdotool installed, that last one is the live path rather

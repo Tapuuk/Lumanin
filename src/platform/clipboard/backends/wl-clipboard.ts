@@ -2,7 +2,7 @@ import type { Exec } from '../../exec'
 import type { ClipboardBackend } from '../index'
 
 /**
- * `wl-copy` / `wl-paste` (PLATFORM-MATRIX §3 backend 1).
+ * `wl-copy` / `wl-paste` (clipboard backend 1).
  *
  * Two details in here are load-bearing and both cost a debugging session if you
  * get them wrong:

@@ -15,7 +15,7 @@ import { INTERNAL_TYPES } from '../shared/render-tree'
 /**
  * The navigation stack, which is one React tree and not several.
  *
- * ARCHITECTURE.md settled this: `useNavigation().push(<View/>)` mounts the
+ * `useNavigation().push(<View/>)` mounts the
  * pushed view *inside* the session's existing tree, so the reconciler emits
  * ordinary patches. There is no second tree, no second reconciler, and nothing
  * for the renderer to reconcile between two sources of truth.
@@ -36,8 +36,7 @@ const NavigationContext = createContext<Navigation | null>(null)
  *
  * Throws outside a command rather than returning a no-op pair. A silent no-op
  * here would produce an action that does nothing when pressed, with no error
- * anywhere — the exact failure RAYCAST-COMPAT's "throw, never no-op" rule is
- * about.
+ * anywhere — the exact failure the "throw, never no-op" rule is about.
  */
 export function useNavigation(): Navigation {
   const navigation = useContext(NavigationContext)

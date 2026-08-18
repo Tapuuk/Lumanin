@@ -42,7 +42,7 @@ import { request } from './client'
  * also the most talkative. Before anything is built it prints who published it,
  * which commit is being installed, what the manifest says it is, whether it
  * pulls in third-party dependencies, and what "not sandboxed" actually means.
- * Then it asks. SECURITY.md §"Installing a plugin from a URL".
+ * Then it asks.
  */
 
 const USAGE = `Usage: ${APP_ID} plugin-install <repository|directory> [--yes] [--deps] [--all]

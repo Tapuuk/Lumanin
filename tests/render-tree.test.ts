@@ -6,10 +6,8 @@ import { sameTree, serializeTree } from '../src/host/tree'
 import { actionHandlerOf, listItemsOf, emptyTree, type RenderNode } from '../src/shared/render-tree'
 
 /**
- * The patch round-trip, which ARCHITECTURE.md asks for by name:
- *
- * > render fixture components in-worker, snapshot trees, apply patches in a mock
- * > player, assert deep-equality with a fresh render.
+ * The patch round-trip: render fixture components in-worker, snapshot trees,
+ * apply patches in a mock player, assert deep-equality with a fresh render.
  *
  * The property is the thing worth stating plainly: **a player that has applied
  * every patch in order holds exactly the tree the worker holds.** Nothing else

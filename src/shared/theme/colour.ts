@@ -3,12 +3,12 @@
  *
  * Renderer-safe and dependency-free on purpose: these functions run in the
  * daemon when a theme is resolved and in tests when a derivation is golden-ed,
- * and `docs/THEMING.md` requires the derivation be *deterministic* — the same
+ * and the derivation must be *deterministic* — the same
  * Omarchy palette must always produce the same token set, or a "why did my theme
  * shift" bug becomes unreproducible.
  *
  * All ratios here are WCAG 2.1 relative-luminance contrast, which is what
- * THEMING.md's contrast guard is stated in (4.5:1 body text, 3:1 large text and
+ * the contrast guard is stated in (4.5:1 body text, 3:1 large text and
  * focus borders).
  */
 
@@ -93,7 +93,7 @@ export function isLight(colour: Rgb): boolean {
 /**
  * The direction a surface has to move to become more visible against `bg`:
  * white on a dark theme, black on a light one. Every "lighten by 6%" in
- * THEMING.md means this — a literal lighten turns a white background into
+ * the derivation rules means this — a literal lighten turns a white background into
  * nothing at all.
  */
 export function contrastPole(bg: Rgb): Rgb {
@@ -118,7 +118,7 @@ export function bestPole(bg: Rgb): Rgb {
 /**
  * Push `fg` away from `bg` until it clears `ratio`, and give up gracefully.
  *
- * THEMING.md makes the contrast guard binding on the tokens we *ship*, but it is
+ * The contrast guard is binding on the tokens we *ship*, but it is
  * just as load-bearing on tokens we *derive*: an Omarchy palette whose comment
  * colour sits at 2.8:1 against its own background would otherwise become our
  * `textFaint` and be genuinely unreadable. Moving toward the pole rather than

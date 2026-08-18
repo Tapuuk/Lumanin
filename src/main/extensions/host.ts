@@ -187,7 +187,7 @@ export class ExtensionHost {
    *
    * Every live session died with it, and each one has a panel showing its last
    * frame. Reporting them individually is what turns a frozen view into an error
-   * card with a Reload action (ARCHITECTURE.md §"Failure containment").
+   * card with a Reload action.
    */
   private onHostExit(code: number): void {
     const wasRunning = this.peer !== null
@@ -689,8 +689,8 @@ export class ExtensionHost {
       case APP_METHODS.LOG: {
         const entry = params as LogParams
         const session = this.sessions.get(entry.sessionId)
-        // Tagged with the extension so `lumanin ext log <name>` can find them
-        // (ARCHITECTURE.md §Logging). Never with anything from the payload —
+        // Tagged with the extension so `lumanin ext log <name>` can find them.
+        // Never with anything from the payload —
         // an extension's log line is its own text and gets no structure of ours.
         this.deps.logger[entry.level]('extension', {
           ...(session === undefined

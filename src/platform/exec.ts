@@ -3,7 +3,7 @@ import { execFile, spawn } from 'node:child_process'
 /**
  * The one place the platform layer spawns processes.
  *
- * SECURITY.md rule 1: an argv array, never a shell string. Nothing here ever
+ * The process rule: an argv array, never a shell string. Nothing here ever
  * reaches `/bin/sh`, so no amount of quoting in a clipboard payload or a window
  * title can turn into a command.
  *
@@ -81,7 +81,7 @@ export interface LineStream {
  * change *subscription* is neither: `gdbus monitor` never exits, has no exit
  * code worth waiting for, and must not hold the daemon open. This is the only
  * other place the platform layer starts a process, and it obeys the same
- * SECURITY.md rules — argv array, no shell, nothing sensitive in argv.
+ * rules — argv array, no shell, nothing sensitive in argv.
  *
  * `onExit` fires if the child dies on its own. Callers treat that as "this
  * source stopped being live", not as a crash: the theme still resolves, it just

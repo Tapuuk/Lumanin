@@ -8,7 +8,7 @@ import { ASSETS_DIRNAME, COMMANDS_DIRNAME, MANIFEST_BASENAME, SRC_DIRNAME, SUPPO
 /**
  * Building an extension from source.
  *
- * RAYCAST-COMPAT.md §"Store & install" makes this the **primary** install path,
+ * Building from source is the **primary** install path,
  * not a fallback: the `raycast/extensions` monorepo is MIT-licensed, so
  * compiling and running it is squarely permitted, while the store's own API is
  * private and undocumented. Everything here therefore has to work offline
@@ -18,7 +18,7 @@ import { ASSETS_DIRNAME, COMMANDS_DIRNAME, MANIFEST_BASENAME, SRC_DIRNAME, SUPPO
  * JSX — with one addition that is ours and load-bearing: the externals list.
  */
 
-/** Modules the bundle must never contain a copy of. See ARCHITECTURE.md §single-React. */
+/** Modules the bundle must never contain a copy of: a worker holds exactly one React. */
 export const ALWAYS_EXTERNAL = [
   'react',
   'react/jsx-runtime',
@@ -51,17 +51,17 @@ export function thirdPartyDependencies(manifestPath: string): readonly string[] 
  *
  * `@raycast/*` were the specifiers our worker answered to before the API became
  * the single `lumanin` module; today the only code importing them is code from
- * the old ecosystem, which we deliberately no longer run. The check exists so
+ * Raycast extensions, which we deliberately no longer run. The check exists so
  * the person installing one gets one honest sentence instead of a resolver
  * error naming a module they never typed. The message itself stays name-free —
- * user-facing text does not mention the old ecosystem.
+ * user-facing text does not mention Raycast.
  */
 const FOREIGN_SCOPE = '@raycast/'
 
 export const FOREIGN_PLUGIN_MESSAGE =
   "this plugin was written for a different launcher's API and cannot run here - Lumanin plugins import from `lumanin`"
 
-/** Whether a manifest declares runtime dependencies from the old ecosystem. */
+/** Whether a manifest declares runtime dependencies on `@raycast/*` packages. */
 export function foreignManifest(manifestPath: string): boolean {
   try {
     const raw = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>
@@ -174,8 +174,8 @@ export async function buildExtension(request: BuildRequest): Promise<BuildResult
  *
  * `platform: 'node'` and `format: 'cjs'` because the worker's module hook works
  * by patching `Module._resolveFilename`, which only sees CommonJS requires
- * (ARCHITECTURE.md §"Interception mechanism" — if we ever emit ESM this becomes
- * a `module.register()` loader, decided once rather than per extension).
+ * (if we ever emit ESM this becomes a `module.register()` loader, decided once
+ * rather than per extension).
  *
  * `external` is the whole of the single-React rule's build half: React and the
  * API must come from the worker, and the manifest's own `external[]` names
@@ -226,8 +226,8 @@ function findEntry(source: string, command: CommandSpec): string | null {
 /**
  * `npm install --ignore-scripts`.
  *
- * SECURITY.md calls install scripts "the sharpest edge in the whole product" and
- * requires `--ignore-scripts` by **default**. Installing an extension already
+ * Install scripts are the sharpest edge in the whole product, so
+ * `--ignore-scripts` is the **default**. Installing an extension already
  * means running its author's code — but only when you run the extension, and
  * only in a worker. A postinstall script runs at install time, as your user, in
  * the daemon's environment, before you have seen anything.
@@ -240,7 +240,7 @@ function installDependencies(source: string, onProgress?: (message: string) => v
   onProgress?.('installing dependencies (scripts disabled)')
 
   return new Promise((resolve, reject) => {
-    // An argv array, never a shell string (SECURITY.md §"Rules for reviewers").
+    // An argv array, never a shell string.
     const child = spawn('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund'], {
       cwd: source,
       stdio: 'ignore'
@@ -267,7 +267,7 @@ function describe(error: unknown): string {
     const errors = (error as { errors?: { text?: string; location?: { file?: string; line?: number } }[] })
       .errors
     if (Array.isArray(errors) && errors.length > 0) {
-      // A source file importing the old ecosystem's modules without declaring
+      // A source file importing `@raycast/*` modules without declaring
       // them fails resolution here; say the honest sentence, not the specifier.
       if (errors.some((entry) => entry.text?.includes(`resolve "${FOREIGN_SCOPE}`) === true)) {
         return FOREIGN_PLUGIN_MESSAGE

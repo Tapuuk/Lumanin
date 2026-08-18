@@ -22,7 +22,7 @@ import { carryMark, pending, unsupported } from './unsupported'
  * come back to the worker to run the extension's own `onCopy` callback.
  *
  * `Action.Push` is the reason `target` is not hoisted into a slot
- * (`render-tree.ts` §SLOT_PROPS): a pushed view must not mount until it is
+ * (see `SLOT_PROPS` in `render-tree.ts`): a pushed view must not mount until it is
  * pushed, and here it does not — `push(target)` is called from `onAction`.
  */
 
@@ -98,8 +98,8 @@ const CopyToClipboard: FunctionComponent<SpecAction.CopyToClipboard.Props> = (pr
           concealed: props.concealed === true
         })
         // "The main window is closed, and a HUD is shown after the content was
-        // copied" — developers.raycast.com/api-reference/user-interface/actions,
-        // read 2026-08-09. The HUD is why this is not just `closeMainWindow()`.
+        // copied" — developers.raycast.com/api-reference/user-interface/actions.
+        // The HUD is why this is not just `closeMainWindow()`.
         await showHUD('Copied to Clipboard')
       },
       props.onCopy === undefined ? undefined : () => props.onCopy?.(props.content)
@@ -114,8 +114,8 @@ const Paste: FunctionComponent<SpecAction.Paste.Props> = (props) =>
     onAction: actionOf(
       // The paste backend has to inject into whatever is focused, which cannot
       // be us — so the window closes first and the platform layer decides how
-      // (PLATFORM-MATRIX §5; on a session with no injection backend this
-      // degrades to copy-and-prompt rather than doing nothing).
+      // (on a session with no injection backend this degrades to
+      // copy-and-prompt rather than doing nothing).
       () => Clipboard.paste(props.content),
       props.onPaste === undefined ? undefined : () => props.onPaste?.(props.content)
     )
@@ -147,7 +147,7 @@ Open.displayName = 'Action.Open'
 /**
  * `Action.OpenWith` — "open this path with an application I choose".
  *
- * Choosing needs a picker, and the picker is a Form (M5). Until then this opens
+ * Choosing needs a picker, and the picker is a Form. Until then this opens
  * with the desktop's default handler and says so in its title, which is the
  * honest degradation: the file opens, and the user can see that the *choice*
  * part did not happen. Silently behaving as `Open` under the `Open With` label
@@ -268,7 +268,7 @@ CreateSnippet.displayName = 'Action.CreateSnippet'
 /**
  * The three that cannot exist here.
  *
- * They render as ordinary actions and throw when pressed, per RAYCAST-COMPAT's
+ * They render as ordinary actions and throw when pressed, per the
  * "throw, never no-op" rule — an action that silently does nothing is
  * indistinguishable from one that is broken, and the user has no way to find out
  * which.
@@ -314,7 +314,7 @@ const InstallMCPServer = throwingAction(
  * `Action.PickDate` — pending, not unsupported. The distinction is the store
  * scanner's: an extension that picks a date is not a Linux incompatibility.
  *
- * Note it is *not* satisfied by `Form.DatePicker`, which M5 built. This one is a
+ * Note it is *not* satisfied by `Form.DatePicker`, which exists. This one is a
  * row in the action panel that opens a date popover and returns the answer, so
  * what it needs is an action that renders UI instead of dispatching a handler —
  * a shape the panel does not have yet, and the only action in the spec that

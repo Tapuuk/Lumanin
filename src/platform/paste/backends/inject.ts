@@ -7,7 +7,7 @@ import type { PasteBackend, PasteOutcome } from '../index'
  * synthesise Ctrl+V, and — if the helper is missing, its daemon is down, or it
  * refuses the arguments — return the copy-and-prompt outcome instead of throwing.
  *
- * That last part is PLATFORM-MATRIX §5's "never fail silently" read the other way
+ * That last part is the paste capability's "never fail silently" read the other way
  * round: the user's text is already on their clipboard by the time injection is
  * attempted, so a failed keystroke costs them one Ctrl+V, not their snippet.
  */

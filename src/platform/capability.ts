@@ -2,9 +2,9 @@ import type { PlatformProfile } from './detect'
 import { describePlatform } from './detect'
 
 /**
- * The capability/backend framework (PLATFORM-MATRIX §"Capability → backend priority").
+ * The capability/backend framework.
  *
- * Rules this encodes, all of them from CLAUDE.md or PLATFORM-MATRIX:
+ * Rules this encodes:
  *
  *  - **Backends are selected by capability, not by desktop name.** A backend's
  *    `probe` may read the profile's protocol/binary/D-Bus findings; DE booleans
@@ -14,7 +14,7 @@ import { describePlatform } from './detect'
  *    time.** A capability with no viable backend is UNSUPPORTED with a reason.
  *  - **Backends we cannot test here are UNVERIFIED, not OK.** The dev machine is
  *    Arch + Hyprland; KDE/GNOME/X11 paths are written against documentation and
- *    stay labelled until a human confirms them in a VM (see TESTING.md).
+ *    stay labelled until a human confirms them in a VM.
  */
 
 export const CAPABILITIES = [

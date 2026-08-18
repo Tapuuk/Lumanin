@@ -371,7 +371,7 @@ export function PreferenceRow({
 /**
  * A stored secret is never echoed back into the page — the field shows that
  * one is set and takes a replacement. It never leaves this machine either;
- * that is the whole no-sign-in model (SECURITY.md §"No sign-in").
+ * that is the whole no-sign-in model.
  */
 function PasswordControl({
   stored,

@@ -10,7 +10,7 @@ import type { AppearanceBackend, AppearanceSignal } from './index'
  * `'prefer-light'`, and GNOME 47 added `accent-color`, which is a **named
  * enum**, not a colour: `blue`, `teal`, `green`, `yellow`, `orange`, `red`,
  * `pink`, `purple`, `slate`. The hex values below are libadwaita's own, from
- * `adw-accent-color.c` (checked 2026-08-08), so a GNOME user's accent is the
+ * `adw-accent-color.c`, so a GNOME user's accent is the
  * exact colour their other applications are using rather than an approximation.
  *
  * Live updates come from `~/.config/dconf/user`, which dconf rewrites on every

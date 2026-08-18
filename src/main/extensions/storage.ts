@@ -6,17 +6,17 @@ import { openOwnerOnly } from '../../node/sqlite'
  * `LocalStorage` and preference values, per extension.
  *
  * One database file for both, and one row-space per extension, because the
- * namespace is the security boundary such as it is: SECURITY.md's threat table
- * lists "extension reading another extension's secrets", and the mitigation is
+ * namespace is the security boundary such as it is: the threat is an extension
+ * reading another extension's secrets, and the mitigation is
  * that the api-shim exposes no cross-extension read path. That works only while
  * the namespace comes from the session main already knows rather than from a
  * name the worker sends — which is why every method here takes the extension as
  * a parameter and none of them take a table.
  *
- * The honest caveat, also from SECURITY.md: an extension has full filesystem
+ * The honest caveat: an extension has full filesystem
  * access and can open this file directly. This is a speed bump, not a wall.
  *
- * One file per concern, per CLAUDE.md — this one is extensions, and a corrupt
+ * One file per concern — this one is extensions, and a corrupt
  * clipboard database can never cost someone their extension data.
  */
 

@@ -3,8 +3,7 @@ import { Fragment, type ReactNode } from 'react'
 /**
  * Markdown, rendered to React elements — never to HTML.
  *
- * SECURITY.md §Renderer requires rendered markdown to be sanitised with no raw
- * HTML passthrough. The usual shape of that is a parser plus a sanitiser, where
+ * Rendered markdown must be sanitised with no raw HTML passthrough. The usual shape of that is a parser plus a sanitiser, where
  * the sanitiser is the only thing standing between an extension's `Detail` and
  * script execution inside our window, and where being one CVE behind is a real
  * risk that grows on someone else's schedule.
@@ -190,7 +189,7 @@ function inline(text: string, asset: (path: string) => string): ReactNode {
       const link = /^\[([^\]]*)\]\(([^)]+)\)$/.exec(token)
       const href = link?.[2] ?? ''
       out.push(
-        // Not an `<a>`. In-page navigation is blocked (SECURITY.md §Renderer), so
+        // Not an `<a>`. In-page navigation is blocked in the renderer, so
         // a real anchor would either do nothing or need an exception; this asks
         // main to open it in the user's browser, which is what a link in a
         // launcher means anyway.

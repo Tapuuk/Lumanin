@@ -7,7 +7,7 @@ function capture(): { records: LogRecord[]; logger: Logger } {
 }
 
 describe('redaction', () => {
-  // SECURITY.md: clipboard contents and password-typed preference values
+  // Clipboard contents and password-typed preference values
   // must never reach disk. Enforced here so no call site has to remember.
   it('redacts secret-shaped keys in any casing or separator style', () => {
     const out = redact({

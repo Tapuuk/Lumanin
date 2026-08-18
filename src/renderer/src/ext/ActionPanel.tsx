@@ -38,7 +38,7 @@ function keepFocusWhereItIs(event: MouseEvent): void {
  *
  * The first binding that would actually fire, rather than the first binding
  * there is: `secondary` ships as Space *and* Ctrl+Enter, and Space is only a key
- * while the search box is empty (`keys.ts` §isTypeable). So the bar says `Space`
+ * while the search box is empty (see `isTypeable` in `keys.ts`). So the bar says `Space`
  * when Space works and `Ctrl+↵` once you start typing, which is the difference
  * between a hint and a lie.
  */

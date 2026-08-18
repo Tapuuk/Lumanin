@@ -3,9 +3,9 @@ import { describePlatform, detectPlatform, placementMode } from '../src/platform
 
 /**
  * The dev machine is Arch + Hyprland, so every other desktop is exercised by
- * injecting its environment. CLAUDE.md requires probes to be mockable for exactly
+ * injecting its environment. Probes are mockable for exactly
  * this reason — these profiles are the only way KDE/GNOME paths get tested until
- * a human runs the VM checklist in TESTING.md.
+ * a human runs the VM checklist.
  */
 const PROFILES = {
   hyprland: { XDG_SESSION_TYPE: 'wayland', XDG_CURRENT_DESKTOP: 'Hyprland' },

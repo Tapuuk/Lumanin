@@ -13,7 +13,7 @@ import { useTheme } from './useTheme'
 /**
  * The root view.
  *
- * The renderer is deliberately dumb (ARCHITECTURE.md §"Renderer ↔ main"): it
+ * The renderer is deliberately dumb: it
  * renders state and forwards intents. It never decides what Esc means, never
  * hides itself, never ranks anything, and never reads anything outside the
  * preload bridge.
@@ -24,7 +24,7 @@ import { useTheme } from './useTheme'
  * scrolls. The rest of the window is transparent.
  *
  * That is a deliberate inversion of the obvious design, where the window is
- * resized to fit the content. See ARCHITECTURE.md §"Panel sizing": the search
+ * resized to fit the content. The search
  * field must not move as results appear, and a compositor that keeps a floating
  * window's *centre* fixed when the client resizes itself — Hyprland does — moves
  * it by half the growth every time. Not resizing is the only version of "the bar
@@ -246,7 +246,7 @@ export function App(): React.JSX.Element {
   }, [])
 
   // Rendering before the theme arrives would paint one frame of undefined
-  // custom properties — invisible text, the failure mode THEMING.md calls out.
+  // custom properties — invisible text, the failure mode theming has to avoid.
   if (theme === null) return <div className="root" />
 
   return (

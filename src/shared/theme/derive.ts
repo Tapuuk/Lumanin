@@ -14,9 +14,9 @@ import type { AnsiPalette, Theme, ThemeTokens } from './tokens'
  * `resolveTheme()` — turn any partial description of a theme into a complete,
  * legible token set.
  *
- * This is the function THEMING.md calls for: *"a theme file may specify any
- * subset; `resolveTheme()` fills every remaining token by derivation from
- * `bg`/`text`/`accent` and returns a fully-populated token set."* It exists
+ * The rule is: a theme file may specify any subset; `resolveTheme()` fills every
+ * remaining token by derivation from `bg`/`text`/`accent` and returns a
+ * fully-populated token set. It exists
  * because the alternative failure mode is the worst one there is — the renderer
  * reading an undefined custom property and painting invisible text.
  *
@@ -104,7 +104,7 @@ const AA_LARGE = 3
 const DEFAULT_UI: UiTokens = {
   radiusOuter: 6,
   radiusInner: 4,
-  // Empty means "fontconfig default" — THEMING.md: we ship no bundled fonts.
+  // Empty means "fontconfig default": we ship no bundled fonts.
   font: '',
   fontMono: '',
   animations: true,
@@ -178,7 +178,7 @@ export function resolveTheme(seed: ThemeSeed): Theme {
 
   const ansi = readAnsi(seed.ansi)
 
-  // THEMING.md §2b: accent is the palette's blue unless the theme names one.
+  // Accent is the palette's blue unless the theme names one.
   // `colors.toml` always names one, so this branch is for hand-written packs and
   // for legacy alacritty derivation.
   const accent = ensureContrast(given.accent ?? ansi?.[4] ?? mix(text, bg, 0.2), bg, AA_LARGE)
@@ -231,7 +231,7 @@ export function resolveTheme(seed: ThemeSeed): Theme {
     bgSelected: toHex(legibleSelection(pick('bgSelected', mix(bg, accent, 0.15), null, 0))),
     bgHover: toHex(legibleSelection(pick('bgHover', mix(bg, accent, 0.08), null, 0))),
 
-    // THEMING.md §2b takes borders from the palette's bright black — the slot a
+    // Borders come from the palette's bright black — the slot a
     // terminal theme already reserves for "visible but recessive".
     border: toHex(pick('border', ansi?.[8] ?? mix(bg, text, 0.25), null, 0)),
     // A focus ring is a non-text indicator, so it is held to 3:1 rather than 4.5.

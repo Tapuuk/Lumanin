@@ -3,7 +3,7 @@ import type { SeedColours } from './derive'
 /**
  * KDE Plasma colour schemes.
  *
- * **Verified against `KDE/breeze/colors/BreezeDark.colors` on 2026-08-08.** A
+ * **Verified against `KDE/breeze/colors/BreezeDark.colors`.** A
  * `.colors` scheme file and `~/.config/kdeglobals` are the *same INI format* —
  * applying a scheme in System Settings copies its sections into `kdeglobals` —
  * so reading `kdeglobals` gets the live palette without having to find, parse and

@@ -19,7 +19,7 @@ export default defineConfig({
       //             can reach, loaded by the worker's resolution hook rather
       //             than imported by anything here. It is listed so rollup
       //             emits it; nothing in the app requires it directly. Its API
-      //             shape follows the pinned spec (RAYCAST-COMPAT.md), but the
+      //             shape follows the pinned spec, but the
       //             module a plugin names is only ever ours.
       rollupOptions: {
         input: {

@@ -1,7 +1,7 @@
 import type { PasteBackend, PasteDeps } from '../index'
 
 /**
- * The backend that cannot fail (PLATFORM-MATRIX §5 backend 4).
+ * The backend that cannot fail (paste backend 4).
  *
  * No helper is installed, so nothing can synthesise the keystroke — but the user
  * still gets their text, on the clipboard, with a toast saying to press Ctrl+V.

@@ -141,7 +141,7 @@ export const GridItemSize = specEnum<typeof SpecGrid.ItemSize>()({ Small: 'small
  * `Keyboard.Shortcut.Common` — the shortcuts Raycast asks extensions to reuse so
  * that Copy is in the same place in every extension.
  *
- * Taken from developers.raycast.com/api-reference/keyboard (read 2026-08-09),
+ * Taken from developers.raycast.com/api-reference/keyboard,
  * **both columns**, in the spec's own dual-platform shape. That matters here: our
  * `parseShortcut` prefers the `Windows` variant, and the Windows column is a real
  * PC-keyboard mapping the Raycast authors made themselves rather than our

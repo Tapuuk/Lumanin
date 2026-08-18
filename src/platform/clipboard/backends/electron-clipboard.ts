@@ -1,7 +1,7 @@
 import type { ClipboardBackend } from '../index'
 
 /**
- * Electron's own clipboard module (PLATFORM-MATRIX §3 backend 2).
+ * Electron's own clipboard module (clipboard backend 2).
  *
  * Fine on X11, where the X server holds the selection independently of any
  * client, and the honest fallback anywhere `wl-clipboard` is missing. On Wayland

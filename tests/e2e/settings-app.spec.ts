@@ -12,7 +12,7 @@ import { _electron as electron, expect, test, type ElectronApplication, type Pag
  *
  * What this deliberately does not test: the compositor bind *apply* step. It
  * writes into desktop config files and its truth is per-desktop — that is the
- * VM round in TESTING.md. The plan/consent surface (the banner) is asserted;
+ * VM round. The plan/consent surface (the banner) is asserted;
  * the write behind the Apply button is the same `applyPlan` the fix tests
  * already cover.
  */

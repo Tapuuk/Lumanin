@@ -11,7 +11,7 @@ import type { AppearanceBackend, AppearanceSignal } from './index'
  * the difference between a launcher that belongs on their desktop and one that
  * merely runs on it.
  *
- * The syntax, from niri's configuration reference (checked 2026-08-08):
+ * The syntax, from niri's configuration reference:
  *
  * ```kdl
  * layout {

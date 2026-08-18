@@ -2,7 +2,7 @@ import type { Exec } from '../../exec'
 import type { WindowInfo, WindowsBackend } from '../index'
 
 /**
- * Hyprland's own IPC via `hyprctl -j` (PLATFORM-MATRIX §7 backend 1).
+ * Hyprland's own IPC via `hyprctl -j` (windows backend 1).
  *
  * Shape verified against Hyprland on the dev machine rather than from memory —
  * `hyprctl clients -j` returns an array whose entries carry `address`, `class`,

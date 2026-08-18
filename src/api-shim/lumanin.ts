@@ -11,7 +11,7 @@
  * file re-exports is the entire surface a plugin can reach. The two halves have
  * no overlapping export names (checked when this file was introduced — if a
  * collision ever appears, resolve it explicitly here with the API half winning,
- * and record it in RAYCAST-COMPAT.md).
+ * and say so in a comment beside the resolution).
  */
 export * from './index'
 export * from './utils'

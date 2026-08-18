@@ -38,14 +38,14 @@ import { readVersion, request, resolveDaemonCommand, startDaemon } from './clien
  *
  * Needs a terminal, and says so rather than half-working down a pipe: the whole
  * thing is cursor movement and raw-mode keys. Editing the file by hand stays
- * fully supported — this writes the same file, and CONFIG.md is still its spec.
+ * fully supported — this writes the same file.
  */
 export async function runConfig(): Promise<number> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     const paths = resolvePaths()
     process.stderr.write(
       `${APP_ID}: config needs a terminal.\n` +
-        `Edit ${paths.configFile} directly - see the CONFIG documentation.\n`
+        `Edit ${paths.configFile} directly, or run \`lumanin config\` from a terminal.\n`
     )
     return 1
   }
@@ -203,7 +203,7 @@ export async function runDoctor(flags: ReadonlySet<string>): Promise<void> {
 }
 
 /**
- * `doctor --fix`. PLATFORM-MATRIX's rules, in order: show the diff, ask, apply
+ * `doctor --fix`. The rules, in order: show the diff, ask, apply
  * only what was consented to in this same run, back up, stay idempotent.
  */
 async function runFix(
@@ -232,7 +232,7 @@ async function runFix(
   if (plan.manual.length > 0) {
     // Deliberately not automated. Everything here needs root, and a launcher that
     // silently acquires uinput access is a launcher that silently acquires every
-    // keystroke — SECURITY.md makes that the user's decision to make knowingly.
+    // keystroke — that is the user's decision to make knowingly.
     out.write('\nNot done for you - these need root, so run them yourself:\n')
     for (const step of plan.manual) {
       out.write(`\n  ${step.title}\n    ${step.why}\n`)
@@ -278,8 +278,8 @@ async function runFix(
  * Writing the file is not enabling it — systemd needs to be told the unit exists
  * and that `graphical-session.target` wants it, and neither happens by itself.
  * Both commands are `--user`: nothing here touches system units, and nothing
- * here needs root, which is the line SECURITY.md draws for what `--fix` may run
- * as opposed to print.
+ * here needs root, which is the line drawn for what `--fix` may run as
+ * opposed to print.
  */
 async function enableUnit(out: NodeJS.WriteStream): Promise<void> {
   for (const args of [
@@ -295,7 +295,7 @@ async function enableUnit(out: NodeJS.WriteStream): Promise<void> {
   }
 }
 
-/** Run a command, argv array never a shell string (SECURITY.md §Processes). */
+/** Run a command, argv array never a shell string. */
 function run(command: string, args: readonly string[]): Promise<boolean> {
   return new Promise((resolve) => {
     const child = spawn(command, [...args], { stdio: 'ignore' })

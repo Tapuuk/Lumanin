@@ -30,7 +30,7 @@ export function buildSearchUrl(template: string, query: string): string {
  *
  * Accepted on input and rewritten to `{}` so a template copied out of Raycast,
  * Chrome's search-engine settings or a browser bookmark keyword works unedited.
- * Ours stays `{}` — it is the shortest, and CONFIG.md documents one spelling.
+ * Ours stays `{}` — it is the shortest, and the config documents one spelling.
  */
 const PLACEHOLDER_ALIASES = /\{query\}|\{searchterms\}|\{search\}|%s/gi
 

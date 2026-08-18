@@ -2,7 +2,7 @@ import { accessSync, constants } from 'node:fs'
 import { delimiter, isAbsolute, join } from 'node:path'
 
 /**
- * `$PATH` probe (PLATFORM-MATRIX §Detection step 5).
+ * `$PATH` probe (detection step 5).
  *
  * Resolution is done by walking `$PATH` rather than spawning `which`: this runs
  * for a dozen binaries at daemon start, and a dozen subprocesses is a lot of

@@ -40,7 +40,7 @@ export function textOf(node: RenderNode): string {
  * The contents of an element-valued prop.
  *
  * `actions`, `detail`, `metadata` and `searchBarAccessory` arrive as `__slot`
- * children rather than props (`shared/render-tree.ts` §SLOT_PROPS), because a
+ * children rather than props (see `SLOT_PROPS` in `shared/render-tree.ts`), because a
  * reconciler renders children and not props. This puts them back.
  */
 export function slot(node: RenderNode, name: string): RenderNode | null {

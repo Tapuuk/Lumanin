@@ -62,7 +62,7 @@ export interface CommandFix {
   readonly title: string
   readonly why: string
   readonly state: 'up-to-date' | 'will-add' | 'will-update' | 'not-applicable'
-  /** argv arrays. Never a shell string — SECURITY.md §Processes. */
+  /** argv arrays. Never a shell string. */
   readonly commands: readonly (readonly string[])[]
   /** What `--unfix` would run instead. */
   readonly undo: readonly (readonly string[])[]

@@ -97,14 +97,14 @@ describe('reading a form', () => {
       node('Form', {}, [
         node('Form.Checkbox', { id: 'a', value: true }),
         node('Form.TagPicker', { id: 'b', value: ['x', 'y'] }),
-        node('Form.DatePicker', { id: 'c', value: { __date: '2026-08-10T09:00:00.000Z' } }),
+        node('Form.DatePicker', { id: 'c', value: { __date: '2031-04-05T09:00:00.000Z' } }),
         node('Form.TextField', { id: 'd', value: 'text' })
       ])
     )
     expect(form.fields.map((field) => field.controlled)).toEqual([
       true,
       ['x', 'y'],
-      '2026-08-10T09:00:00.000Z',
+      '2031-04-05T09:00:00.000Z',
       'text'
     ])
   })

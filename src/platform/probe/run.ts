@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process'
 /**
  * Subprocess helper for probes.
  *
- * SECURITY.md rule 1: anything that spawns a process takes an argv array, never
+ * The process rule: anything that spawns a process takes an argv array, never
  * a shell string built by concatenation. `execFile` without a shell is the whole
  * point — none of these arguments ever reach `/bin/sh`.
  *

@@ -36,10 +36,10 @@ import { isAbandoned, Menu, Screen, type Term } from './tui'
  *  - **configure** reaches a plugin's own preferences and its individual
  *    commands. A plugin with six commands where you want two is normal.
  *
- * (This screen once also browsed a curated catalogue of extensions from the
- * old ecosystem, installed from a pinned tree. That whole idea went with the
- * compatibility purge — RAYCAST-COMPAT.md §"Purged" — and what remains is the
- * half that was always ours: managing what is installed.)
+ * (This screen once also browsed a curated catalogue of Raycast extensions,
+ * installed from a pinned tree. That whole idea went when running Raycast
+ * extensions was dropped, and what remains is the half that was always ours:
+ * managing what is installed.)
  *
  * Everything here writes immediately rather than collecting a draft the way
  * `lumanin config` does. A screen where "Remove" needs a later Save is a screen

@@ -1,8 +1,8 @@
 import { defineConfig } from '@playwright/test'
 
 /**
- * Playwright drives the real Electron window (CLAUDE.md: "Playwright (Electron)
- * for the few real-window flows"). It is separate from Vitest on purpose —
+ * Playwright drives the real Electron window, for the few flows that need one.
+ * It is separate from Vitest on purpose —
  * these tests boot an actual daemon and cost seconds, where the unit suite costs
  * a second in total and is what runs on every save.
  */

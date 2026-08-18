@@ -2,12 +2,12 @@ import type { Exec } from '../../exec'
 import type { WindowInfo, WindowsBackend } from '../index'
 
 /**
- * EWMH via `wmctrl` (PLATFORM-MATRIX §7 backend 5) — the path that covers every
+ * EWMH via `wmctrl` (windows backend 5) — the path that covers every
  * X11 desktop at once: XFCE, MATE, Cinnamon, i3, KDE on X11.
  *
- * The matrix names "EWMH via an x11 module". `wmctrl` reads the same
+ * The planned form was "EWMH via an x11 module". `wmctrl` reads the same
  * `_NET_CLIENT_LIST` and `_NET_WM_*` properties through one subprocess instead of
- * a native addon, which is the right trade at M1: no build step, no ABI to rebuild
+ * a native addon, which is the right trade for now: no build step, no ABI to rebuild
  * against Electron, and the properties are the standard's, not wmctrl's. If the
  * subprocess cost ever shows up in a profile, the addon can replace this without
  * the interface moving.
@@ -17,7 +17,7 @@ import type { WindowInfo, WindowsBackend } from '../index'
  * list of titles.
  *
  * UNVERIFIED: written against wmctrl's documented output. The dev machine is
- * Wayland; the X11 paths need a human in a VM per TESTING.md.
+ * Wayland; the X11 paths need a human in a VM.
  */
 export function createEwmh(exec: Exec): WindowsBackend {
   return {

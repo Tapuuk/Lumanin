@@ -4,8 +4,8 @@
   "private": true,
   "description": "A keyboard-first command palette and launcher for Linux, with a plugin API and a generator skill for Claude Code.",
   "license": "MIT",
-  "comment:type": "CommonJS deliberately: SECURITY.md requires sandbox:true on the renderer, and a sandboxed Electron preload cannot be an ES module. Renderer code is bundled by Vite and unaffected.",
-  "comment:react": "react and react-dom are RUNTIME dependencies, not dev ones, and that is load-bearing rather than tidiness. electron-vite externalizes `dependencies` only, so a devDependency gets inlined into the main build's chunks — while react-reconciler, being a real dependency, stays external and requires the copy in node_modules. That is two Reacts in one worker, which fails as 'Invalid hook call' from inside the extension's own component and sends its author looking at their hooks. See ARCHITECTURE.md 'the single-React-copy rule'.",
+  "comment:type": "CommonJS deliberately: the renderer runs with sandbox:true, and a sandboxed Electron preload cannot be an ES module. Renderer code is bundled by Vite and unaffected.",
+  "comment:react": "react and react-dom are RUNTIME dependencies, not dev ones, and that is load-bearing rather than tidiness. electron-vite externalizes `dependencies` only, so a devDependency gets inlined into the main build's chunks — while react-reconciler, being a real dependency, stays external and requires the copy in node_modules. That is two Reacts in one worker, which fails as 'Invalid hook call' from inside the extension's own component and sends its author looking at their hooks. That is the single-React-copy rule.",
   "main": "./out/main/index.js",
   "bin": {
     "lumanin": "./bin/lumanin.js"
@@ -25,7 +25,8 @@
     "lumanin": "node ./bin/lumanin.js",
     "test:e2e": "playwright test",
     "typecheck:e2e": "tsc -p tsconfig.e2e.json --noEmit",
-    "build:plugins": "node scripts/build-plugins.mjs"
+    "build:plugins": "node scripts/build-plugins.mjs",
+    "check:refs": "node scripts/check-private-refs.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

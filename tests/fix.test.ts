@@ -20,8 +20,8 @@ import { parseHotkey, type Hotkey } from '../src/shared/hotkey'
 import { DEFAULT_HOTKEY } from '../src/platform/fix/actions'
 
 /**
- * `doctor --fix` edits files a user's session depends on. Every rule
- * PLATFORM-MATRIX states about it — idempotent, marked, reversible, diffed —
+ * `doctor --fix` edits files a user's session depends on. Every rule it
+ * follows — idempotent, marked, reversible, diffed —
  * is asserted here, against a real temporary config tree.
  */
 
@@ -195,7 +195,7 @@ describe('planFixes', () => {
    * requested "" does not exist" — five fields cut down to three, the dispatcher
    * among the missing.
    *
-   * So this asserts the *text*, the way CLAUDE.md asks: hyprlang's comment
+   * So this asserts the *text*: hyprlang's comment
    * stripping and variable substitution are reimplemented here from
    * `hyprlang/src/config.cpp`, and the command that survives them has to be the
    * command we meant. That is the part provable without a compositor.

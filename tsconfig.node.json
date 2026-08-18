@@ -17,7 +17,7 @@
         "src/shared/*"
       ],
       // The compat spec, used as *types only* — `spec/` is dev-only and never
-      // shipped (RAYCAST-COMPAT.md §Spec baseline). Mapping it here is what makes
+      // shipped. Mapping it here is what makes
       // "never implement from memory" structural rather than a habit: the shim's
       // exports are declared with the spec's own types, so a shape that drifts is
       // a compile error in `npm run typecheck`, not something an audit has to

@@ -3,7 +3,7 @@ import type { Exec } from '../exec'
 import { createPrimarySelection } from './backends/primary'
 
 /**
- * Reading the user's current text selection (PLATFORM-MATRIX §6) — the capability
+ * Reading the user's current text selection — the capability
  * behind `getSelectedText`.
  *
  * Both implemented backends read the **PRIMARY** selection, which on Linux is
@@ -13,7 +13,7 @@ import { createPrimarySelection } from './backends/primary'
  * and unlike synthesising Ctrl+C it touches nothing, which matters because Ctrl+C
  * means "interrupt" in exactly the terminal windows a launcher gets used over.
  *
- * When nothing can read it, this rejects. RAYCAST-COMPAT's macOS-only policy is
+ * When nothing can read it, this rejects. The macOS-only policy is
  * explicit that a rejected promise is the honest answer and a silent empty string
  * is not: an extension can handle the first and cannot detect the second.
  */
@@ -68,7 +68,7 @@ export function createSelection(id: string | null, deps: SelectionDeps): Selecti
 }
 
 /**
- * PLATFORM-MATRIX §6 backend 4: GNOME Wayland, or any session with no helper
+ * Selection backend 4: GNOME Wayland, or any session with no helper
  * installed. Nothing can read the selection there without a companion shell
  * extension, so say so rather than returning a plausible empty string.
  */

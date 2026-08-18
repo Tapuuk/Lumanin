@@ -31,7 +31,7 @@ export interface DesktopEntry {
   readonly terminal: boolean
   readonly categories: readonly string[]
   readonly keywords: readonly string[]
-  /** Matches this app's windows; PLATFORM-MATRIX §7 uses it for the switcher. */
+  /** Matches this app's windows; the window switcher uses it. */
   readonly startupWmClass?: string
   readonly actions: readonly DesktopAction[]
   readonly path_?: string
@@ -74,7 +74,8 @@ export function parseGroups(contents: string): ParsedGroups {
 }
 
 /**
- * Unescape a value per §"Value types": the file format's own escapes, which are
+ * Unescape a value per the Desktop Entry Specification's "Value types" section:
+ * the file format's own escapes, which are
  * not the shell's. `\s` meaning a space is the one nobody remembers.
  */
 export function unescapeValue(value: string): string {
@@ -122,7 +123,8 @@ export function parseList(value: string | undefined): readonly string[] {
 }
 
 /**
- * Locale keys, most specific first, per §"Localized values":
+ * Locale keys, most specific first, per the Desktop Entry Specification's
+ * "Localized values" section:
  * `lang_COUNTRY@MODIFIER`, `lang_COUNTRY`, `lang@MODIFIER`, `lang`. The encoding
  * part of the POSIX locale (`.UTF-8`) is stripped — it never appears in a key.
  */
@@ -185,7 +187,7 @@ export type EntryResult =
  * Turn one `.desktop` file into an indexable entry, or say why not.
  *
  * The five skip rules are all from the spec and all produce visibly wrong
- * results if ignored — PLATFORM-MATRIX §8 lists them for that reason:
+ * results if ignored:
  *
  *  - `Hidden=true` means the file is *deleted*, not merely invisible.
  *  - `NoDisplay=true` is a real application that should not be offered as one

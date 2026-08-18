@@ -2,7 +2,7 @@ import type { PasteBackend, PasteDeps } from '../index'
 import { clipboardThenKeystroke } from './inject'
 
 /**
- * `wtype` (PLATFORM-MATRIX §5 backend 2) — no daemon, no udev rule, no root.
+ * `wtype` (paste backend 2) — no daemon, no udev rule, no root.
  *
  * It speaks `zwp_virtual_keyboard_manager_v1` directly, which is why it is
  * simpler than ydotool and also why it is narrower: compositors that do not

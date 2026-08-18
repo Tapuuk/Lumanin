@@ -7,8 +7,7 @@ import { List, ActionPanel, Action, showToast, Toast, usePromise } from 'lumanin
 ```
 
 This file is the ground truth for what that module provides **right now**. If something is not
-listed as working here, do not emit it. (Maintainers: this file is updated alongside the api-shim
-- see `.claude/agents/compat-auditor.md`.)
+listed as working here, do not emit it. (Maintainers: this file is updated alongside the api-shim.)
 
 ## A plugin's shape
 
@@ -135,7 +134,7 @@ who presses open on a `.blend` wants Blender, not a file manager.
 Both keys are rebindable by the user (`config.toml` `[keys]`), so name your actions for what they
 do, not for the key you expect.
 
-**Shortcuts are Ctrl + one key. No Shift** (project rule, 2026-08-11) - write
+**Shortcuts are Ctrl + one key. No Shift** (project rule) - write
 `{ modifiers: ['cmd'], key: 'o' }`, which maps to Ctrl+O, and not `['cmd', 'shift']`. A launcher is
 used one-handed while something else has your attention, and a three-key chord is not that. Reach
 for Ctrl+Alt only when a plugin genuinely has more actions than there are free letters, and use

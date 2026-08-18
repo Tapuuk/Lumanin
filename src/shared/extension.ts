@@ -6,7 +6,7 @@
  * one), and the build path (to know what to compile). Pure and renderer-safe:
  * reading the file is the caller's job, understanding it is this file's.
  *
- * The field list is RAYCAST-COMPAT.md §Manifest, which is itself checked against
+ * The field list is the pinned spec's manifest schema, which is itself checked against
  * developers.raycast.com. Unknown fields are **preserved, never rejected** — the
  * manifest is a third party's document that gains fields on Raycast's schedule,
  * and refusing to load an extension over a field we have not heard of is the one
@@ -111,9 +111,8 @@ export interface Manifest {
   readonly categories: readonly string[]
   /**
    * `"macOS" | "Windows"` only — **`"Linux"` is not a legal value**, so an absent
-   * or macOS-only field says nothing about us either way. RAYCAST-COMPAT.md
-   * §"Signal 1" is explicit that we must never warn merely because a field cannot
-   * contain a value that does not exist.
+   * or macOS-only field says nothing about us either way. We must never warn
+   * merely because a field cannot contain a value that does not exist.
    */
   readonly platforms: readonly string[]
   readonly commands: readonly CommandSpec[]

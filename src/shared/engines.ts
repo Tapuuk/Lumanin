@@ -4,7 +4,7 @@ import type { WebSearch } from './config'
  * The built-in web searches, and the set enabled out of the box.
  *
  * This is a *catalog*, not a default: `[search].engines` picks ids out of it,
- * and the settings UI (M5) renders it as a list of checkboxes. Every entry the
+ * and the settings UI renders it as a list of checkboxes. Every entry the
  * user enables is a permanent row in the root list — a search is always offered,
  * for every query — which is why the shipped selection is one engine and not
  * sixteen. Three permanent rows under every keystroke is not a feature.

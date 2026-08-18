@@ -119,7 +119,7 @@ export interface SessionEnvironment {
   readonly textSize: 'medium' | 'large'
   readonly isDevelopment: boolean
   readonly launchType: 'userInitiated' | 'background'
-  /** Reported by `environment.raycastVersion`. See RAYCAST-COMPAT §"raycastVersion". */
+  /** Reported by `environment.raycastVersion`: the pinned spec's version, not ours. */
   readonly apiVersion: string
 }
 

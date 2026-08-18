@@ -2,7 +2,7 @@ import type { PasteBackend, PasteDeps } from '../index'
 import { clipboardThenKeystroke } from './inject'
 
 /**
- * `xdotool` (PLATFORM-MATRIX §5 backend 3) — the X11 path, via XTEST.
+ * `xdotool` (paste backend 3) — the X11 path, via XTEST.
  *
  * `--clearmodifiers` is not optional here: the user reached this code by pressing
  * a hotkey, so Super (or whatever they bound) may still be physically held. XTEST

@@ -1,15 +1,15 @@
 /**
- * The semantic design tokens from `docs/THEMING.md`.
+ * The semantic design tokens.
  *
  * Components may only use these — never a raw hex value, never a palette name.
  * The token set is exhaustive by construction: `ThemeTokens` has no optional
  * colour fields, so a theme that omits a token cannot reach the renderer with a
- * hole in it. THEMING.md calls out why that matters — reading an undefined CSS
+ * hole in it. That matters because reading an undefined CSS
  * custom property yields invisible text, the worst failure mode there is.
  *
- * M0 ships one fully-specified built-in pack. M3 adds `resolveTheme()` (deriving
- * a full set from a partial theme file), the Omarchy/portal resolution chain, and
- * live hot-swapping. Neither changes this shape.
+ * One fully-specified built-in pack ships. `resolveTheme()` derives a full set
+ * from a partial theme file, the Omarchy/portal resolution chain picks the source,
+ * and hot-swapping is live. None of that changes this shape.
  */
 
 /** Named ANSI slots 0–15, in the conventional order. */
@@ -96,7 +96,7 @@ export function tokensToCssVars(tokens: ThemeTokens): Record<string, string> {
     vars[`${CSS_VAR_PREFIX}ansi-${String(index)}`] = colour
   })
 
-  // THEMING.md: motion is near-none by default and off entirely when the theme
+  // Motion is near-none by default and off entirely when the theme
   // says so. The system `prefers-reduced-motion` signal ORs with this in CSS.
   vars[`${CSS_VAR_PREFIX}motion-duration`] = tokens.animations ? '80ms' : '0ms'
 

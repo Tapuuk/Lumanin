@@ -14,8 +14,8 @@ import { parseThemePack } from '../src/shared/theme/pack'
 
 /**
  * The Omarchy integration, tested against the file formats that are actually on
- * disk today (verified 2026-08-08 — see the comment block in
- * `src/shared/theme/omarchy.ts` for why that date matters).
+ * disk today (see the comment block in `src/shared/theme/omarchy.ts` for the
+ * two shapes).
  */
 
 /** Verbatim shape of a stock theme's `colors.toml`. */
@@ -135,7 +135,7 @@ describe('parseAlacritty', () => {
     const palette = parseAlacritty(ALACRITTY_TOML)
     expect(palette?.colours.bg).toBe('#1a0d2e')
     expect(palette?.colours.text).toBe('#d4a5ff')
-    // THEMING.md §2b, and what `omarchy-theme-colors-from-alacritty` does too:
+    // What `omarchy-theme-colors-from-alacritty` does too:
     // the accent is the palette's blue.
     expect(palette?.colours.accent).toBe('#8b9aff')
     expect(palette?.ansi?.[8]).toBe('#543a6e')
@@ -251,7 +251,7 @@ describe('readOmarchyTheme', () => {
 
   it('reads the Omarchy 4 shape: mode key, named palette, shell selection colour', () => {
     // Verified against the `colors.toml` Omarchy 4.0 (Quattro) writes for
-    // catppuccin on 2026-08-16.
+    // catppuccin.
     const root = omarchyTree({ 'colors.toml': COLORS_TOML_V4, '../theme.name': 'catppuccin\n' })
     const theme = readOmarchyTheme(root)
     expect(theme?.seed.meta.variant).toBe('dark')
@@ -272,7 +272,7 @@ describe('readOmarchyTheme', () => {
   })
 
   it("lets a theme's own lumanin.toml beat everything we would infer", () => {
-    // The zero-config adoption path THEMING.md promises theme authors only means
+    // The zero-config adoption path promised to theme authors only means
     // anything if the file actually wins.
     const root = omarchyTree({
       'colors.toml': COLORS_TOML,

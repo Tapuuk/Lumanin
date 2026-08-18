@@ -126,7 +126,7 @@ export class SettingsWindow {
       backgroundColor: '#161616',
       webPreferences: {
         preload: preloadPath,
-        // Same renderer contract as the panel — SECURITY.md §Renderer. The
+        // Same renderer contract as the panel. The
         // allow-list in main is per sender, so this window's page can reach
         // only `SETTINGS_INVOKE_METHODS` even though the bridge is shared.
         contextIsolation: true,

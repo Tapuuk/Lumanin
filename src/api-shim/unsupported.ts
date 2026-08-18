@@ -1,14 +1,14 @@
 /**
  * The APIs that cannot work here, and the rule for saying so.
  *
- * RAYCAST-COMPAT.md §"macOS-only policy" is binding and has one line worth
+ * The macOS-only policy is binding and has one line worth
  * repeating: **throw, never no-op.** A `getSelectedFinderItems()` that quietly
  * resolves to `[]` turns "this needs Finder" into a bug report about an
  * extension that returns nothing for no reason — and the person who has to
  * diagnose it has neither our source nor the extension's.
  *
- * The registry here is not decoration either. RAYCAST-COMPAT §"Signal 2" builds
- * the store's compatibility scanner out of *this set*, derived at scan time
+ * The registry here is not decoration either. The store's compatibility scanner
+ * is built out of *this set*, derived at scan time
  * rather than hand-maintained, so adding a member here teaches the scanner about
  * it the same day and the two cannot drift.
  */
@@ -24,8 +24,8 @@
  * bundle boundary without either module importing the other.
  *
  * Without this the coverage ratio counts names, and a `pending()` that throws on
- * first call reads as implemented — which is exactly how M5 reported 88/88 with
- * a third of it unbuilt.
+ * first call reads as implemented — which is exactly how the coverage number
+ * once reported 88/88 with a third of it unbuilt.
  */
 export const PENDING = Symbol.for('lumanin.pending')
 export const UNSUPPORTED = Symbol.for('lumanin.unsupported')
@@ -111,7 +111,7 @@ export function pending<T>(api: string, reason: string): T {
  * OAuth. {@link pending} says "later", and there is no later. {@link unsupported}
  * says "Linux cannot do this", and Linux can do it perfectly well — the
  * launcher has chosen not to broker sign-in, because it has no online services
- * and is not going to grow any (user decision, 2026-08-10).
+ * and is not going to grow any.
  *
  * The distinction is not bookkeeping. It decides what a plugin author is told to
  * do next: wait, give up, or take the other route. So the reason is required and

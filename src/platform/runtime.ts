@@ -14,8 +14,8 @@ import { createWindows, type WindowsBackend } from './windows/index'
  *
  * Selection happens once, at daemon start, and produces objects — not ids, not
  * booleans to branch on. Nothing above this line ever asks which backend won:
- * that is what keeps `if (isHyprland)` out of every other file, which CLAUDE.md
- * makes a hard rule.
+ * that is what keeps `if (isHyprland)` out of every other file, which is a
+ * hard rule.
  *
  * `report` is the same data `lumanin doctor` prints. Building it here rather than
  * separately means the report cannot drift from what is actually running — it
@@ -40,7 +40,7 @@ export interface PlatformRuntime {
    *
    * The theme engine needs this and must not learn it by asking which compositor
    * is running — a translucent theme falls back to `blurFallbackOpacity` whenever
-   * this is false, whatever the reason (see THEMING.md §"Blur / Glass themes").
+   * this is false, whatever the reason.
    */
   readonly blurGranted: boolean
 }
@@ -112,7 +112,7 @@ export function createRuntime(deps: RuntimeDeps): PlatformRuntime {
     // chain, so "the chain picked none" is the honest answer to "is blur
     // available", not a gap. On Hyprland we additionally *ask* for no blur —
     // most of our window is transparent backdrop — which is why this stays false
-    // there until a glass theme turns the rule off (PLATFORM-MATRIX §12).
+    // there until a glass theme turns the rule off.
     blurGranted: chosen('windowEffects') !== null && chosen('windowEffects') !== 'none'
   }
 }

@@ -68,7 +68,7 @@ import type { ThemeService } from './theme'
  * diffs render in a modal instead of a pager, and consent is a button instead
  * of a `[y/N]`.
  *
- * Security shape (SECURITY.md §Renderer): the renderer names *choices*, never
+ * Security shape: the renderer names *choices*, never
  * mechanisms. `settings.set` takes a path checked against a closed allow-list;
  * `settings.applyBind` re-plans from disk rather than accepting a plan back
  * from the page; plugin install re-fetches by source string. Nothing the
@@ -430,7 +430,7 @@ export class SettingsIpc {
 
   /**
    * One `[aliases]` entry. The stored value follows the CLI's spelling rules: a
-   * plain application or command stays a bare id (what CONFIG.md documents and
+   * plain application or command stays a bare id (what the config documents and
    * what a person types by hand); `shell:` keeps its prefix; anything inside a
    * plugin keeps the whole key, and becomes an `{ id, title }` table when it
    * carries a title.
@@ -1075,7 +1075,7 @@ function stamp(): string {
   return new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
 }
 
-/** Run a command, argv array never a shell string (SECURITY.md §Processes). */
+/** Run a command, argv array never a shell string. */
 function runQuiet(command: string, args: readonly string[]): Promise<boolean> {
   return new Promise((settle) => {
     const child = spawn(command, [...args], { stdio: 'ignore' })

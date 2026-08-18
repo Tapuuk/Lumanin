@@ -57,9 +57,8 @@ describe('parseManifest', () => {
 
   /**
    * `platforms` can never contain `"Linux"` — the field's only legal values are
-   * `"macOS"` and `"Windows"`. RAYCAST-COMPAT §"Signal 1" is explicit that this
-   * must not be read as incompatibility, so the parser records it and judges
-   * nothing.
+   * `"macOS"` and `"Windows"`. This must not be read as incompatibility, so
+   * the parser records it and judges nothing.
    */
   it('records `platforms` without judging it', () => {
     const { manifest, problems } = parseManifest({ ...MINIMAL, platforms: ['macOS'] })

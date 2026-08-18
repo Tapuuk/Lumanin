@@ -367,8 +367,8 @@ describe('launching', () => {
 })
 
 describe('keeping the index fresh', () => {
-  // Installing an app must not require restarting the daemon — PLATFORM-MATRIX
-  // §8 asks for a watch, and without one the launcher quietly serves a snapshot
+  // Installing an app must not require restarting the daemon — the index is
+  // watched, and without that the launcher quietly serves a snapshot
   // taken at login.
   const logger = {
     info: () => undefined,
@@ -509,7 +509,7 @@ describe('opening a file', () => {
     })
 
     expect(taken).toBe(true)
-    // argv array, never a shell string — SECURITY.md rule 1. A path is
+    // argv array, never a shell string. A path is
     // arbitrary text and this one comes from a plugin's row.
     expect(calls).toEqual([{ gio: '/usr/bin/gio', args: ['open', '/home/me/scene.blend'] }])
   })

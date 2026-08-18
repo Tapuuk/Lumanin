@@ -6,7 +6,7 @@ import { all, create, type FactoryFunctionMap, type MathJsInstance } from 'mathj
  * Two problems, and the second is the hard one:
  *
  *  1. Evaluate an expression, including units — `10 km to miles`, `3 GB / 4`.
- *     mathjs does this, which is why CLAUDE.md picked it.
+ *     mathjs does this, which is why it was picked.
  *  2. **Know when not to.** This runs on every keystroke alongside the app
  *     search, so it has to stay silent for `7-zip`, `gimp 2.10` and `python3`,
  *     all of which are perfectly good arithmetic-shaped strings. A calculator
@@ -29,7 +29,7 @@ import { all, create, type FactoryFunctionMap, type MathJsInstance } from 'mathj
  * we want a launcher's search bar to do. mathjs's own security guidance is to
  * remove exactly these, so they are removed rather than trusted not to be
  * reached — the input is whatever the user typed, which is the definition of
- * untrusted for SECURITY.md's purposes.
+ * untrusted input.
  */
 function restricted(): {
   evaluate: (expression: string) => unknown

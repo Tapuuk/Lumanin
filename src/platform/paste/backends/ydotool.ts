@@ -2,7 +2,7 @@ import type { PasteBackend, PasteDeps } from '../index'
 import { clipboardThenKeystroke } from './inject'
 
 /**
- * `ydotool` (PLATFORM-MATRIX §5 backend 1) — the only injector that works on
+ * `ydotool` (paste backend 1) — the only injector that works on
  * GNOME Wayland, because it goes through `/dev/uinput` at the kernel level
  * rather than through a Wayland protocol the compositor may not expose.
  *

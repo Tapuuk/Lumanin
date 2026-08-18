@@ -508,7 +508,7 @@ describe('quoting a target for each parser', () => {
  * component is first created (login, in practice), so the file write alone
  * leaves the key dead until then. These busctl calls are what the Plasma
  * Shortcuts KCM itself makes - verified against kglobalacceld and
- * plasma-desktop source, 2026-08-14 - and every claim a command line encodes
+ * plasma-desktop source - and every claim a command line encodes
  * (signatures, the dummy-register dance, the Qt integers) is pinned here.
  */
 describe('KDE live binds over D-Bus', () => {

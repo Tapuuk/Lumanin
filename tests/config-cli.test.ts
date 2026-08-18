@@ -29,9 +29,8 @@ function tempFile(name = 'config.toml'): string {
 
 describe('the config document', () => {
   it('round-trips a file it does not fully understand', () => {
-    // The promise from CONFIG.md: a key belonging to a milestone we have not
-    // built yet must survive being edited by a version that has never heard
-    // of it.
+    // The config promise: a key for a feature not built yet must survive
+    // being edited by a version that has never heard of it.
     const path = tempFile()
     writeFileSync(path, '[clipboard]\nretention_days = 14\n\n[general]\nwidth = 900\n')
 
@@ -324,7 +323,7 @@ describe('the menu', () => {
     // places forever. Walking one row from the bottom to the top has to be N
     // presses, not N presses interleaved with letting go of the modifier.
     //
-    // The chord is Ctrl+↑ since 2026-08-11: nothing in this application asks for
+    // The chord is Ctrl+↑: nothing in this application asks for
     // Shift any more.
     const { term, input } = fakeTerm()
     const menu = new Menu(term, new Screen(term), {})

@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 
 /**
- * Icon Theme Specification lookup (PLATFORM-MATRIX §8).
+ * Icon Theme Specification lookup.
  *
  * A `.desktop` file's `Icon=` is usually a *name*, not a path — `firefox`, not
  * `/usr/share/icons/hicolor/128x128/apps/firefox.png` — and turning one into the

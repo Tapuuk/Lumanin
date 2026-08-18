@@ -5,8 +5,8 @@ import { join, resolve } from 'node:path'
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
 
 /**
- * The real-window flows (CLAUDE.md: "Playwright (Electron) for the few real-window
- * flows"). Everything else is a Vitest unit — this file exists only for the
+ * The real-window flows: Playwright (Electron) for the few flows that need a
+ * real window. Everything else is a Vitest unit — this file exists only for the
  * things that are not true unless a browser actually renders them: that typing
  * produces results, that the panel is a bar until it has something to show and
  * the window's height afterwards, and that Enter launches.
@@ -34,7 +34,7 @@ function absoluteWaylandDisplay(): Record<string, string> {
  * compositor granted it, and Playwright's own screenshots agree with them
  * because they capture the web contents rather than the screen. A whole class of
  * bug — the panel not resizing at all — is invisible to every one of those and
- * obvious to this. See ARCHITECTURE.md §"Resizing a Wayland surface".
+ * obvious to this.
  *
  * Returns `null` where there is no Hyprland to ask, which is most CI.
  */
@@ -229,7 +229,7 @@ test('keeps a whole family when the family genuinely matches', async () => {
 test('grows and shrinks with the result count, and gives it back when empty', async () => {
   // The panel hugs its content: more results make it taller, fewer make it
   // shorter, an empty query leaves the bare bar. "Fill the window once there is
-  // anything to show" was tried and reverted on the user's call (2026-08-11) —
+  // anything to show" was tried and reverted on the user's call —
   // on a translucent theme the filled region reads as a washed-out slab over
   // the desktop. See the note on `.panel` in base.css.
   await page.locator('.search__input').fill('e')
@@ -248,7 +248,7 @@ test('grows and shrinks with the result count, and gives it back when empty', as
 })
 
 test('a query matching nothing falls back to web searches, and nothing else', async () => {
-  // It used to leave the panel a bare bar. Since M3 an unmatched query is exactly
+  // It used to leave the panel a bare bar. Now an unmatched query is exactly
   // the case the web fallback exists for — "nothing here, try the web" — so the
   // assertion is that *only* those rows appear, not that none do.
   await page.locator('.search__input').fill('zzzzqqqqxxxx')

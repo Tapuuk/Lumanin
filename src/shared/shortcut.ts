@@ -21,7 +21,7 @@ export const MODIFIER_ORDER = ['ctrl', 'alt', 'shift', 'super'] as const
 export type Modifier = (typeof MODIFIER_ORDER)[number]
 
 /**
- * Cmd → Ctrl, Opt → Alt (CLAUDE.md §Keys).
+ * Cmd → Ctrl, Opt → Alt.
  *
  * `cmd` is the interesting one. On macOS it is the *primary* modifier — the one
  * on Copy, Save, New — and its Linux equivalent by role is Ctrl, not Super.
@@ -261,7 +261,7 @@ export function matchesShortcut(event: KeyState, shortcut: Shortcut): boolean {
   return engraved(event.code) === shortcut.key
 }
 
-/** The action panel's own key, fixed by CLAUDE.md so extensions cannot rebind it. */
+/** The action panel's own key, fixed so extensions cannot rebind it. */
 export const ACTION_PANEL_SHORTCUT: Shortcut = { modifiers: ['ctrl'], key: 'k' }
 
 /** Enter runs the first action; this runs the second. Raycast's convention. */

@@ -48,7 +48,7 @@ describe('parseRequest', () => {
   })
 
   it('rejects anything that is not an allow-listed verb', () => {
-    // SECURITY.md §Local IPC: the verb set is closed and never eval-shaped.
+    // The verb set is closed and never eval-shaped.
     expect(parseRequest({ id: 1, verb: { kind: 'eval', code: '1+1' } })).toBeNull()
     expect(parseRequest({ id: 1, verb: { kind: '__proto__' } })).toBeNull()
     expect(parseRequest({ id: 1, verb: 'toggle' })).toBeNull()

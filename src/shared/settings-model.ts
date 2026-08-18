@@ -226,7 +226,7 @@ export function appearanceSettings(
  * you use most wins whenever it matches at all. So it is named for that, and
  * offered as four answers rather than as a decimal.
  *
- * The key in `config.toml` keeps its name: it is what CONFIG.md documents and
+ * The key in `config.toml` keeps its name: it is what the config format documents and
  * what anyone's existing file says, and renaming a key to improve a label is a
  * migration nobody asked for.
  */
@@ -255,7 +255,7 @@ export function habitLabel(weight: number): string {
   return nearest.value === weight ? nearest.label : `${nearest.label} (${String(weight)})`
 }
 
-/** `[file_search].hide_on_open` — see CONFIG.md §`[file_search]`. */
+/** `[file_search].hide_on_open`: opening a file closes the panel. */
 export const FILE_SEARCH_HIDE_ON_OPEN: Setting = {
   path: ['file_search', 'hide_on_open'],
   label: 'Close the panel when a file opens',
@@ -264,7 +264,7 @@ export const FILE_SEARCH_HIDE_ON_OPEN: Setting = {
   read: (c) => c.fileSearch.hideOnOpen
 }
 
-/** Root commands, for the pickers. Ids match CONFIG.md's `builtin/<name>` form. */
+/** Root commands, for the pickers. Ids use the config's `builtin/<name>` form. */
 export const BUILTIN_COMMANDS: readonly { readonly id: string; readonly title: string }[] = [
   { id: 'builtin/reload-applications', title: 'Reload Applications' },
   { id: 'builtin/reload-theme', title: 'Reload Theme' },

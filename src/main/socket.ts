@@ -16,7 +16,7 @@ import type { Logger } from '../node/logger'
  * line. Chosen over anything richer because `printf '{"id":1,"verb":{"kind":"toggle"}}\n'
  * | nc -U` should work.
  *
- * SECURITY.md §Local IPC:
+ * Local IPC rules:
  *   - Unix socket only. There is no TCP listener and there never will be.
  *   - Socket mode 0600, inside a directory this code verifies is user-owned and
  *     not group/world accessible.

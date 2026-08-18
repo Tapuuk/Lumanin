@@ -9,15 +9,15 @@ import type { DaemonStatus } from './protocol'
 import type { Theme } from './theme/tokens'
 
 /**
- * The renderer ↔ main contract (`docs/ARCHITECTURE.md` §"Renderer ↔ main").
+ * The renderer ↔ main contract.
  *
  * The renderer is dumb: it renders trees and forwards user intents. It has no Node
  * access and no privileges — everything crosses this typed bridge, over exactly two
  * Electron channels, through a method allow-list checked in main.
  *
  * Methods are namespaced `platform.* | ext.* | store.* | theme.* | builtin.*`
- * plus `app.*`/`window.*` for daemon control. M0 defines the window and theme
- * slice; later milestones add namespaces without changing the transport.
+ * plus `app.*`/`window.*` for daemon control. New namespaces are added without
+ * changing the transport.
  */
 
 export const INVOKE_CHANNEL = 'lumanin:invoke'
@@ -27,7 +27,7 @@ export const EVENT_CHANNEL = 'lumanin:event'
 export interface ThemePayload {
   readonly meta: Theme['meta']
   readonly cssVars: Readonly<Record<string, string>>
-  /** Whether the compositor actually granted background blur (PLATFORM-MATRIX §12). */
+  /** Whether the compositor actually granted background blur. */
   readonly blurGranted: boolean
   /**
    * The zoom the main process applies to the window: the text size wanted
@@ -42,7 +42,7 @@ export interface ThemePayload {
 /** Where Esc was pressed. `esc_at_root` only governs the root — see `escapeAction`. */
 export interface EscapeParams {
   /**
-   * True when there is nothing left to back out of: no query typed and, from M4,
+   * True when there is nothing left to back out of: no query typed and
    * no extension view pushed on the navigation stack.
    */
   readonly atRoot: boolean
@@ -196,7 +196,7 @@ export interface InvokeMap extends SettingsInvokeMap {
    * Esc pressed. Main owns the decision because it depends on
    * `[general].esc_at_root`; the renderer only reports the keypress, says whether
    * it was at the root, and reacts to the answer. (Inside an extension session
-   * Esc pops the navigation stack instead — that path arrives with the host in M4.)
+   * Esc pops the navigation stack instead.)
    */
   'window.escape': { params: EscapeParams; result: EscapeResult }
   'theme.current': { params: undefined; result: ThemePayload }
@@ -211,7 +211,7 @@ export interface InvokeMap extends SettingsInvokeMap {
    */
   'keys.current': { params: undefined; result: KeyMap }
 
-  // --- Extensions (M4). The renderer holds no extension state of its own: it
+  // --- Extensions. The renderer holds no extension state of its own: it
   // plays the tree the worker sends and forwards what the user did to it.
   /**
    * A user interaction reached a function prop. `handlerId` came out of the tree.

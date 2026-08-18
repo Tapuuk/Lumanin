@@ -10,7 +10,7 @@
 /**
  * The fraction of the screen height at which the panel's **top edge** sits.
  *
- * The window is a fixed box (see ARCHITECTURE.md §"Panel sizing") with the
+ * The window is a fixed box with the
  * search bar at the top of it, so this is really "where the search bar lands",
  * and the bar is what the number is chosen for: at 0.32, the bar's centre falls
  * around 65% of the way up the screen from the bottom.

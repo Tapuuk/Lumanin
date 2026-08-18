@@ -186,8 +186,8 @@ export function showToast(
  * Raycast closes the main window and shows the HUD over the desktop. Ours does
  * the same: the renderer keeps the HUD painted for its dismiss interval while
  * the panel is hidden, which is why the panel's own window is what draws it
- * rather than a second window we would have to place (ARCHITECTURE.md §Positioning
- * — a second window is a second placement problem on Wayland, for a line of text).
+ * rather than a second window we would have to place (a second window is a
+ * second placement problem on Wayland, for a line of text).
  */
 export async function showHUD(
   title: string,

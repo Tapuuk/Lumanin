@@ -68,7 +68,7 @@ interface Tool {
  *
  * `which` would mean a child process per candidate on every view open, to answer
  * a question `readdir`-free `existsSync` answers in microseconds. It also keeps
- * this honest about SECURITY.md's rule on argv: there is no shell here at all,
+ * this honest about the argv rule: there is no shell here at all,
  * not even to look something up.
  */
 function onPath(names: readonly string[]): string | null {
@@ -137,7 +137,7 @@ function pattern(query: string): string {
   return query.trim().split(/\s+/).filter(Boolean).map(quoteRegex).join('.*')
 }
 
-/** The argv for one search. Never a shell string — SECURITY.md §"Spawning". */
+/** The argv for one search. Never a shell string. */
 function argsFor(tool: Tool, query: string, root: string, hidden: boolean): readonly string[] {
   switch (tool.name) {
     case 'fd':
@@ -519,8 +519,8 @@ interface Hit {
  *    thousands under `.cache`, `node_modules` and `target` are not.
  *
  * Only then does the name break the tie — a prefix match ahead of a match in the
- * middle, the way the launcher orders everything else (CONFIG.md §"How a matched
- * row is ordered"). It is last rather than first because within one category at
+ * middle, the way the launcher orders everything else. It is last rather than
+ * first because within one category at
  * one depth there are rarely more than a handful of rows left to separate.
  */
 function rank(hits: readonly Hit[], query: string, order: readonly Category[], home: string): readonly Hit[] {
@@ -799,7 +799,7 @@ function listDirectory(path: string, hidden: boolean): { hits: Hit[]; problem: s
  *
  * Filtering is the **launcher's**, not ours: a listing is a fixed list, so the
  * search box narrows it with the same rules — and the same forgiven typo — that
- * the root list uses. That is CLAUDE.md's rule that a plugin view is part of the
+ * the root list uses. That is the rule that a plugin view is part of the
  * launcher rather than a separate app, and it is free here.
  */
 function Browse({

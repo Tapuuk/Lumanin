@@ -238,8 +238,8 @@ export function mergeIndexes(installed: ExtensionIndex, bundled: ExtensionIndex)
  * They go through the *same* scoring as the launcher's own commands — one list,
  * one relative cutoff, one order — because a root that ranked extensions
  * separately would show a weak extension match above a strong application one
- * purely for being the best of its kind. That was the M3 lesson with built-in
- * commands (`root-search.ts` §"ranked together") and it does not stop applying
+ * purely for being the best of its kind. That was the lesson with built-in
+ * commands (see "ranked together" in `root-search.ts`) and it does not stop applying
  * because the command came from somewhere else.
  *
  * The subtitle names the extension, which is what makes two extensions' "Search"
@@ -280,7 +280,7 @@ export function extensionRootCommands(
 
 /**
  * A command's icon as the root list draws it: a `lumanin-icon:` URL the renderer
- * can put in an `<img>`, never a filesystem path (SECURITY.md §Renderer).
+ * can put in an `<img>`, never a filesystem path.
  *
  * The manifest `icon` (command first, then the extension's) is one of three
  * forms, and the form decides both where the image comes from and whether the
@@ -365,8 +365,8 @@ export function preferenceSpecs(command: InstalledCommand): readonly PreferenceS
 /**
  * Preferences that are `required` and still unset.
  *
- * Raycast blocks a command until these are filled in, and RAYCAST-COMPAT asks us
- * to mirror that. Running anyway is worse than it sounds: an extension whose
+ * Raycast blocks a command until these are filled in, and we mirror that.
+ * Running anyway is worse than it sounds: an extension whose
  * required API key is missing does not fail cleanly, it makes an unauthenticated
  * request and shows the user an error from someone else's server.
  */

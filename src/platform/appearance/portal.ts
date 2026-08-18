@@ -2,8 +2,7 @@ import { spawnLines, type Exec, type LineStream } from '../exec'
 import type { AppearanceBackend, AppearanceSignal } from './index'
 
 /**
- * `org.freedesktop.portal.Settings` — the desktop-agnostic appearance signal
- * (THEMING.md §3, PLATFORM-MATRIX §10).
+ * `org.freedesktop.portal.Settings` — the desktop-agnostic appearance signal.
  *
  * This is the one that covers everything: KDE, GNOME, COSMIC, niri with a
  * portal, and anything else that ships one. It does not hand over a palette, only
@@ -16,7 +15,7 @@ import type { AppearanceBackend, AppearanceSignal } from './index'
  * another native module to rebuild against Electron's ABI, and this runs twice a
  * session plus one long-lived monitor.
  *
- * **Both the read and the change signal were verified live on 2026-08-08** (on
+ * **Both the read and the change signal were verified live** (on
  * Hyprland with `xdg-desktop-portal-gtk`, where this backend loses to Omarchy but
  * still answers). `ReadOne color-scheme` returns `(<uint32 1>,)`; `ReadOne
  * accent-color` returns `org.freedesktop.portal.Error.NotFound` when the desktop
@@ -102,8 +101,8 @@ export class PortalAppearance implements AppearanceBackend {
       ['monitor', '--session', '--dest', PORTAL_DEST, '--object-path', PORTAL_PATH],
       (line) => {
         if (!line.includes('SettingChanged')) return
-        // GNOME's portal emits the same change twice, once per namespace (verified
-        // 2026-08-08). Ours is the standard one; taking both repaints twice for
+        // GNOME's portal emits the same change twice, once per namespace.
+        // Ours is the standard one; taking both repaints twice for
         // one click.
         if (!line.includes(NAMESPACE)) return
         notify()

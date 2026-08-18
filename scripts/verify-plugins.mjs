@@ -11,8 +11,8 @@
  * `<profile-root>` is a throwaway XDG tree with plugins already installed
  * into `<root>/data/lumanin/extensions` — see `scripts/install-plugins.sh`,
  * which builds one. (This began as the machine behind the old curated
- * catalogue's `VERIFIED` claim; the catalogue is gone — RAYCAST-COMPAT.md
- * §"Purged" — but "did the thing we just generated render" is the same
+ * catalogue's `VERIFIED` claim; the catalogue is gone, but "did the thing we
+ * just generated render" is the same
  * question, so the machine stayed.)
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
