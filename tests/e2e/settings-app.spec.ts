@@ -117,6 +117,69 @@ test('opens themed, on the General screen, with every section listed', async () 
   }
 })
 
+test('the visual system holds: one typeface, grid rows, muted help, a focus ring, 24px targets', async () => {
+  // The theme's mono token may be empty (the fontconfig default), in which
+  // case the mono fallback stack is the one typeface everything shares.
+  const token = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--lumanin-font-mono').trim()
+  )
+  const font = await page.locator('.settings').evaluate((el) => getComputedStyle(el).fontFamily)
+  expect(font).toMatch(/monospace/i)
+  if (token !== '') expect(font).toBe(token)
+  for (const selector of ['.s-row__label', '.settings__section', '.settings__heading', '.s-button']) {
+    const family = await page.locator(selector).first().evaluate((el) => getComputedStyle(el).fontFamily)
+    expect(family, selector).toBe(font)
+  }
+
+  expect(await page.locator('.s-row').first().evaluate((el) => getComputedStyle(el).display)).toBe('grid')
+
+  // Help text is muted, never faint: compare against probes coloured by token.
+  const [muted, faint] = await page.evaluate(() => {
+    const probe = (token: string): string => {
+      const el = document.createElement('span')
+      el.style.color = `var(${token})`
+      document.body.append(el)
+      const color = getComputedStyle(el).color
+      el.remove()
+      return color
+    }
+    return [probe('--lumanin-text-muted'), probe('--lumanin-text-faint')]
+  })
+  expect(muted).not.toBe(faint)
+  const helpColors = await page.locator('.s-row__help').evaluateAll((els) => els.map((el) => getComputedStyle(el).color))
+  expect(helpColors.length).toBeGreaterThan(0)
+  for (const color of helpColors) expect(color).toBe(muted)
+
+  // Keyboard focus draws the global ring: reach a select by Tab, not by click.
+  const select = page.locator('.s-select').first()
+  await select.focus()
+  await page.keyboard.press('Tab')
+  await page.keyboard.press('Shift+Tab')
+  const focused = await page.evaluate(() => {
+    const el = document.activeElement as HTMLElement
+    const style = getComputedStyle(el)
+    return { className: el.className, outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth }
+  })
+  expect(focused.className).toContain('s-select')
+  expect(focused.outlineStyle).toBe('solid')
+  expect(focused.outlineWidth).not.toBe('0px')
+
+  await section('Action Keys').click()
+  expect(await page.locator('.s-hotkey').first().evaluate((el) => getComputedStyle(el).fontFamily)).toBe(font)
+  const boxes = await page.locator('.s-chip__remove, .s-iconbtn').evaluateAll((els) =>
+    els.map((el) => {
+      const rect = el.getBoundingClientRect()
+      return { width: rect.width, height: rect.height }
+    })
+  )
+  expect(boxes.length).toBeGreaterThan(0)
+  for (const box of boxes) {
+    expect(box.width).toBeGreaterThanOrEqual(24)
+    expect(box.height).toBeGreaterThanOrEqual(24)
+  }
+  await section('General').click()
+})
+
 test('general: the update check answers with a sentence, whatever the checkout says', async () => {
   const row = page.locator('.s-row', { hasText: 'Launcher version' })
   await expect(row).toBeVisible()
