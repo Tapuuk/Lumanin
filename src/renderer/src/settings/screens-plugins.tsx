@@ -32,8 +32,9 @@ export function PluginsScreen(): React.JSX.Element {
       <InstallSection onInstalled={refresh} />
       {plugins
         // A bundled plugin is a feature of the app that happens to be built as
-        // one; file search has its own screen. Listing it here reads as "a
-        // plugin called files", which it is not to anyone using the launcher.
+        // one; file search is edited under Search (behaviour) and Keys (its key).
+        // Listing it here reads as "a plugin called files", which it is not to
+        // anyone using the launcher.
         .filter((plugin) => !plugin.bundled)
         .map((plugin) => (
           <PluginCard key={plugin.name} plugin={plugin} onChanged={refresh} />

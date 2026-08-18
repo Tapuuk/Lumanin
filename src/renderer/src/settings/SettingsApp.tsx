@@ -3,34 +3,22 @@ import { useEffect, useState } from 'react'
 import { useTheme } from '../useTheme'
 import { BindBanner } from './bind'
 import { Logo } from './Logo'
-import { AppearanceScreen, FileSearchScreen, GeneralScreen, KeysScreen } from './screens-basic'
+import { KeysScreen, PanelScreen } from './screens-basic'
 import { PluginsScreen } from './screens-plugins'
-import { HotkeysScreen, SearchScreen } from './screens-search'
+import { SearchScreen } from './screens-search'
+import { SECTIONS, type SectionId } from './sections'
 import { SettingsProvider, useSettingsState } from './useSettings'
 import { Wizard } from './Wizard'
 
 /**
  * The settings app's shell: a themed titlebar, a section sidebar, and a content
- * pane. The sections mirror `lumanin config`'s menu one for one — the two are
- * the same settings model behind different frontends, and a screen existing in
- * one but not the other would mean they had drifted.
+ * pane. Four sections: Panel, Search, Keys, Plugins. `lumanin config` edits the
+ * same settings model behind its own menu; only the grouping differs.
  *
  * Everything here wears the launcher's own tokens (`--lumanin-*`), applied and
  * hot-swapped by the same `useTheme` the panel uses, so a theme change repaints
  * both applications in the same moment.
  */
-
-const SECTIONS = [
-  { id: 'general', title: 'General', hint: 'Panel behaviour and size' },
-  { id: 'appearance', title: 'Appearance', hint: 'Theme, light/dark, animations' },
-  { id: 'search', title: 'Global Search', hint: 'Hotkey, ranking, web searches, pins, aliases' },
-  { id: 'file-search', title: 'File Search', hint: 'Its key, categories, opening' },
-  { id: 'keys', title: 'Action Keys', hint: 'The panel’s own keys' },
-  { id: 'hotkeys', title: 'Plugin Hotkeys', hint: 'Global keys bound straight to plugins' },
-  { id: 'plugins', title: 'Plugins', hint: 'Installed plugins, preferences, installing' }
-] as const
-
-type SectionId = (typeof SECTIONS)[number]['id']
 
 export function SettingsApp(): React.JSX.Element {
   useTheme()
@@ -76,7 +64,7 @@ function SaveErrorBanner(): React.JSX.Element | null {
 
 function Shell(): React.JSX.Element {
   const { state, refresh } = useSettingsState()
-  const [active, setActive] = useState<SectionId>('general')
+  const [active, setActive] = useState<SectionId>('panel')
   // Latched, not live: the first thing anyone does in the wizard creates
   // `config.toml`, which flips `firstRun` false on the next state push — and
   // an un-latched wizard vanished under the very click that used it. Once
@@ -112,7 +100,7 @@ function Shell(): React.JSX.Element {
 
       <div className="settings__body">
         <nav className="settings__sidebar" aria-label="Sections">
-          {SECTIONS.map((candidate) => (
+          {SECTIONS.map((candidate, index) => (
             <button
               key={candidate.id}
               type="button"
@@ -121,13 +109,13 @@ function Shell(): React.JSX.Element {
               onClick={() => setActive(candidate.id)}
             >
               {candidate.title}
+              <span className="settings__section-key">Ctrl+{String(index + 1)}</span>
             </button>
           ))}
         </nav>
 
         <main className="settings__content">
           <h1 className="settings__heading">{section.title}</h1>
-          <p className="settings__hint">{section.hint}</p>
 
           {state !== null && state.parseError !== null ? (
             <div className="s-error">
@@ -140,13 +128,10 @@ function Shell(): React.JSX.Element {
               <SaveErrorBanner />
               {/* Not while the wizard is up: its "Make it stick" step is the
                   one place first-run compositor writes happen. */}
-              {wizard !== true && <BindBanner />}
-              {active === 'general' && <GeneralScreen />}
-              {active === 'appearance' && <AppearanceScreen />}
+              {wizard !== true && <BindBanner visible={active === 'keys'} />}
+              {active === 'panel' && <PanelScreen />}
               {active === 'search' && <SearchScreen />}
-              {active === 'file-search' && <FileSearchScreen />}
               {active === 'keys' && <KeysScreen />}
-              {active === 'hotkeys' && <HotkeysScreen />}
               {active === 'plugins' && <PluginsScreen />}
             </>
           )}
