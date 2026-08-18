@@ -350,12 +350,18 @@ describe('stubs are marked so coverage cannot be fooled', () => {
   const UNSUPPORTED = Symbol.for('lumanin.unsupported')
   const DECLINED = Symbol.for('lumanin.declined')
 
-  it('marks what is unbuilt with the milestone it arrives in', () => {
-    expect((shim.Action.PickDate as unknown as Record<symbol, string>)[PENDING]).toBe('M7')
+  it('marks what is unbuilt with the reason it is unbuilt', () => {
+    expect((shim.Action.PickDate as unknown as Record<symbol, string>)[PENDING]).toMatch(
+      /date picker/
+    )
     // And what was cut carries the declined mark, not a milestone.
     expect(
       (shim.WindowManagement.getActiveWindow as unknown as Record<symbol, string>)[DECLINED]
     ).toMatch(/window manager/)
+  })
+
+  it('says a stub is unbuilt in the same shape every time', () => {
+    expect(() => (utils.useSQL as unknown as () => void)()).toThrow(/not implemented yet: /)
   })
 
   /**
@@ -365,7 +371,7 @@ describe('stubs are marked so coverage cannot be fooled', () => {
    * and says the extension is fine, which a stack trace does not.
    */
   it('marks components that exist but are not drawn yet', () => {
-    expect((shim.Grid as unknown as Record<symbol, string>)[PENDING]).toBe('M7')
+    expect((shim.Grid as unknown as Record<symbol, string>)[PENDING]).toMatch(/List with icons/)
     expect(typeof shim.Grid).toBe('function')
     expect(shim.environment.canAccess(shim.Grid)).toBe(false)
   })
@@ -446,7 +452,7 @@ describe('there is no sign-in, and it says what to do instead', () => {
   })
 })
 
-describe('the deprecated surface (Wave 1.5)', () => {
+describe('the deprecated surface', () => {
   /**
    * A CommonJS bundle destructures the whole namespace at load, so one missing
    * export takes an extension down before any of it runs. That is why this is a
