@@ -179,7 +179,7 @@ which sites it will talk to and what it sends there, and get a yes. Example: *"T
 
 **If that site needs credentials, there is one way to get them: a `password` preference.**
 Lumanin runs no online services and does not broker sign-in - `OAuth.PKCEClient`, `OAuthService`,
-`withAccessToken` and `getAccessToken` all throw, permanently, and no milestone will change that.
+`withAccessToken` and `getAccessToken` all throw, permanently, and nothing will change that.
 Declare the token in the manifest, read it with `getPreferenceValues()`, and put *where to get
 one* in the preference's `description`; the user pastes it in `lumanin plugins` and it stays on
 their machine. If the service issues only OAuth credentials and has no personal access tokens at

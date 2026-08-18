@@ -1,8 +1,8 @@
 /**
  * Compat coverage, as a number.
  *
- * RAYCAST-COMPAT.md: "Track coverage numerically … A checklist of prose can hide
- * a 40% hole; a ratio cannot." Run against a built shim:
+ * Track coverage numerically: a checklist of prose can hide a 40% hole; a
+ * ratio cannot. Run against a built shim:
  *
  *     npm run build && node scripts/compat-coverage.mjs
  *
@@ -24,11 +24,11 @@
  *
  *   built       — nothing; use it
  *   pending     — wait; it is coming, and the mark says why it is not built yet
- *   unsupported — give up; Linux cannot do this (see §"macOS-only policy")
+ *   unsupported — give up; Linux cannot do this (the macOS-only policy)
  *   declined    — take the other route; we will not build it, and the mark says
- *                 what to use instead (OAuth, since 2026-08-10)
+ *                 what to use instead (OAuth)
  *
- * The headline ratio is built-only. That is the number a milestone gate reads.
+ * The headline ratio is built-only. That is the number a release gate reads.
  */
 import fs from 'node:fs'
 import path from 'node:path'

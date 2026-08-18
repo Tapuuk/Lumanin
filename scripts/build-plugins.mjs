@@ -8,7 +8,7 @@
  * user's machine. Not a similar one: `buildExtension` is imported and called.
  *
  * That matters more than it looks. The externals list is half of the
- * single-React rule (ARCHITECTURE.md), the manifest parser is what decides
+ * single-React rule, the manifest parser is what decides
  * which commands exist, and a bundled plugin built by a second, simpler script
  * would be the one plugin in the world that was never built the way plugins are
  * built — so it would be the one that breaks when either changes.

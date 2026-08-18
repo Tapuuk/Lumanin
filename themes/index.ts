@@ -18,7 +18,7 @@ import { tokyoNight } from './tokyo-night/theme'
 
 export const BUILTIN_SEEDS: readonly ThemeSeed[] = [tokyoNight, tokyoDay, adwaitaDark, adwaitaLight]
 
-/** THEMING.md §5: the end of the resolution chain. */
+/** The end of the resolution chain. */
 export const DEFAULT_BASE = 'tokyo'
 
 /**

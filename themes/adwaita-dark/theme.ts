@@ -8,12 +8,12 @@ import type { ThemeSeed } from '../../src/shared/theme/derive'
  * libadwaita, not shipped as a stylesheet, so there is no file to derive from.
  * Falling back to Tokyo Night there would put a purple-blue launcher in the
  * middle of a grey desktop. These are libadwaita's own values, from its
- * `css-variables` documentation (checked 2026-08-08), so the panel is the same
+ * `css-variables` documentation, so the panel is the same
  * grey as the GNOME windows around it and a system accent tints it exactly as it
  * tints them.
  *
  * Only the *colours* follow GNOME. Spacing, radius and typography stay ours —
- * the same line THEMING.md draws for the Glass exception, for the same reason:
+ * the same line drawn for the Glass exception, for the same reason:
  * this is a finish, not a costume.
  */
 export const adwaitaDark: ThemeSeed = {

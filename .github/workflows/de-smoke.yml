@@ -4,7 +4,7 @@
 # is exercised by a machine and not only by the dev desktop. sway is the one
 # compositor that runs headless on a stock runner with no session, no GPU and no
 # seat; KDE (kwin_wayland --virtual) is a possible later addition, GNOME does
-# not fit a runner. This does not replace the human VM round in SHIP.md §9 —
+# not fit a runner. This does not replace the human VM round —
 # a headless compositor proves the code path, not the desktop.
 name: DE smoke
 

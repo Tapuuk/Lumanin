@@ -1,7 +1,7 @@
 import type { ThemeSeed } from '../../src/shared/theme/derive'
 
 /**
- * Tokyo Night (night variant) — the built-in default per THEMING.md §5.
+ * Tokyo Night (night variant) — the built-in default.
  *
  * Palette values are from the upstream Tokyo Night colour scheme (MIT); see
  * `themes/CREDITS.md`.

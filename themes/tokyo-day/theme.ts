@@ -3,7 +3,7 @@ import type { ThemeSeed } from '../../src/shared/theme/derive'
 /**
  * Tokyo Night Day — the built-in *light* base.
  *
- * It exists for THEMING.md §3: the XDG portal's `color-scheme` signal picks
+ * It exists because the XDG portal's `color-scheme` signal picks
  * between our built-in light and dark bases, so shipping only a dark theme would
  * make "follow the system" a setting that can only ever do nothing. Pairing it
  * with the default rather than inventing a second identity keeps the two

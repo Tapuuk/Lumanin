@@ -1,6 +1,6 @@
 # The gate every push runs: types, the unit suite, a full build, and the
 # Playwright real-window flows under Xvfb (the X11 path — the Wayland path is
-# de-smoke.yml). A repository with no green check reads as abandoned (SHIP.md §8).
+# de-smoke.yml). A repository with no green check reads as abandoned.
 name: CI
 
 # Manual by choice: a run always tests the newest commit, so one run covers
