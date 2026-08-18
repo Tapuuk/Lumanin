@@ -2,12 +2,13 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ENV_PREFIX } from '@shared/identity'
 import { formatHotkey, KEY_ALIASES, MODIFIERS, type Hotkey, type Modifier } from '@shared/hotkey'
 import type { Setting } from '@shared/settings-model'
-import { setConfig, useSettingsState } from './useSettings'
+import { setConfig, useOptimistic, useSettingsState } from './useSettings'
 
 /**
  * The generic building blocks every screen is made of. Each control saves on
- * change and lets the config round trip redraw it — the same instant-apply the
- * daemon's file watch already gives every other writer of `config.toml`.
+ * change, shows the chosen value at once, and lets the config round trip
+ * confirm it — the same instant-apply the daemon's file watch already gives
+ * every other writer of `config.toml`.
  */
 
 export function Section({ title, children }: { title?: string; children: ReactNode }): React.JSX.Element {
@@ -40,7 +41,7 @@ export function Row({
 }
 
 export function Toggle({
-  checked,
+  checked: truth,
   disabled,
   ariaLabel,
   onChange
@@ -48,8 +49,9 @@ export function Toggle({
   checked: boolean
   disabled?: boolean
   ariaLabel?: string
-  onChange: (next: boolean) => void
+  onChange: (next: boolean) => void | Promise<unknown>
 }): React.JSX.Element {
+  const [checked, commit] = useOptimistic(truth)
   return (
     <button
       type="button"
@@ -58,7 +60,10 @@ export function Toggle({
       aria-label={ariaLabel}
       className={`s-toggle${checked ? ' s-toggle--on' : ''}`}
       disabled={disabled === true}
-      onClick={() => onChange(!checked)}
+      onClick={() => {
+        const next = !checked
+        commit(next, Promise.resolve(onChange(next)))
+      }}
     >
       <span className="s-toggle__knob" />
     </button>
@@ -73,11 +78,13 @@ export function SettingControl({ setting }: { setting: Setting }): React.JSX.Ele
 
   const read = setting.read(state.resolved)
   const overridden = read.layer === 'env' || read.layer === 'flag'
-  const save = (value: string | number | boolean | null): void => {
+  const save = (value: string | number | boolean | null): Promise<void> => {
     setError(null)
-    setConfig(setting.path, value).catch((cause: unknown) => {
+    const work = setConfig(setting.path, value)
+    work.catch((cause: unknown) => {
       setError(cause instanceof Error ? cause.message : String(cause))
     })
+    return work
   }
 
   const help = overridden
@@ -96,7 +103,7 @@ function editorFor(
   setting: Setting,
   value: unknown,
   disabled: boolean,
-  save: (value: string | number | boolean | null) => void
+  save: (value: string | number | boolean | null) => Promise<void>
 ): ReactNode {
   const editor = setting.editor
   switch (editor.kind) {
@@ -149,7 +156,7 @@ const DEFAULT = '\u0000default'
 function EnumControl({
   options,
   freeform,
-  value,
+  value: truth,
   disabled,
   onSave
 }: {
@@ -157,8 +164,10 @@ function EnumControl({
   freeform: boolean
   value: string
   disabled: boolean
-  onSave: (next: string) => void
+  onSave: (next: string) => void | Promise<unknown>
 }): React.JSX.Element {
+  const [value, commit] = useOptimistic(truth)
+  const save = (next: string): void => commit(next, Promise.resolve(onSave(next)))
   const listed = options.some((option) => option.value === value)
   const [custom, setCustom] = useState<string | null>(freeform && !listed && value !== '' ? value : null)
   // The value can change under us — the CLI or an editor writing the same
@@ -183,7 +192,7 @@ function EnumControl({
             return
           }
           setCustom(null)
-          onSave(next)
+          save(next)
         }}
       >
         <option value="">Default - follow the desktop</option>
@@ -200,7 +209,7 @@ function EnumControl({
           placeholder="Theme name"
           disabled={disabled}
           onSave={(next) => {
-            if (next.trim().length > 0) onSave(next.trim())
+            if (next.trim().length > 0) save(next.trim())
           }}
         />
       )}
@@ -209,7 +218,7 @@ function EnumControl({
 }
 
 function NumberControl({
-  value,
+  value: truth,
   min,
   max,
   integer,
@@ -223,8 +232,10 @@ function NumberControl({
   integer: boolean
   presets: readonly { value: number; label: string; detail?: string }[]
   disabled: boolean
-  onSave: (next: number | null) => void
+  onSave: (next: number | null) => void | Promise<unknown>
 }): React.JSX.Element {
+  const [value, commit] = useOptimistic(truth)
+  const save = (next: number | null): void => commit(next, Promise.resolve(onSave(next)))
   const preset = presets.find((candidate) => candidate.value === value)
   const [custom, setCustom] = useState<boolean>(presets.length > 0 && value !== null && preset === undefined)
   const [text, setText] = useState<string>(value === null ? '' : String(value))
@@ -254,7 +265,7 @@ function NumberControl({
           onBlur={() => {
             if (text.trim().length === 0) {
               setProblem(null)
-              onSave(null)
+              save(null)
               return
             }
             const parsed = Number(text)
@@ -267,7 +278,7 @@ function NumberControl({
               return
             }
             setProblem(null)
-            onSave(parsed)
+            save(parsed)
           }}
         />
         {presets.length > 0 && (
@@ -288,7 +299,7 @@ function NumberControl({
       onChange={(event) => {
         const next = event.target.value
         if (next === DEFAULT) {
-          onSave(null)
+          save(null)
           return
         }
         if (next === CUSTOM) {
@@ -296,7 +307,7 @@ function NumberControl({
           setCustom(true)
           return
         }
-        onSave(Number(next))
+        save(Number(next))
       }}
     >
       <option value={DEFAULT}>Default</option>
