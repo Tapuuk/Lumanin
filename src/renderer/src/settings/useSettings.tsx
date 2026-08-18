@@ -88,6 +88,11 @@ export function useOptimistic<T>(
   return [pending === null ? value : pending.value, commit]
 }
 
+/** Comparator for `useOptimistic` over an ordered list of primitives. */
+export function sameList<T>(a: readonly T[], b: readonly T[]): boolean {
+  return a.length === b.length && a.every((item, index) => item === b[index])
+}
+
 /** Write one setting; a successful write pushes the redraw. Throws with a sentence. */
 export async function setConfig(path: readonly string[], value: SettingsSetValue): Promise<void> {
   const result = await window.lumanin.invoke('settings.set', { path, value })

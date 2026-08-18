@@ -19,7 +19,7 @@ import {
   GENERAL_SETTINGS
 } from '@shared/settings-model'
 import { HotkeyCapture, rawChordFrom, ReorderList, Row, Section, SettingControl } from './controls'
-import { guarded, setConfig, useSettingsState } from './useSettings'
+import { guarded, sameList, setConfig, useOptimistic, useSettingsState } from './useSettings'
 import { PreferenceRow } from './screens-plugins'
 import type { PluginDto, UpdateApplyDto, UpdateCheckDto } from '@shared/ipc'
 
@@ -173,10 +173,13 @@ export function FileSearchScreen(): React.JSX.Element | null {
   useEffect(() => {
     refreshFiles()
   }, [refreshFiles, state])
+  const [order, commitOrder] = useOptimistic<readonly FileCategory[]>(
+    completeFileOrder(state?.resolved.fileSearch.order.value ?? []),
+    sameList
+  )
   if (state === null) return null
 
   const hotkey = state.resolved.fileSearch.hotkey.value
-  const order = completeFileOrder(state.resolved.fileSearch.order.value)
 
   return (
     <>
@@ -221,7 +224,10 @@ export function FileSearchScreen(): React.JSX.Element | null {
           }))}
           onMove={(id, delta) => {
             const moved = move(order, id as FileCategory, delta)
-            if (moved !== null) guarded(setConfig(['file_search', 'order'], moved))
+            if (moved === null) return
+            const work = setConfig(['file_search', 'order'], moved)
+            guarded(work)
+            commitOrder(moved, work)
           }}
         />
       </Section>

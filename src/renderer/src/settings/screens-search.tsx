@@ -9,7 +9,7 @@ import { HotkeyCapture, Modal, ReorderList, Row, Section, SettingControl, TextCo
 import { describeKey } from './describe'
 import { move } from './screens-basic'
 import { TargetPicker, type PickedTarget } from './TargetPicker'
-import { guarded, invokeChecked, setConfig, useSettingsState } from './useSettings'
+import { guarded, invokeChecked, sameList, setConfig, useOptimistic, useSettingsState } from './useSettings'
 
 /**
  * Global Search: the hotkey, ranking, engines, result order, pins and aliases —
@@ -31,28 +31,55 @@ function usePickerContext(): {
   return { apps, plugins }
 }
 
+const NONE: readonly never[] = []
+
+function samePins(
+  a: readonly { key: string; title: string | null }[],
+  b: readonly { key: string; title: string | null }[]
+): boolean {
+  return a.length === b.length && a.every((pin, index) => pin.key === b[index]?.key)
+}
+
 export function SearchScreen(): React.JSX.Element | null {
   const { state } = useSettingsState()
   const context = usePickerContext()
   const [picking, setPicking] = useState<'pin' | 'alias' | null>(null)
   const [aliasWord, setAliasWord] = useState('')
+  const resolved = state?.resolved ?? null
+  const [enabledEngines, commitEngines] = useOptimistic<readonly string[]>(
+    resolved?.search.webSearches.value.map((engine) => engine.id) ?? NONE,
+    sameList
+  )
+  // Inert groups (`files`, `calculator`) are dropped from display: a config may
+  // still name them, but a lever attached to nothing is not offered.
+  const [order, commitOrder] = useOptimistic<readonly ResultGroup[]>(
+    resolved?.search.fallbackOrder.value.filter((group) => OFFERED_RESULT_GROUPS.includes(group)) ?? NONE,
+    sameList
+  )
+  const [pins, commitPins] = useOptimistic<readonly { key: string; title: string | null }[]>(
+    resolved?.search.pins.value ?? NONE,
+    samePins
+  )
 
-  if (state === null) return null
-  const resolved = state.resolved
+  if (state === null || resolved === null) return null
 
   // --- engines ---------------------------------------------------------------
-  const enabledEngines = resolved.search.webSearches.value.map((engine) => engine.id)
+  const engineById = (id: string): { id: string; name: string; keyword: string } | undefined =>
+    resolved.search.webSearches.value.find((engine) => engine.id === id) ??
+    BUILTIN_ENGINES.find((engine) => engine.id === id)
   const disabledEngines = BUILTIN_ENGINES.filter((engine) => !enabledEngines.includes(engine.id))
   const writeEngines = (ids: readonly string[]): void => {
-    guarded(setConfig(['search', 'engines'], [...ids]))
+    const work = setConfig(['search', 'engines'], [...ids])
+    guarded(work)
+    commitEngines(ids, work)
   }
 
   // --- result order ----------------------------------------------------------
-  // Inert groups (`files`, `calculator`) are dropped from display: a config may
-  // still name them, but a lever attached to nothing is not offered.
-  const order = resolved.search.fallbackOrder.value.filter((group) =>
-    OFFERED_RESULT_GROUPS.includes(group)
-  )
+  const writeOrder = (groups: readonly ResultGroup[]): void => {
+    const work = setConfig(['search', 'order'], [...groups])
+    guarded(work)
+    commitOrder(groups, work)
+  }
   const groupHelp: Readonly<Record<ResultGroup, string>> = {
     plugins: 'Your plugins’ own commands',
     apps: 'Installed applications',
@@ -63,9 +90,13 @@ export function SearchScreen(): React.JSX.Element | null {
   }
 
   // --- pins ------------------------------------------------------------------
-  const pins = resolved.search.pins.value
   const writePins = (entries: readonly { key: string; title: string | null }[]): void => {
-    guarded(invokeChecked(() => window.lumanin.invoke('settings.setPins', { entries }), 'the pins could not be saved'))
+    const work = invokeChecked(
+      () => window.lumanin.invoke('settings.setPins', { entries }),
+      'the pins could not be saved'
+    )
+    guarded(work)
+    commitPins(entries, work)
   }
 
   // --- aliases ---------------------------------------------------------------
@@ -102,12 +133,12 @@ export function SearchScreen(): React.JSX.Element | null {
         </p>
         <ReorderList
           rows={[
-            ...resolved.search.webSearches.value.map((engine) => ({
-              id: engine.id,
-              label: engine.name,
-              detail: `Keyword: ${engine.keyword}`,
-              on: true
-            })),
+            ...enabledEngines.flatMap((id) => {
+              const engine = engineById(id)
+              return engine === undefined
+                ? []
+                : [{ id: engine.id, label: engine.name, detail: `Keyword: ${engine.keyword}`, on: true }]
+            }),
             ...disabledEngines.map((engine) => ({
               id: engine.id,
               label: engine.name,
@@ -143,14 +174,11 @@ export function SearchScreen(): React.JSX.Element | null {
             }))
           ]}
           onToggle={(id, next) => {
-            const nextOrder = next
-              ? [...order, id as ResultGroup]
-              : order.filter((candidate) => candidate !== id)
-            guarded(setConfig(['search', 'order'], nextOrder))
+            writeOrder(next ? [...order, id as ResultGroup] : order.filter((candidate) => candidate !== id))
           }}
           onMove={(id, delta) => {
             const moved = move(order, id as ResultGroup, delta)
-            if (moved !== null) guarded(setConfig(['search', 'order'], [...moved]))
+            if (moved !== null) writeOrder(moved)
           }}
         />
       </Section>
