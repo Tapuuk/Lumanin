@@ -17,10 +17,10 @@ import Database, { type Database as Db } from 'better-sqlite3'
  * ahead log is not a private database.
  *
  * This is *not* a claim that secrets are safe here. Anything running as this
- * user can still read them, and SECURITY.md is honest that plugins are not
+ * user can still read them, and plugins are not
  * sandboxed. It is the file mode matching the directory that already says who
- * this data belongs to. Real encryption at rest is a separate decision — see
- * SHIP.md §10d for why it is deferred rather than forgotten.
+ * this data belongs to. Real encryption at rest is a separate decision,
+ * deferred rather than forgotten: no bundled plugin declares a secret yet.
  */
 
 /** `0600`, applied best-effort: a filesystem that cannot do it must not stop the daemon. */

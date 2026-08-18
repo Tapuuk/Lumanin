@@ -35,7 +35,7 @@ const WORKER_PATH = join(__dirname, 'worker.js')
 const MODULE_PATH = join(__dirname, 'lumanin.js')
 
 /**
- * The per-worker memory ceiling, from ARCHITECTURE.md's budget table.
+ * The per-worker memory ceiling.
  *
  * A hard limit, not a warning: an extension that allocates past it gets an OOM
  * inside its own isolate, which arrives here as an `error` event and becomes an
@@ -229,7 +229,7 @@ async function create(spec: SessionSpec): Promise<{ sessionId: string }> {
 /**
  * A worker that died, which is the case this whole layer exists for.
  *
- * ARCHITECTURE.md §"Failure containment": an error card with the stack and a
+ * Failure containment: an error card with the stack and a
  * Reload action, and the session garbage-collected. The alternative — a session
  * that simply stops answering — leaves the panel showing the last frame the
  * extension rendered, indistinguishable from one that is merely slow.

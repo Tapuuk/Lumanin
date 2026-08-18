@@ -3,9 +3,9 @@ import { join } from 'node:path'
 import { ENV_PREFIX } from '../shared/identity'
 
 /**
- * Structured JSONL logging (see `docs/ARCHITECTURE.md` §Logging).
+ * Structured JSONL logging.
  *
- * Redaction lives here and only here. SECURITY.md makes this the logger's job
+ * Redaction lives here and only here. It is the logger's job
  * rather than each call site's: clipboard contents, `password`-typed preference
  * values must never reach disk, and a rule that depends on every
  * future call site remembering it is a rule that will be broken.
@@ -173,7 +173,7 @@ export function createFileSink(logDir: string, basename = 'lumanin.jsonl'): Sink
  * is an uncaught exception in the main process, which Electron shows as a
  * modal error dialog and which leaves the IPC that dispatches window actions
  * dead behind it — one dropped log line taking the whole app's interactivity
- * with it. Observed 2026-08-10, from a `Logger.error` call after the parent
+ * with it. Observed from a `Logger.error` call after the parent
  * that owned the pipe was killed.
  *
  * Losing a diagnostic line is the correct outcome; the process staying up is

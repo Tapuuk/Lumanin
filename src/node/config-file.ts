@@ -13,9 +13,9 @@ import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
 /**
  * Reading and rewriting `config.toml` from the CLI.
  *
- * The rule from CONFIG.md is that a config we do not fully understand is never
+ * The rule is that a config we do not fully understand is never
  * clobbered: this parses the file into a plain document, edits *that*, and
- * writes it back, so keys belonging to milestones we have not built yet survive
+ * writes it back, so keys for features not built yet survive
  * a round trip untouched. Insertion order survives too, which is what keeps the
  * file recognisable to the person who wrote it.
  *

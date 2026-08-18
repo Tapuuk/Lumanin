@@ -13,7 +13,7 @@
  * rather than described, because we do not implement them and a description we
  * cannot verify is a guess.
  *
- * ARCHITECTURE.md pins the version exactly for this reason: the reconciler has no
+ * The version is pinned exactly for this reason: the reconciler has no
  * semver contract and its host config changes between patch releases.
  */
 declare module 'react-reconciler' {

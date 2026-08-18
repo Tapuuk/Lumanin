@@ -7,7 +7,7 @@ import { createIdFactory, isText, type Child, type Instance, type TextInstance }
 /**
  * The custom renderer.
  *
- * ARCHITECTURE.md calls this the heart, and the thing to understand about it is
+ * This is the heart of the extension host, and the thing to understand about it is
  * how *little* it does: React does the work, and a host config's job is only to
  * say what an "instance" is and how instances are attached to each other. Ours
  * are plain objects, so every method here is two lines.
@@ -86,7 +86,7 @@ const config: HostConfig<Instance, TextInstance, Container, HostContext, Instanc
    * Always `false`, deliberately. Returning `true` for text-only children is a
    * DOM optimisation — set `textContent` and skip creating child nodes — and
    * taking it would make a text child vanish from the serialized tree instead of
-   * appearing as a node. ARCHITECTURE.md requires text nodes to round-trip
+   * appearing as a node. Text nodes must round-trip
    * exactly, and this is the switch that decides whether they exist at all.
    */
   shouldSetTextContent() {

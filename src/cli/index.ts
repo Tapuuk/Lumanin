@@ -138,8 +138,8 @@ async function main(): Promise<void> {
     return
   }
   if (parsed.clientCommand === 'config') {
-    // `config` is the terminal menu, `settings` is the window (user decision,
-    // 2026-08-12 — a person typing a verb into a terminal wants the terminal
+    // `config` is the terminal menu, `settings` is the window (user decision:
+    // a person typing a verb into a terminal wants the terminal
     // answer). Both edit the same config.toml, so which frontend answered
     // never matters. `--tui` is accepted for compatibility and is a no-op.
     process.exit(await (await import('./tools')).runConfig())

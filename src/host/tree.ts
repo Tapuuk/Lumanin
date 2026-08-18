@@ -142,8 +142,8 @@ function encodeValue(
 
   // A React element that escaped slot hoisting. Serializing it would send a
   // lump of React internals — fibers, symbols, circular parents — so it is
-  // refused by name instead. This is ARCHITECTURE.md's "non-serializable props
-  // are rejected with a clear error naming the prop".
+  // refused by name instead: non-serializable props are rejected with a clear
+  // error naming the prop.
   if (isReactElement(value)) {
     sink.reject(
       nodeId,

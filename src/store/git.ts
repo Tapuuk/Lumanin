@@ -5,8 +5,8 @@ import { spawn } from 'node:child_process'
  * and `plugin-install`'s arbitrary repository.
  *
  * Shared so there is one place that spawns git, and so the rule that matters is
- * stated once: **an argv array, never a shell string** (SECURITY.md §"Rules for
- * reviewers"). Both callers take a URL from somewhere the user pointed at, and a
+ * stated once: **an argv array, never a shell string**. Both callers take a URL
+ * from somewhere the user pointed at, and a
  * URL concatenated into a shell line is the classic way that ends badly.
  */
 

@@ -6,7 +6,7 @@ import { decay, launchWeight, type Frecency } from '../shared/frecency'
 /**
  * Launch history, persisted.
  *
- * **One database file per concern**, per CLAUDE.md — this one is only frecency.
+ * **One database file per concern** — this one is only frecency.
  * The reason is recovery rather than tidiness: a corrupt clipboard database
  * should never cost the user their launch habits, and a schema migration for one
  * feature should never be able to take another offline.
@@ -14,7 +14,7 @@ import { decay, launchWeight, type Frecency } from '../shared/frecency'
  * better-sqlite3 v13 ships **Node-API prebuilds**, which are ABI-stable across
  * Node and Electron versions. Verified on this tree: Electron 43 reports ABI 148
  * and local Node reports 147, and the same `prebuilds/linux-x64.node` loads under
- * both. So the `electron-rebuild` step CLAUDE.md anticipated for M2 is not
+ * both. So an `electron-rebuild` step is not
  * needed, and packaging does not have to rebuild per Electron bump.
  */
 

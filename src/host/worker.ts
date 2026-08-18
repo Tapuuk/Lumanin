@@ -12,14 +12,14 @@ import type { HandlerFn, ShimRuntime } from '../api-shim/runtime'
 /**
  * One command, in one v8 isolate.
  *
- * SECURITY.md is blunt about what this is and is not: a Worker is a **fault**
+ * Be blunt about what this is and is not: a Worker is a **fault**
  * boundary, not a security one. The extension gets full Node — filesystem,
  * network, `child_process` — and what the isolate buys is that its crash, its
  * infinite loop and its 600 MB array take down one command instead of the
  * launcher.
  *
  * **One worker per command, not per extension** — a deliberate departure from
- * CLAUDE.md's table, for a reason that only shows up once the shim exists. Half
+ * the original design, for a reason that only shows up once the shim exists. Half
  * the API surface is module-level state that belongs to *one* running command:
  * `environment.commandName`, the navigation stack, and the legacy `render()`
  * root. Two commands sharing an isolate would mean every one of those has to
@@ -60,8 +60,8 @@ type ShimModule = typeof import('../api-shim/lumanin')
 /**
  * The modules an extension must never bring its own copy of.
  *
- * `react` is the load-bearing one (ARCHITECTURE.md §"the single-React-copy
- * rule"): `react-reconciler@0.33` peers on `^19.2.0`, so a bundle that inlined
+ * `react` is the load-bearing one (the single-React-copy
+ * rule): `react-reconciler@0.33` peers on `^19.2.0`, so a bundle that inlined
  * its own React would leave two copies in this isolate — and two copies of
  * React means hooks resolve against the wrong dispatcher and fail with
  * "invalid hook call", an error that names nothing about the actual cause.
@@ -230,7 +230,7 @@ function describe(error: unknown): string {
  *
  * Extensions log; that is how their authors debug them, and swallowing it makes
  * ours the launcher you cannot develop against. `lumanin ext log <name>` tails
- * these, tagged with the session (ARCHITECTURE.md §Logging).
+ * these, tagged with the session.
  */
 function captureConsole(): void {
   const levels = { debug: 'debug', log: 'info', info: 'info', warn: 'warn', error: 'error' } as const
@@ -328,7 +328,7 @@ function start(session: SessionSpec): null {
 /**
  * Fail loudly if two Reacts ended up here anyway.
  *
- * ARCHITECTURE.md asks for this explicitly, and the reason is the error it
+ * This check is deliberate, and the reason is the error it
  * replaces: two copies of React produce "invalid hook call" from inside the
  * extension's own component, which sends its author looking at their hooks. The
  * cache scan is the honest check — the module hook makes this near-impossible,

@@ -12,7 +12,7 @@
  * pair of arrays. Writing it once against an abstract `send` is what makes those
  * testable without an Electron window or a real thread.
  *
- * **Only registered methods.** ARCHITECTURE.md makes this a rule rather than a
+ * **Only registered methods.** This is a rule rather than a
  * default, and the reason is the same one behind the socket's verb allow-list:
  * the code on the far side of a worker boundary is a stranger's, and a router
  * that dispatches by looking a string up in the object it happens to be holding

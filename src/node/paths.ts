@@ -4,7 +4,7 @@ import { isAbsolute, join } from 'node:path'
 import { APP_ID, CONFIG_BASENAME, SOCKET_BASENAME } from '../shared/identity'
 
 /**
- * XDG path resolution. `docs/CONFIG.md` is the contract; never hardcode `~/.config`.
+ * XDG path resolution. Never hardcode `~/.config`.
  *
  * Everything is derived from an injected environment so tests can drive the whole
  * matrix (unset vars, relative vars, missing runtime dir) without touching the
