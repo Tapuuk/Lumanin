@@ -113,9 +113,14 @@ function send<E extends EventName>(event: E, payload: EventMap[E]): void {
 let pushSequence = 0
 function pushState(): void {
   const sequence = ++pushSequence
-  void ipc.state().then((state) => {
-    if (sequence === pushSequence) send('settings.changed', state)
-  })
+  void ipc
+    .state()
+    .then((state) => {
+      if (sequence === pushSequence) send('settings.changed', state)
+    })
+    .catch((error: unknown) => {
+      logger.warn('settings state push failed', { error })
+    })
 }
 
 const ipc = new SettingsIpc({
