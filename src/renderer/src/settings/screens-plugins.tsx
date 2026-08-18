@@ -127,7 +127,7 @@ function PluginCard({ plugin, onChanged }: { plugin: PluginDto; onChanged: () =>
           </div>
           {plugin.bundled && (
             <p className="s-help">
-              Ships inside the app, so it can be turned off but not removed - an upgrade would
+              Ships inside the app, so it can be turned off but not removed. An upgrade would
               bring it back. A plugin you install under the same name replaces it.
             </p>
           )}
@@ -214,12 +214,12 @@ function ExportModal({ plugin, onClose }: { plugin: PluginDto; onClose: () => vo
         <>
           <p className="s-help">
             Copies the plugin&rsquo;s source into your Downloads folder as a directory ready to
-            publish - push it to any public git repository and anyone installs it from the URL.
+            publish. Push it to any public git repository and anyone can install it from the URL.
             A README and .gitignore are included.
           </p>
           <label className="s-checkline">
             <input type="checkbox" checked={mit} onChange={(event) => setMit(event.target.checked)} />
-            Add an MIT license (recommended - matches Lumanin&rsquo;s own)
+            Add an MIT license (recommended, matches Lumanin&rsquo;s own)
           </label>
           <div className="s-modal__buttons">
             <button type="button" className="s-button" onClick={onClose}>
@@ -251,7 +251,7 @@ function ExportModal({ plugin, onClose }: { plugin: PluginDto; onClose: () => vo
           {result.publishedAt !== undefined && (
             <p className="s-help">
               This plugin was installed from {result.publishedAt}, so it is already published
-              there - exporting makes sense for a fork.
+              there. Export it to start a fork.
             </p>
           )}
           {published === null && result.ghReady === true && (
@@ -388,7 +388,7 @@ function PasswordControl({
       <input
         className="s-input"
         type="password"
-        placeholder={stored ? '••••••••  (set - type to replace)' : 'Paste the token'}
+        placeholder={stored ? '••••••••  (set, type to replace)' : 'Paste the token'}
         value={text}
         onChange={(event) => setText(event.target.value)}
         onBlur={() => {
@@ -534,7 +534,7 @@ function InstallSection({ onInstalled }: { onInstalled: () => void }): React.JSX
   return (
     <Section title="Install a plugin">
       <p className="s-help">
-        From any public git repository over https - <code>owner/name</code>, a GitHub URL, or a
+        From any public git repository over https: <code>owner/name</code>, a GitHub URL, or a
         directory path on this machine.
       </p>
       <div className="s-inline">
@@ -577,7 +577,7 @@ function InstallSection({ onInstalled }: { onInstalled: () => void }): React.JSX
               Packages:{' '}
               {inspection.dependencies !== undefined && inspection.dependencies.length > 0
                 ? `${String(inspection.dependencies.length)}: ${inspection.dependencies.join(', ')}`
-                : 'none - it depends on nothing outside Lumanin'}
+                : 'none. It depends on nothing outside Lumanin.'}
             </div>
             {inspection.replacing === true && (
               <div className="s-error">
@@ -587,7 +587,7 @@ function InstallSection({ onInstalled }: { onInstalled: () => void }): React.JSX
           </div>
           <p className="s-help">
             A plugin is a program. Running one gives its code the same access to your files, your
-            network and your session that you have - the same trust as <code>npm install</code> or
+            network and your session that you have, the same trust as <code>npm install</code> or
             an AUR package. Nothing is sandboxed, and nobody has reviewed this code. Read it first
             if you do not know the author: <code>{inspection.directory}</code>
           </p>

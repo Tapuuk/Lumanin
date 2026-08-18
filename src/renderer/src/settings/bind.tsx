@@ -156,7 +156,7 @@ export function BindBanner(): React.JSX.Element | null {
   if (!state.bindable) {
     return (
       <div className="s-banner s-banner--info">
-        This desktop binds shortcuts through its own settings - add a shortcut there running{' '}
+        This desktop binds shortcuts through its own settings. Add a shortcut there running{' '}
         <code>lumanin toggle</code> (and <code>lumanin open …</code> for the rest). The values here
         stay what Lumanin reports.
       </div>
@@ -178,7 +178,7 @@ export function BindBanner(): React.JSX.Element | null {
             failures.map((result) => (
               <div key={result.target} className="s-error">
                 ✘ {result.target}
-                {result.detail !== undefined ? ` - ${result.detail}` : ''}
+                {result.detail !== undefined ? `: ${result.detail}` : ''}
               </div>
             ))
           )}

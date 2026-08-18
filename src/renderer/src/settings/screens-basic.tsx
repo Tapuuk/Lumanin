@@ -83,8 +83,8 @@ function UpdatesSection(): React.JSX.Element {
         label="Launcher version"
         help={
           check === null
-            ? 'Checks where this copy was installed from - a git checkout or a package - and reports what is newer. Nothing is downloaded until you say so.'
-            : `${check.current}${check.kind === 'git' ? ` - checkout at ${check.root}` : ''}`
+            ? 'Checks where this copy was installed from, a git checkout or a package, and reports what is newer. Nothing is downloaded until you confirm.'
+            : `${check.current}${check.kind === 'git' ? `, checkout at ${check.root}` : ''}`
         }
       >
         <button type="button" className="s-button" disabled={checking || applying} onClick={runCheck}>
@@ -114,7 +114,7 @@ function UpdatesSection(): React.JSX.Element {
             <span>
               {String(check.changes.length)} new {check.changes.length === 1 ? 'commit' : 'commits'}
               {check.latest !== null ? ` (${check.latest})` : ''}. Updating pulls, rebuilds in place and restarts
-              the launcher - a minute or two.
+              the launcher. It takes a minute or two.
               {check.dirty ? ' This checkout has local edits, which the update refuses to overwrite.' : ''}
             </span>
             <button
@@ -186,7 +186,7 @@ export function FileSearchScreen(): React.JSX.Element | null {
       <Section>
         <Row
           label="Hotkey"
-          help="The only way into file search - it is deliberately not a row at the root. Backspace while capturing removes the key."
+          help="The only way into file search. It is not a row at the root. Backspace while capturing removes the key."
         >
           <HotkeyCapture
             value={hotkey}
@@ -214,7 +214,7 @@ export function FileSearchScreen(): React.JSX.Element | null {
       </Section>
       <Section title="Category order">
         <p className="s-help">
-          Which kind of file wins when names tie - the first matching category ranks first.
+          Which kind of file wins when names tie. The first matching category ranks first.
         </p>
         <ReorderList
           rows={order.map((category: FileCategory) => ({
@@ -243,9 +243,8 @@ export function KeysScreen(): React.JSX.Element | null {
   return (
     <Section>
       <p className="s-help">
-        The panel&apos;s own keys - answered while the launcher has focus, so nothing is written
-        into the desktop. A bare, unmodified key also types, so it fires only while the search box
-        is empty.
+        The panel&apos;s own keys, answered while the launcher has focus. Nothing is written into
+        the desktop. A bare key also types, so it fires only while the search box is empty.
       </p>
       {KEY_ACTIONS.map((action) => (
         <KeyActionRow key={action} action={action} chords={keys[action].map(formatKeyChord)} />
@@ -315,7 +314,7 @@ function KeyActionRow({
             const formatted = formatKeyChord(parsed)
             if (!chords.includes(formatted)) save([...chords, formatted])
             if (isTypeable(parsed)) {
-              setNote('A bare key also types - it fires only while the search box is empty')
+              setNote('A bare key also types. It fires only while the search box is empty.')
             }
           }}
         >
