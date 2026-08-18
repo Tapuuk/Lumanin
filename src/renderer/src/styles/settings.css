@@ -10,20 +10,17 @@
 body:has(.settings) {
   background: var(--lumanin-bg);
 
-  /* The app's corner rounding, derived from the theme's radius tokens so a
-     square-corner theme squares this window too. Multiplied, not offset: at
-     the default outer radius of 6px these come out at the 10/12/16px the
-     design was drawn with, and at 0 they are 0. */
-  --s-radius-inner: var(--lumanin-radius-inner, 4px);
-  --s-radius: calc(var(--lumanin-radius-outer, 6px) * 1.667);
-  --s-radius-large: calc(var(--lumanin-radius-outer, 6px) * 2);
-  --s-radius-hero: calc(var(--lumanin-radius-outer, 6px) * 2.667);
+  /* The theme's own radii: inner for controls and rows, outer for cards. */
+  --s-radius: var(--lumanin-radius-inner, 4px);
+  --s-radius-large: var(--lumanin-radius-outer, 6px);
 }
 
 .settings {
   display: flex;
   flex-direction: column;
   height: 100%;
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 13px;
   color: var(--lumanin-text);
 }
 
@@ -56,7 +53,6 @@ body:has(.settings) {
    content headings. */
 .settings__title {
   flex: 1 1 auto;
-  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -65,14 +61,14 @@ body:has(.settings) {
 
 .settings__close {
   flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border: none;
   border-radius: var(--lumanin-radius-inner);
   background: none;
   font: inherit;
   font-size: 13px;
-  color: var(--lumanin-text-faint);
+  color: var(--lumanin-text-muted);
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
@@ -103,11 +99,10 @@ body:has(.settings) {
 .settings__section {
   padding: 9px 14px;
   border: none;
-  border-radius: var(--s-radius);
+  border-radius: var(--s-radius-large);
   background: none;
   font: inherit;
-  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--lumanin-text-muted);
   text-align: left;
   cursor: pointer;
@@ -132,15 +127,16 @@ body:has(.settings) {
 
 .settings__heading {
   margin: 0 0 4px;
-  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
-  font-size: 20px;
+  font-size: 15px;
   font-weight: 600;
 }
 
 .settings__hint {
   margin: 0 0 18px;
+  user-select: text;
+  cursor: auto;
   font-size: 13px;
-  color: var(--lumanin-text-faint);
+  color: var(--lumanin-text-muted);
 }
 
 
@@ -176,11 +172,10 @@ body:has(.settings) {
 
 .s-section__title {
   margin: 0 0 10px;
-  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--lumanin-text-faint);
+  color: var(--lumanin-text-muted);
 }
 
 .s-row {
@@ -197,14 +192,16 @@ body:has(.settings) {
 }
 
 .s-row__label {
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--lumanin-text);
 }
 
 .s-row__help {
   margin-top: 2px;
+  user-select: text;
+  cursor: auto;
   font-size: 12px;
-  color: var(--lumanin-text-faint);
+  color: var(--lumanin-text-muted);
 }
 
 .s-row__control {
@@ -218,26 +215,31 @@ body:has(.settings) {
 
 .s-help {
   margin: 0 0 10px;
+  user-select: text;
+  cursor: auto;
   font-size: 12.5px;
   color: var(--lumanin-text-muted);
 }
 
 .s-help code,
 .s-banner code {
-  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
   font-size: 0.95em;
   background: var(--lumanin-bg-hover);
   padding: 1px 4px;
-  border-radius: var(--s-radius-inner);
+  border-radius: var(--s-radius);
 }
 
 .s-error {
+  user-select: text;
+  cursor: auto;
   font-size: 12.5px;
   color: var(--lumanin-err);
   overflow-wrap: anywhere;
 }
 
 .s-ok {
+  user-select: text;
+  cursor: auto;
   font-size: 12.5px;
   color: var(--lumanin-ok);
 }
@@ -298,7 +300,6 @@ body:has(.settings) {
   font: inherit;
   font-size: 13px;
   color: var(--lumanin-text);
-  outline: none;
   max-width: 280px;
 }
 
@@ -314,14 +315,6 @@ body:has(.settings) {
 .s-input:disabled {
   opacity: 0.5;
   cursor: default;
-}
-
-/* `:focus` on both, deliberately: the two controls sit side by side and must
-   signal focus under the same condition (the global :focus-visible ring is
-   stripped by the outline reset above). */
-.s-select:focus,
-.s-input:focus {
-  border-color: var(--lumanin-accent);
 }
 
 .s-input--number {
@@ -374,8 +367,9 @@ body:has(.settings) {
 }
 
 .s-iconbtn {
-  width: 27px;
-  height: 27px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0 6px;
   border: 1px solid var(--lumanin-border);
   border-radius: var(--s-radius);
   background: none;
@@ -432,15 +426,17 @@ body:has(.settings) {
 }
 
 .s-list__label {
-  font-size: 13.5px;
+  font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .s-list__detail {
-  font-size: 11.5px;
-  color: var(--lumanin-text-faint);
+  user-select: text;
+  cursor: auto;
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -455,6 +451,8 @@ body:has(.settings) {
 /* ------------------------------------------------------------------ banner */
 
 .s-banner {
+  user-select: text;
+  cursor: auto;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -490,7 +488,7 @@ body:has(.settings) {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--lumanin-border);
-  border-radius: var(--s-radius-hero);
+  border-radius: var(--s-radius-large);
   background: var(--lumanin-bg);
 }
 
@@ -504,7 +502,7 @@ body:has(.settings) {
   justify-content: space-between;
   padding: 12px 16px;
   border-bottom: 1px solid var(--lumanin-border);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -527,9 +525,10 @@ body:has(.settings) {
 }
 
 .s-diff__path {
-  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
-  font-size: 11.5px;
-  color: var(--lumanin-text-faint);
+  user-select: text;
+  cursor: auto;
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
   margin-bottom: 4px;
   overflow-wrap: anywhere;
 }
@@ -540,7 +539,6 @@ body:has(.settings) {
   padding: 9px 12px;
   border-radius: var(--s-radius);
   background: var(--lumanin-bg-hover);
-  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
   font-size: 11.5px;
   color: var(--lumanin-text-muted);
   overflow-x: auto;
@@ -557,7 +555,6 @@ body:has(.settings) {
   border: 1px solid var(--lumanin-border);
   border-radius: var(--s-radius);
   background: var(--lumanin-bg-hover);
-  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
   font-size: 12.5px;
   color: var(--lumanin-text);
   cursor: pointer;
@@ -592,16 +589,21 @@ body:has(.settings) {
   padding: 2px 8px;
   border: 1px solid var(--lumanin-border);
   border-radius: 999px;
-  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
   font-size: 12px;
   color: var(--lumanin-text);
 }
 
 .s-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px -6px -4px 0;
   border: none;
   background: none;
-  font-size: 10px;
-  color: var(--lumanin-text-faint);
+  font-size: 11px;
+  color: var(--lumanin-text-muted);
   cursor: pointer;
   padding: 0;
 }
@@ -616,7 +618,7 @@ body:has(.settings) {
   border-radius: 999px;
   border: 1px solid var(--lumanin-border);
   font-size: 11px;
-  color: var(--lumanin-text-faint);
+  color: var(--lumanin-text-muted);
 }
 
 .s-badge--ok {
@@ -642,7 +644,7 @@ body:has(.settings) {
   border-radius: var(--s-radius);
   background: none;
   font: inherit;
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--lumanin-text);
   text-align: left;
   cursor: pointer;
@@ -658,9 +660,11 @@ body:has(.settings) {
 }
 
 .s-pickrow__detail {
+  user-select: text;
+  cursor: auto;
   flex: 0 1 auto;
-  font-size: 11.5px;
-  color: var(--lumanin-text-faint);
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -682,7 +686,8 @@ body:has(.settings) {
   border: none;
   background: none;
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--lumanin-text);
   text-align: left;
   cursor: pointer;
@@ -699,6 +704,8 @@ body:has(.settings) {
 }
 
 .s-facts {
+  user-select: text;
+  cursor: auto;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -768,7 +775,6 @@ body:has(.settings) {
 
 .wiz__title {
   margin: 0 0 10px;
-  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
   font-size: 24px;
   font-weight: 600;
   color: var(--lumanin-text);
@@ -848,7 +854,7 @@ body:has(.settings) {
 
 .wiz__choice-note {
   font-size: 11px;
-  color: var(--lumanin-text-faint);
+  color: var(--lumanin-text-muted);
 }
 
 .wiz__center {
@@ -889,7 +895,7 @@ body:has(.settings) {
   background: none;
   font: inherit;
   font-size: 12px;
-  color: var(--lumanin-text-faint);
+  color: var(--lumanin-text-muted);
   cursor: pointer;
 }
 
