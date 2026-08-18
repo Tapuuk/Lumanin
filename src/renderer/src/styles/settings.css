@@ -260,6 +260,7 @@ body:has(.settings) {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  max-width: 100%;
 }
 
 /* ----------------------------------------------------------------- controls */
@@ -311,7 +312,7 @@ body:has(.settings) {
   font: inherit;
   font-size: 13px;
   color: var(--lumanin-text);
-  max-width: 280px;
+  max-width: min(280px, 100%);
 }
 
 .s-input {
@@ -566,6 +567,7 @@ body:has(.settings) {
   border: 1px solid var(--lumanin-border);
   border-radius: var(--s-radius);
   background: var(--lumanin-bg-hover);
+  font: inherit;
   font-size: 12.5px;
   color: var(--lumanin-text);
   cursor: pointer;
@@ -613,6 +615,7 @@ body:has(.settings) {
   margin: -4px -6px -4px 0;
   border: none;
   background: none;
+  font: inherit;
   font-size: 11px;
   color: var(--lumanin-text-muted);
   cursor: pointer;
