@@ -95,6 +95,7 @@ test('a fresh home opens the first-run wizard; walking it through writes the mar
   // The apply step offers no skip: "Later" or "Next" leaves without writing.
   await page.locator('.wiz__buttons .s-button', { hasText: 'Next' }).click()
   await expect(page.locator('.wiz__title')).toContainText('Make it stick')
+  await expect(page.locator('.wiz__buttons .s-button', { hasText: /^(Later|Next)$/ }).first()).toBeVisible()
   await expect(page.locator('.wiz__skip')).toHaveCount(0)
   await expect(page.locator('.wiz__buttons .s-button', { hasText: 'Skip' })).toHaveCount(0)
   await page.locator('.wiz__buttons .s-button', { hasText: /^(Later|Next)$/ }).first().click()

@@ -44,8 +44,8 @@ export function Wizard({ onDone }: { onDone: () => void }): React.JSX.Element {
   }
 
   // Esc never reaches the app's close handler while the wizard is up. On the
-  // first and last steps it is the same answer as "Skip setup"; on the apply
-  // step the visible buttons decide.
+  // first step it is "Skip setup", on the last it is "Open Settings"; on the
+  // apply step the visible buttons decide.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape' || isCaptureActive()) return
