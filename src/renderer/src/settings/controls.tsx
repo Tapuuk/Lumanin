@@ -251,7 +251,7 @@ export function PickButton({
       <button
         type="button"
         className="s-pick"
-        aria-haspopup="listbox"
+        aria-haspopup="dialog"
         aria-expanded={open}
         disabled={disabled === true}
         onClick={() => setOpen(true)}
@@ -311,12 +311,6 @@ function PickOverlay({
       case 'ArrowUp':
         setActive(Math.max(0, current - 1))
         break
-      case 'Home':
-        setActive(0)
-        break
-      case 'End':
-        setActive(Math.max(0, last))
-        break
       case 'Enter':
         if (activeRow !== undefined) onPick(activeRow.value)
         break
@@ -329,7 +323,7 @@ function PickOverlay({
   return (
     <Modal title={title} onClose={onClose}>
       <input
-        className="s-input"
+        className="s-input s-input--fill"
         type="text"
         placeholder="Type to narrow…"
         aria-label="Narrow the choices"
@@ -366,8 +360,8 @@ function PickOverlay({
             </button>
           )
         })}
-        {shown.length === 0 && <div className="s-help">Nothing matches.</div>}
       </div>
+      {shown.length === 0 && <div className="s-help">Nothing matches.</div>}
     </Modal>
   )
 }

@@ -355,6 +355,12 @@ body:has(.settings) {
   width: 90px;
 }
 
+.s-input--fill {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
 /* The pick button: the current choice, opened into a filterable list. */
 .s-pick {
   display: inline-flex;
@@ -397,8 +403,9 @@ body:has(.settings) {
 
 /* Presets as one segmented control; the number field after it holds any other value. */
 .s-segments {
-  display: inline-flex;
-  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .s-segments__pill {

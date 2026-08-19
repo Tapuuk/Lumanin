@@ -607,6 +607,21 @@ test('Up and Down walk the rows, landing on the control so Space acts on it', as
   await page.keyboard.press('Escape')
   await expect(page.locator('.s-modal')).toHaveCount(0)
   expect(await page.evaluate(() => document.activeElement?.className)).toBe('s-pick')
+
+  // A row of presets lands on the checked pill, not the leftmost one, so a
+  // Space there keeps the value instead of swapping it for the first preset.
+  const width = page.locator('.s-row', { hasText: 'Panel width' })
+  const wide = width.getByRole('radio', { name: 'Wide', exact: true })
+  await wide.click()
+  await expect.poll(config).toContain('width = 900')
+  await page.locator('.settings__heading').click()
+  for (let i = 0; i < 12 && !(await width.evaluate((el) => el.contains(document.activeElement))); i++) {
+    await page.keyboard.press('ArrowDown')
+  }
+  expect(await wide.evaluate((el) => el === document.activeElement)).toBe(true)
+  await page.keyboard.press('Space')
+  await expect(wide).toHaveAttribute('aria-checked', 'true')
+  await expect.poll(config).toContain('width = 900')
 })
 
 test('a slash typed in a text field is a character, not the filter key', async () => {
