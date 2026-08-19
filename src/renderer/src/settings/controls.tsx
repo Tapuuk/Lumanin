@@ -319,23 +319,53 @@ export function PickButton({
   )
 }
 
-function PickOverlay({
+export function PickOverlay({
   title,
   value,
   options,
   onPick,
-  onClose
+  onClose,
+  wide,
+  crumbs,
+  onCrumb,
+  onBack,
+  filter: withFilter,
+  levelKey,
+  empty,
+  children
 }: {
   title: string
-  value: string
+  /** The option shown active on open, if any. */
+  value?: string
   options: readonly PickOption[]
   onPick: (value: string) => void
   onClose: () => void
+  wide?: boolean
+  /** The trail from the root to here, current level last; hidden with one crumb or fewer. */
+  crumbs?: readonly string[]
+  /** A click on any crumb but the last. */
+  onCrumb?: (index: number) => void
+  /** One level up: Backspace or ArrowLeft with an empty filter. */
+  onBack?: () => void
+  /** Whether the filter input is shown; defaults to true. */
+  filter?: boolean
+  /** When it changes, the filter text and the active row reset. */
+  levelKey?: string
+  /** Shown when there are no options at all (not when a filter empties them). */
+  empty?: ReactNode
+  /** Rendered after the list. */
+  children?: ReactNode
 }): React.JSX.Element {
   const id = useId()
   const [filter, setFilter] = useState('')
-  const shown = options.filter((option) => matchesFilter(filter, option.label, option.detail))
   const [active, setActive] = useState(() => Math.max(0, options.findIndex((option) => option.value === value)))
+  const [seen, setSeen] = useState(levelKey)
+  if (levelKey !== seen) {
+    setSeen(levelKey)
+    setFilter('')
+    setActive(0)
+  }
+  const shown = options.filter((option) => matchesFilter(filter, option.label, option.detail))
   const rowId = (option: PickOption): string => `${id}-${String(options.indexOf(option))}`
   const activeRow = shown[Math.min(active, shown.length - 1)]
 
@@ -362,48 +392,86 @@ function PickOverlay({
     event.preventDefault()
   }
 
+  const onBodyKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (onBack === undefined || isCaptureActive()) return
+    if (event.key !== 'Backspace' && event.key !== 'ArrowLeft') return
+    if (event.target instanceof HTMLInputElement && event.target.value.length > 0) return
+    event.preventDefault()
+    onBack()
+  }
+
+  const trail = crumbs ?? []
+  const current = trail[trail.length - 1]
+
   return (
-    <Modal title={title} onClose={onClose}>
-      <input
-        className="s-input s-input--fill"
-        type="text"
-        placeholder="Type to narrow…"
-        aria-label="Narrow the choices"
-        role="combobox"
-        aria-expanded="true"
-        aria-controls={`${id}-list`}
-        aria-activedescendant={activeRow === undefined ? undefined : rowId(activeRow)}
-        value={filter}
-        onChange={(event) => {
-          setFilter(event.target.value)
-          setActive(0)
-        }}
-        onKeyDown={onKeyDown}
-        autoFocus
-      />
-      <div id={`${id}-list`} className="s-picklist s-picklist--overlay" role="listbox" aria-label={title}>
-        {shown.map((option) => {
-          const isActive = option === activeRow
-          return (
-            <button
-              key={option.value}
-              id={rowId(option)}
-              type="button"
-              role="option"
-              data-value={option.value}
-              aria-selected={isActive}
-              className={`s-pickrow${isActive ? ' s-pickrow--active' : ''}`}
-              tabIndex={-1}
-              onMouseMove={() => setActive(shown.indexOf(option))}
-              onClick={() => onPick(option.value)}
-            >
-              <span className="s-pickrow__label">{option.label}</span>
-              {option.detail !== undefined && <span className="s-pickrow__detail">{option.detail}</span>}
-            </button>
-          )
-        })}
+    <Modal title={title} onClose={onClose} wide={wide === true}>
+      <div className="s-pickbody" onKeyDown={onBodyKeyDown}>
+        {trail.length > 1 && (
+          <nav className="s-crumbs" aria-label="Where you are">
+            {trail.slice(0, -1).map((crumb, index) => (
+              <span key={`${String(index)}-${crumb}`} className="s-crumbs__item">
+                <button
+                  type="button"
+                  className="s-linkish"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => onCrumb?.(index)}
+                >
+                  {crumb}
+                </button>
+                <span className="s-crumbs__sep" aria-hidden="true">
+                  ›
+                </span>
+              </span>
+            ))}
+            <span className="s-crumbs__current">{current}</span>
+          </nav>
+        )}
+        {withFilter !== false && (
+          <input
+            className="s-input s-input--fill"
+            type="text"
+            placeholder="Type to narrow…"
+            aria-label="Narrow the choices"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls={`${id}-list`}
+            aria-activedescendant={activeRow === undefined ? undefined : rowId(activeRow)}
+            value={filter}
+            onChange={(event) => {
+              setFilter(event.target.value)
+              setActive(0)
+            }}
+            onKeyDown={onKeyDown}
+            autoFocus
+          />
+        )}
+        <div id={`${id}-list`} className="s-picklist s-picklist--overlay" role="listbox" aria-label={title}>
+          {shown.map((option) => {
+            const isActive = option === activeRow
+            return (
+              <button
+                key={option.value}
+                id={rowId(option)}
+                type="button"
+                role="option"
+                data-value={option.value}
+                aria-selected={isActive}
+                className={`s-pickrow${isActive ? ' s-pickrow--active' : ''}`}
+                tabIndex={-1}
+                onMouseMove={() => setActive(shown.indexOf(option))}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => onPick(option.value)}
+              >
+                <span className="s-pickrow__label">{option.label}</span>
+                {option.detail !== undefined && <span className="s-pickrow__detail">{option.detail}</span>}
+              </button>
+            )
+          })}
+        </div>
+        {options.length > 0 && shown.length === 0 && <div className="s-help">Nothing matches.</div>}
+        {options.length === 0 && empty}
+        {children}
       </div>
-      {shown.length === 0 && <div className="s-help">Nothing matches.</div>}
     </Modal>
   )
 }
@@ -914,14 +982,18 @@ export function HotkeyCapture({
   value,
   allowNone,
   disabled,
+  autoArm,
   onPick
 }: {
   /** `formatHotkey` spelling, or '' for none. */
   value: string
   allowNone?: boolean
   disabled?: boolean
+  /** Arm and focus on mount, for a capture that is the whole point of the screen it is on. */
+  autoArm?: boolean
   onPick: (hotkey: string | null) => void
 }): React.JSX.Element {
+  const button = useRef<HTMLButtonElement>(null)
   const [capturing, setCapturing] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const [typed, setTyped] = useState<string | null>(null)
@@ -939,6 +1011,11 @@ export function HotkeyCapture({
     },
     []
   )
+  useEffect(() => {
+    if (autoArm !== true) return
+    arm(true)
+    button.current?.focus()
+  }, [])
 
   const onKeyDown = (event: React.KeyboardEvent): void => {
     if (!capturing) return
@@ -987,6 +1064,7 @@ export function HotkeyCapture({
   return (
     <div className="s-inline">
       <button
+        ref={button}
         type="button"
         className={`s-hotkey${capturing ? ' s-hotkey--capturing' : ''}`}
         aria-pressed={capturing}

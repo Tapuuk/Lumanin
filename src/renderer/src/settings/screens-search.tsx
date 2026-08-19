@@ -9,7 +9,6 @@ import {
   AddButton,
   Empty,
   HotkeyCapture,
-  Modal,
   RemoveButton,
   ReorderList,
   Section,
@@ -294,7 +293,6 @@ export function PluginHotkeysGroup(): React.JSX.Element | null {
   const context = usePickerContext()
   const binds = useManagedBinds()
   const [picking, setPicking] = useState(false)
-  const [pendingTarget, setPendingTarget] = useState<PickedTarget | null>(null)
 
   if (state === null) return null
   const entries = state.resolved.hotkeys.value
@@ -395,26 +393,14 @@ export function PluginHotkeysGroup(): React.JSX.Element | null {
           purpose="hotkey"
           onClose={() => setPicking(false)}
           onPick={(picked) => {
+            if (picked.hotkey === undefined) return
+            write([
+              ...entries.map((candidate) => toDto(candidate.bind, candidate.target, candidate.title)),
+              toDto(picked.hotkey, picked.key, picked.title)
+            ])
             setPicking(false)
-            setPendingTarget(picked)
           }}
         />
-      )}
-      {pendingTarget !== null && (
-        <Modal title={`A key for “${pendingTarget.label}”`} onClose={() => setPendingTarget(null)}>
-          <p className="s-help">Press the combination this should answer to.</p>
-          <HotkeyCapture
-            value=""
-            onPick={(next) => {
-              if (next === null) return
-              write([
-                ...entries.map((candidate) => toDto(candidate.bind, candidate.target, candidate.title)),
-                toDto(next, pendingTarget.key, pendingTarget.title)
-              ])
-              setPendingTarget(null)
-            }}
-          />
-        </Modal>
       )}
     </>
   )
