@@ -40,7 +40,10 @@ export function PluginsScreen(): React.JSX.Element {
       ))}
       {installed.length === 0 && (
         <Section>
-          <Empty>No plugins installed. The ones that ship with the app are listed below.</Empty>
+          <Empty>
+            No plugins installed.
+            {bundled.length > 0 && ' The ones that ship with the app are listed below.'}
+          </Empty>
         </Section>
       )}
       {bundled.length > 0 && filter.trim().length === 0 && <h2 className="s-section__title">Built in</h2>}

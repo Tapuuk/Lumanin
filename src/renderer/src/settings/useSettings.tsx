@@ -89,6 +89,8 @@ export function useOptimistic<T>(
   const [pending, setPending] = useState<{ readonly value: T } | null>(null)
   const onSaved = useContext(RowSavedContext)
   const confirmed = useRef(false)
+  const latest = useRef(value)
+  latest.current = value
   if (pending !== null && equal(pending.value, value)) {
     setPending(null)
     confirmed.current = true
@@ -99,15 +101,20 @@ export function useOptimistic<T>(
     onSaved()
   })
 
-  const commit = useCallback((next: T, work: Promise<unknown>) => {
-    const entry = { value: next }
-    setPending(entry)
-    const clear = (): void => setPending((current) => (current === entry ? null : current))
-    work.then(
-      () => setTimeout(clear, 1000),
-      () => clear()
-    )
-  }, [])
+  const commit = useCallback(
+    (next: T, work: Promise<unknown>) => {
+      // Nothing to show optimistically and nothing to confirm when the value did not change.
+      if (equal(next, latest.current)) return
+      const entry = { value: next }
+      setPending(entry)
+      const clear = (): void => setPending((current) => (current === entry ? null : current))
+      work.then(
+        () => setTimeout(clear, 1000),
+        () => clear()
+      )
+    },
+    [equal]
+  )
 
   return [pending === null ? value : pending.value, commit]
 }
