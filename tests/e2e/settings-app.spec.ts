@@ -78,23 +78,31 @@ const group = (title: string): ReturnType<Page['locator']> =>
 /** The compositor bind banner: the one line about this desktop's shortcut config. */
 const bindBanner = (): ReturnType<Page['locator']> => page.locator('.s-banner', { hasText: /shortcut/i })
 
-test('a fresh home opens the first-run wizard; dismissing it writes the marker', async () => {
-  // No config.toml has ever existed here, so the wizard fronts the window.
+test('a fresh home opens the first-run wizard; walking it through writes the marker', async () => {
+  // No config.toml has ever existed here, so the wizard fronts the window:
+  // three dots, the theme list and both key rows on the first step.
+  await expect(page.locator('.wiz__title')).toContainText('Set up Lumanin')
+  await expect(page.locator('.wiz__dot')).toHaveCount(3)
+  await expect(page.locator('.s-row .s-hotkey')).toHaveCount(2)
+  await expect(page.locator('.wiz__skip')).toHaveCount(1)
+
+  // "Follow the desktop" writes nothing, which is the point: an untouched
+  // wizard leaves an untouched config. The wizard is latched: this click makes
+  // config.toml possible, and the wizard must not vanish under it.
+  await page.locator('.wiz__choices .wiz__choice', { hasText: 'Follow the desktop' }).click()
   await expect(page.locator('.wiz__title')).toContainText('Set up Lumanin')
 
-  // Walk into the theme step and pick the default. "Follow the desktop"
-  // writes nothing, which is the point — an untouched wizard leaves an
-  // untouched config. The wizard is latched: this click makes config.toml
-  // possible, and the wizard must not vanish under it.
-  await page.locator('.wiz__next').click()
-  await expect(page.locator('.wiz__title')).toContainText('Pick a look')
-  await page.locator('.wiz__choice', { hasText: 'Follow the desktop' }).click()
-  await expect(page.locator('.wiz__title')).toContainText('Pick a look')
+  // The apply step offers no skip: "Later" or "Next" leaves without writing.
+  await page.locator('.wiz__buttons .s-button', { hasText: 'Next' }).click()
+  await expect(page.locator('.wiz__title')).toContainText('Make it stick')
+  await expect(page.locator('.wiz__skip')).toHaveCount(0)
+  await expect(page.locator('.wiz__buttons .s-button', { hasText: 'Skip' })).toHaveCount(0)
+  await page.locator('.wiz__buttons .s-button', { hasText: /^(Later|Next)$/ }).first().click()
+  await expect(page.locator('.wiz__title')).toContainText('All set')
 
-  // Skipping is a real answer: the marker is state, not config, so the
-  // wizard never returns unasked and config.toml still does not exist.
-  await page.locator('.wiz__buttons .s-button', { hasText: 'Back' }).click()
-  await page.locator('.wiz__skip').click()
+  // Opening Settings is a real answer: the marker is state, not config, so
+  // the wizard never returns unasked and config.toml still does not exist.
+  await page.locator('.wiz__buttons .s-button', { hasText: 'Open Settings' }).click()
   await expect(page.locator('.wiz')).toHaveCount(0)
   await expect
     .poll(() => {
