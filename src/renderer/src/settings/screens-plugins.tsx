@@ -6,7 +6,7 @@ import type {
   PluginInspectionDto,
   PluginPreferenceDto
 } from '@shared/ipc'
-import { Busy, Modal, PickButton, Row, Section, TextControl, Toggle } from './controls'
+import { Busy, Empty, Modal, PickButton, Row, Section, TextControl, Toggle, useFilter } from './controls'
 import { guarded, invokeChecked, useSettingsState } from './useSettings'
 
 /**
@@ -17,7 +17,8 @@ import { guarded, invokeChecked, useSettingsState } from './useSettings'
 
 export function PluginsScreen(): React.JSX.Element {
   const { state } = useSettingsState()
-  const [plugins, setPlugins] = useState<readonly PluginDto[]>([])
+  const filter = useFilter()
+  const [plugins, setPlugins] = useState<readonly PluginDto[] | null>(null)
 
   const refresh = useCallback(() => {
     guarded(window.lumanin.invoke('settings.plugins').then(setPlugins))
@@ -27,18 +28,25 @@ export function PluginsScreen(): React.JSX.Element {
     refresh()
   }, [refresh, state])
 
+  if (plugins === null) return <InstallSection onInstalled={refresh} />
+  const installed = plugins.filter(({ bundled }) => !bundled)
+  const bundled = plugins.filter(({ bundled }) => bundled)
+
   return (
     <>
       <InstallSection onInstalled={refresh} />
-      {plugins
-        // A bundled plugin is a feature of the app that happens to be built as
-        // one; file search is edited under Search (behaviour) and Keys (its key).
-        // Listing it here reads as "a plugin called files", which it is not to
-        // anyone using the launcher.
-        .filter((plugin) => !plugin.bundled)
-        .map((plugin) => (
-          <PluginCard key={plugin.name} plugin={plugin} onChanged={refresh} />
-        ))}
+      {installed.map((plugin) => (
+        <PluginCard key={plugin.name} plugin={plugin} onChanged={refresh} />
+      ))}
+      {installed.length === 0 && (
+        <Section>
+          <Empty>No plugins installed. The ones that ship with the app are listed below.</Empty>
+        </Section>
+      )}
+      {bundled.length > 0 && filter.trim().length === 0 && <h2 className="s-section__title">Built in</h2>}
+      {bundled.map((plugin) => (
+        <PluginCard key={plugin.name} plugin={plugin} onChanged={refresh} />
+      ))}
     </>
   )
 }
