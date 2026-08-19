@@ -155,7 +155,15 @@ function Shell(): React.JSX.Element {
           <main ref={content} className="settings__content">
             <h1 className="settings__heading">{section.title}</h1>
 
-            {state !== null && state.parseError !== null ? (
+            {state === null ? (
+              // Rows in the shape of the screen to come, held back a beat so a
+              // fast load never shows them.
+              <>
+                <div className="s-skeleton" aria-hidden="true" />
+                <div className="s-skeleton" aria-hidden="true" />
+                <div className="s-skeleton" aria-hidden="true" />
+              </>
+            ) : state.parseError !== null ? (
               <div className="s-error">
                 {state.configPath} does not parse, so it cannot be edited safely: {state.parseError}
                 <br />
