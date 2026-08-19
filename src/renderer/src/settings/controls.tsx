@@ -173,6 +173,7 @@ function editorFor(
     case 'enum':
       return (
         <EnumControl
+          label={setting.label}
           options={editor.options}
           freeform={setting.freeform === true}
           value={value === null || value === undefined ? '' : String(value)}
@@ -208,19 +209,178 @@ function editorFor(
   }
 }
 
-// Sentinel option values for the custom/default select rows. The NUL escape
+// Sentinel option values for the custom/default rows. The NUL escape
 // keeps them impossible to collide with a real theme name or number, while
 // staying visible in source (a literal NUL byte makes the file read as binary).
 const CUSTOM = '\u0000custom'
 const DEFAULT = '\u0000default'
 
+export interface PickOption {
+  value: string
+  label: string
+  detail?: string
+}
+
+/**
+ * The one way a value is chosen from a list: a button showing the current
+ * choice that opens a filterable list in a dialog. No OS popup, so it looks
+ * the same on every desktop and its keys are ours.
+ */
+export function PickButton({
+  title,
+  value,
+  options,
+  text,
+  disabled,
+  onPick
+}: {
+  /** The dialog's title, usually the setting's label. */
+  title: string
+  value: string
+  options: readonly PickOption[]
+  /** What the button shows when it is not the picked option's label. */
+  text?: string | undefined
+  disabled?: boolean
+  onPick: (value: string) => void
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const close = useCallback(() => setOpen(false), [])
+  const label = text ?? options.find((option) => option.value === value)?.label ?? value
+  return (
+    <>
+      <button
+        type="button"
+        className="s-pick"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        disabled={disabled === true}
+        onClick={() => setOpen(true)}
+      >
+        <span className="s-pick__label">{label}</span>
+        <span className="s-pick__caret" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      {open && (
+        <PickOverlay
+          title={title}
+          value={value}
+          options={options}
+          onClose={close}
+          onPick={(next) => {
+            setOpen(false)
+            onPick(next)
+          }}
+        />
+      )}
+    </>
+  )
+}
+
+function PickOverlay({
+  title,
+  value,
+  options,
+  onPick,
+  onClose
+}: {
+  title: string
+  value: string
+  options: readonly PickOption[]
+  onPick: (value: string) => void
+  onClose: () => void
+}): React.JSX.Element {
+  const id = useId()
+  const [filter, setFilter] = useState('')
+  const shown = options.filter((option) => matchesFilter(filter, option.label, option.detail))
+  const [active, setActive] = useState(() => Math.max(0, options.findIndex((option) => option.value === value)))
+  const rowId = (option: PickOption): string => `${id}-${String(options.indexOf(option))}`
+  const activeRow = shown[Math.min(active, shown.length - 1)]
+
+  useEffect(() => {
+    if (activeRow !== undefined) document.getElementById(rowId(activeRow))?.scrollIntoView({ block: 'nearest' })
+  })
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
+    const last = shown.length - 1
+    const current = Math.min(active, last)
+    switch (event.key) {
+      case 'ArrowDown':
+        setActive(Math.min(last, current + 1))
+        break
+      case 'ArrowUp':
+        setActive(Math.max(0, current - 1))
+        break
+      case 'Home':
+        setActive(0)
+        break
+      case 'End':
+        setActive(Math.max(0, last))
+        break
+      case 'Enter':
+        if (activeRow !== undefined) onPick(activeRow.value)
+        break
+      default:
+        return
+    }
+    event.preventDefault()
+  }
+
+  return (
+    <Modal title={title} onClose={onClose}>
+      <input
+        className="s-input"
+        type="text"
+        placeholder="Type to narrow…"
+        aria-label="Narrow the choices"
+        role="combobox"
+        aria-expanded="true"
+        aria-controls={`${id}-list`}
+        aria-activedescendant={activeRow === undefined ? undefined : rowId(activeRow)}
+        value={filter}
+        onChange={(event) => {
+          setFilter(event.target.value)
+          setActive(0)
+        }}
+        onKeyDown={onKeyDown}
+        autoFocus
+      />
+      <div id={`${id}-list`} className="s-picklist s-picklist--overlay" role="listbox" aria-label={title}>
+        {shown.map((option) => {
+          const isActive = option === activeRow
+          return (
+            <button
+              key={option.value}
+              id={rowId(option)}
+              type="button"
+              role="option"
+              data-value={option.value}
+              aria-selected={isActive}
+              className={`s-pickrow${isActive ? ' s-pickrow--active' : ''}`}
+              tabIndex={-1}
+              onMouseMove={() => setActive(shown.indexOf(option))}
+              onClick={() => onPick(option.value)}
+            >
+              <span className="s-pickrow__label">{option.label}</span>
+              {option.detail !== undefined && <span className="s-pickrow__detail">{option.detail}</span>}
+            </button>
+          )
+        })}
+        {shown.length === 0 && <div className="s-help">Nothing matches.</div>}
+      </div>
+    </Modal>
+  )
+}
+
 function EnumControl({
+  label,
   options,
   freeform,
   value: truth,
   disabled,
   onSave
 }: {
+  label: string
   options: readonly { value: string; label: string }[]
   freeform: boolean
   value: string
@@ -232,43 +392,44 @@ function EnumControl({
   const listed = options.some((option) => option.value === value)
   const [custom, setCustom] = useState<string | null>(freeform && !listed && value !== '' ? value : null)
   // The value can change under us — the CLI or an editor writing the same
-  // file. Re-derive the custom state when it does, so the select never claims
-  // "default" while a custom theme is actually set.
+  // file. Re-derive the custom state when it does, so the button never claims
+  // "Default" while a custom theme is actually set.
   const [seen, setSeen] = useState(value)
   if (seen !== value) {
     setSeen(value)
     setCustom(freeform && !listed && value !== '' ? value : null)
   }
 
+  const rows: PickOption[] = [
+    { value: '', label: 'Default' },
+    ...options,
+    ...(freeform ? [{ value: CUSTOM, label: 'Custom name…' }] : [])
+  ]
+  const current = custom !== null ? CUSTOM : listed ? value : ''
+
   return (
     <div className="s-inline">
-      <select
-        className="s-select"
+      <PickButton
+        title={label}
+        value={current}
+        options={rows}
+        text={custom === null ? undefined : custom.length === 0 ? 'Custom name' : custom}
         disabled={disabled}
-        value={custom !== null ? CUSTOM : listed ? value : ''}
-        onChange={(event) => {
-          const next = event.target.value
+        onPick={(next) => {
           if (next === CUSTOM) {
-            setCustom(value)
+            setCustom(listed ? '' : value)
             return
           }
           setCustom(null)
           save(next)
         }}
-      >
-        <option value="">Default</option>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-        {freeform && <option value={CUSTOM}>Type a name…</option>}
-      </select>
+      />
       {custom !== null && (
         <TextControl
           value={custom}
           placeholder="Theme name"
           disabled={disabled}
+          autoFocus
           onSave={(next) => {
             if (next.trim().length > 0) save(next.trim())
           }}
@@ -401,12 +562,14 @@ export function TextControl({
   value,
   placeholder,
   disabled,
+  autoFocus,
   onSave,
   onLiveChange
 }: {
   value: string
   placeholder?: string
   disabled?: boolean
+  autoFocus?: boolean
   onSave: (next: string) => void
   /** Every keystroke, for callers whose buttons enable off the draft. */
   onLiveChange?: (next: string) => void
@@ -426,6 +589,7 @@ export function TextControl({
       value={text}
       placeholder={placeholder ?? ''}
       disabled={disabled === true}
+      autoFocus={autoFocus === true}
       onFocus={() => {
         focused.current = true
       }}

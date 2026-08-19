@@ -357,6 +357,46 @@ body:has(.settings) {
   width: 90px;
 }
 
+/* The pick button: the current choice, opened into a filterable list. */
+.s-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 9px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--s-radius);
+  background: var(--lumanin-bg-hover);
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text);
+  max-width: min(280px, 100%);
+  text-align: left;
+  cursor: pointer;
+}
+
+.s-pick:hover:not(:disabled) {
+  border-color: var(--lumanin-accent);
+}
+
+.s-pick:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.s-pick__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.s-pick__caret {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--lumanin-text-muted);
+}
+
 .s-button {
   padding: 6px 16px;
   border: 1px solid var(--lumanin-border);
@@ -691,6 +731,19 @@ body:has(.settings) {
 
 .s-pickrow:hover {
   background: var(--lumanin-bg-hover);
+}
+
+.s-picklist--overlay {
+  max-height: 320px;
+  overflow: auto;
+}
+
+.s-pickrow--active {
+  background: var(--lumanin-bg-hover);
+}
+
+.s-pickrow--active .s-pickrow__label {
+  color: var(--lumanin-accent);
 }
 
 .s-pickrow__label {
