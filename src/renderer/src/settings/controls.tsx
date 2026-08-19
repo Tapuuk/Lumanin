@@ -601,15 +601,21 @@ export function TextControl({
   useEffect(() => {
     if (!focused.current) setText(value)
   }, [value])
+  // An effect rather than the attribute: a closing dialog hands focus back to
+  // its opener from its own cleanup, which runs after the attribute would have.
+  const input = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (autoFocus === true) input.current?.focus()
+  }, [autoFocus])
 
   return (
     <input
+      ref={input}
       className="s-input"
       type="text"
       value={text}
       placeholder={placeholder ?? ''}
       disabled={disabled === true}
-      autoFocus={autoFocus === true}
       onFocus={() => {
         focused.current = true
       }}
