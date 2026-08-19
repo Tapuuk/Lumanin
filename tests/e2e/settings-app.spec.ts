@@ -590,6 +590,62 @@ test('an alias cannot point at a web search: the picker does not offer one', asy
   await expect(page.locator('.s-modal')).toHaveCount(0)
 })
 
+test('pins: keyboard only, filter at every level, Backspace goes up, Esc closes', async () => {
+  await section('Search').click()
+  const pins = page.locator('.s-section', { hasText: 'Pins' })
+  const dialog = page.locator('.s-modal__box[role="dialog"]')
+  const where = dialog.locator('nav[aria-label="Where you are"]')
+  await pins.locator('.s-button', { hasText: 'Pin something' }).click()
+  await expect(dialog.locator('input[role="combobox"]')).toBeFocused()
+  await expect(where).toHaveCount(0)
+
+  await page.keyboard.type('command')
+  await expect(dialog.locator('.s-pickrow--active .s-pickrow__label')).toHaveText('A command')
+  await page.keyboard.press('Enter')
+  await expect(where).toBeVisible()
+  await expect(where).toContainText('Commands')
+  await page.keyboard.type('log')
+  await expect(dialog.locator('[role="option"]')).toHaveCount(1)
+  await expect(pickRow('Open Log File')).toBeVisible()
+
+  // Three Backspaces clear the text; the fourth, on an empty filter, goes up.
+  for (let i = 0; i < 4; i += 1) await page.keyboard.press('Backspace')
+  await expect(pickRow('A command')).toBeVisible()
+  await expect(where).toHaveCount(0)
+
+  await page.keyboard.type('command')
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('log')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.s-modal')).toHaveCount(0)
+  await expect.poll(config).toContain('command:builtin/open-log')
+
+  const before = config()
+  await pins.locator('.s-button', { hasText: 'Pin something' }).click()
+  await expect(dialog).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.s-modal')).toHaveCount(0)
+  expect(config()).toBe(before)
+})
+
+test('plugin hotkeys: the key is captured inside the picker, no second dialog', async () => {
+  await section('Keys').click()
+  const hotkeys = page.locator('.s-section', { hasText: 'Plugin hotkeys' })
+  await hotkeys.locator('.s-button', { hasText: 'Bind a key' }).click()
+  await pickRow('A command').click()
+  await pickRow('Reload Theme').click()
+  await expect(page.locator('.s-modal')).toHaveCount(1)
+  await expect(page.locator('.s-modal .s-hotkey[aria-pressed="true"]')).toBeVisible()
+  await page.keyboard.press('Control+Alt+Y')
+  await expect(page.locator('.s-modal')).toHaveCount(0)
+  await expect.poll(config).toContain('target = "command:builtin/reload-theme"')
+  expect(config()).toContain('bind = "Ctrl+Alt+Y"')
+
+  // Removed again so the group is empty for whatever runs after this.
+  await hotkeys.locator('.s-remove').first().click()
+  await expect.poll(config).not.toContain('command:builtin/reload-theme')
+})
+
 test('a typed number commits on Enter', async () => {
   await section('Panel').click()
   const row = page.locator('.s-row', { hasText: 'Panel width' })
