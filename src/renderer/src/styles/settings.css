@@ -327,7 +327,6 @@ body:has(.settings) {
   cursor: default;
 }
 
-.s-select,
 .s-input {
   padding: 5px 9px;
   border: 1px solid var(--lumanin-border);
@@ -347,7 +346,6 @@ body:has(.settings) {
 /* An env/flag-overridden setting renders its editor disabled — without this,
    a disabled field is pixel-identical to an editable one. Same treatment as
    the buttons and the toggle. */
-.s-select:disabled,
 .s-input:disabled {
   opacity: 0.5;
   cursor: default;
@@ -539,11 +537,6 @@ body:has(.settings) {
 .s-iconbtn:disabled {
   opacity: 0.35;
   cursor: default;
-}
-
-.s-iconbtn--danger:hover {
-  color: var(--lumanin-err);
-  border-color: var(--lumanin-err);
 }
 
 /* ------------------------------------------------------------------- lists */
@@ -781,24 +774,8 @@ body:has(.settings) {
   color: var(--lumanin-text);
 }
 
-.s-chip__remove {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
+.s-chip .s-remove {
   margin: -4px -6px -4px 0;
-  border: none;
-  background: none;
-  font: inherit;
-  font-size: 11px;
-  color: var(--lumanin-text-muted);
-  cursor: pointer;
-  padding: 0;
-}
-
-.s-chip__remove:hover {
-  color: var(--lumanin-err);
 }
 
 .s-badge {
