@@ -13,6 +13,9 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   timeout: 30_000,
+  // A runner's shared display is the one flaky variable; locally a failure
+  // should fail.
+  retries: process.env['CI'] ? 1 : 0,
   expect: { timeout: 5_000 },
   reporter: [['list']]
 })

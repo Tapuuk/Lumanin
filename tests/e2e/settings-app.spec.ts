@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
@@ -19,6 +19,10 @@ import type { LumaninBridge } from '@shared/ipc'
  */
 
 const repoRoot = resolve(__dirname, '..', '..')
+
+// One window, one temp home, in file order: a retry replays the file from the
+// wizard, and a failure skips what would otherwise start in the wrong state.
+test.describe.configure({ mode: 'serial' })
 
 function absoluteWaylandDisplay(): Record<string, string> {
   const display = process.env['WAYLAND_DISPLAY']
@@ -215,36 +219,59 @@ test('a toggled setting lands in config.toml, and toggling back to the default d
   await expect.poll(config).not.toContain('hide_on_blur')
 })
 
-type WriteTiming = { clickedAt: number | null; pushedAt: number | null }
 declare global {
   interface Window {
     readonly lumanin: LumaninBridge
-    __writeTiming?: WriteTiming
+    __pushedHideOnBlur?: boolean | null
   }
 }
 
-test('a save pushes the new state itself, well inside the file watcher debounce', async () => {
+const settingsLog = (): string => join(root, 'state', 'lumanin', 'logs', 'lumanin-settings.jsonl')
+const logSize = (): number => {
+  try {
+    return statSync(settingsLog()).size
+  } catch {
+    return 0
+  }
+}
+/** The `reason` of every state push logged after `offset`, in order. */
+const pushReasonsAfter = (offset: number): string[] => {
+  let text: string
+  try {
+    text = readFileSync(settingsLog(), 'utf8').slice(offset)
+  } catch {
+    return []
+  }
+  const reasons: string[] = []
+  for (const line of text.split('\n')) {
+    if (line === '') continue
+    try {
+      const record = JSON.parse(line) as { msg?: unknown; reason?: unknown }
+      if (record.msg === 'settings state push' && typeof record.reason === 'string') reasons.push(record.reason)
+    } catch {
+      // A line still being written.
+    }
+  }
+  return reasons
+}
+
+test('a save pushes the new state itself, before the file watcher does', async () => {
   const row = page.locator('.s-row', { hasText: 'Hide when focus is lost' })
   await page.evaluate(() => {
-    const timing: WriteTiming = { clickedAt: null, pushedAt: null }
-    window.__writeTiming = timing
-    document.addEventListener('click', () => {
-      if (timing.clickedAt === null) timing.clickedAt = performance.now()
-    }, { capture: true, once: true })
-    window.lumanin.on('settings.changed', () => {
-      if (timing.clickedAt !== null && timing.pushedAt === null) timing.pushedAt = performance.now()
+    window.__pushedHideOnBlur = null
+    window.lumanin.on('settings.changed', (state) => {
+      if (window.__pushedHideOnBlur === null) window.__pushedHideOnBlur = state.resolved.general.hideOnBlur.value
     })
   })
 
+  const offset = logSize()
   await row.locator('.s-toggle').click()
   await expect.poll(config).toContain('hide_on_blur = false')
-  await expect
-    .poll(() => page.evaluate(() => window.__writeTiming?.pushedAt ?? null))
-    .not.toBeNull()
-  const timing = await page.evaluate(() => window.__writeTiming)
-  const delta = (timing?.pushedAt ?? 0) - (timing?.clickedAt ?? 0)
-  // Below the watcher's 120 ms debounce: this push came from the write itself.
-  expect(delta).toBeLessThan(100)
+  await expect.poll(() => pushReasonsAfter(offset).length).toBeGreaterThan(0)
+  // The first push after the click is the write's own; the watcher's, if it
+  // ever comes, is behind it.
+  expect(pushReasonsAfter(offset)[0]).toBe('write')
+  await expect.poll(() => page.evaluate(() => window.__pushedHideOnBlur)).toBe(false)
 
   await row.locator('.s-toggle').click()
   await expect.poll(config).not.toContain('hide_on_blur')

@@ -111,8 +111,9 @@ function send<E extends EventName>(event: E, payload: EventMap[E]): void {
  * async, so an older snapshot must not land after a newer one.
  */
 let pushSequence = 0
-function pushState(): void {
+function pushState(reason: 'write' | 'watch'): void {
   const sequence = ++pushSequence
+  logger.debug('settings state push', { reason })
   void ipc
     .state()
     .then((state) => {
@@ -135,7 +136,7 @@ const ipc = new SettingsIpc({
   currentConfig: current,
   onWritten: () => {
     config = loadConfig({ fileContents: readConfigFile(), env: process.env })
-    pushState()
+    pushState('write')
   }
 })
 
@@ -154,7 +155,7 @@ function watchConfigFile(): void {
         void theme.refresh('config.toml changed')
         // Whoever wrote the file — this app, the CLI, an editor — the screens
         // re-draw from what is now true.
-        pushState()
+        pushState('watch')
       }, 120)
     })
     configWatcher.on('error', () => undefined)
