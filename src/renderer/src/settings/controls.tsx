@@ -410,7 +410,12 @@ export function PickOverlay({
           <nav className="s-crumbs" aria-label="Where you are">
             {trail.slice(0, -1).map((crumb, index) => (
               <span key={`${String(index)}-${crumb}`} className="s-crumbs__item">
-                <button type="button" className="s-linkish" onClick={() => onCrumb?.(index)}>
+                <button
+                  type="button"
+                  className="s-linkish"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => onCrumb?.(index)}
+                >
                   {crumb}
                 </button>
                 <span className="s-crumbs__sep" aria-hidden="true">
@@ -454,6 +459,7 @@ export function PickOverlay({
                 className={`s-pickrow${isActive ? ' s-pickrow--active' : ''}`}
                 tabIndex={-1}
                 onMouseMove={() => setActive(shown.indexOf(option))}
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onPick(option.value)}
               >
                 <span className="s-pickrow__label">{option.label}</span>

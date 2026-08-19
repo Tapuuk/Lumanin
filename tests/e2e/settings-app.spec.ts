@@ -620,9 +620,19 @@ test('pins: keyboard only, filter at every level, Backspace goes up, Esc closes'
   await expect(page.locator('.s-modal')).toHaveCount(0)
   await expect.poll(config).toContain('command:builtin/open-log')
 
+  // A mouse click on a row or a crumb must not take the keyboard away: typing
+  // afterwards still narrows the list at the new level.
   const before = config()
   await pins.locator('.s-button', { hasText: 'Pin something' }).click()
   await expect(dialog).toBeVisible()
+  await pickRow('A command').click()
+  await expect(where).toContainText('Commands')
+  await page.keyboard.type('log')
+  await expect(dialog.locator('[role="option"]')).toHaveCount(1)
+  await where.locator('button', { hasText: 'Targets' }).click()
+  await expect(where).toHaveCount(0)
+  await page.keyboard.type('command')
+  await expect(dialog.locator('.s-pickrow--active .s-pickrow__label')).toHaveText('A command')
   await page.keyboard.press('Escape')
   await expect(page.locator('.s-modal')).toHaveCount(0)
   expect(config()).toBe(before)
