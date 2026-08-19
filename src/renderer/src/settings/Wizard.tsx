@@ -1,25 +1,17 @@
 import { useEffect, useState } from 'react'
-import { OFFERED_RESULT_GROUPS, RESULT_GROUP_LABELS, type ResultGroup } from '@shared/config'
-import {
-  completeFileOrder,
-  FILE_CATEGORY_HINTS,
-  FILE_CATEGORY_TITLES,
-  type FileCategory
-} from '@shared/files'
 import type { SetupPlanDto } from '@shared/ipc'
-import { Busy, HotkeyCapture, isCaptureActive, ReorderList } from './controls'
+import { GLOBAL_HOTKEY } from '@shared/settings-model'
+import { Busy, HotkeyCapture, isCaptureActive, Row } from './controls'
 import { Logo } from './Logo'
-import { move } from './screens-basic'
 import { guarded, setConfig, useSettingsState } from './useSettings'
 
 /**
- * First run: a full-window, one-question-at-a-time welcome.
+ * First run: three steps on one card. Choices (theme, the two keys), then
+ * writing those keys into the desktop's own shortcut config, then done.
  *
- * Every step can be skipped, and skipping means "keep the default" - the
- * wizard writes nothing unless the person actually picks something. The one
- * exception is the last real step: skipping the desktop setup means the keys
- * chosen two screens ago will not work outside this window, so that skip asks
- * once, plainly, before letting go.
+ * Every control has a default, and the wizard writes nothing unless the
+ * person actually picks something. "Later" on the second step leaves the keys
+ * saved but unapplied; the sentence under the buttons says where to apply them.
  *
  * The mounting rule matters more than it looks: the very first choice in here
  * creates `config.toml`, which makes `firstRun` false on the next state push.
@@ -27,13 +19,12 @@ import { guarded, setConfig, useSettingsState } from './useSettings'
  * the person says so and never out from under their click.
  */
 
-type Step = 'welcome' | 'theme' | 'hotkey' | 'fskey' | 'order' | 'forder' | 'setup' | 'done'
-const ORDER: readonly Step[] = ['welcome', 'theme', 'hotkey', 'fskey', 'order', 'forder', 'setup', 'done']
-const DOTTED: readonly Step[] = ['theme', 'hotkey', 'fskey', 'order', 'forder', 'setup']
+type Step = 'setup' | 'apply' | 'done'
+const ORDER: readonly Step[] = ['setup', 'apply', 'done']
 
 export function Wizard({ onDone }: { onDone: () => void }): React.JSX.Element {
   const { state } = useSettingsState()
-  const [step, setStep] = useState<Step>('welcome')
+  const [step, setStep] = useState<Step>('setup')
 
   const finish = (): void => {
     // `.finally`: even if marking first-run done fails, the wizard must close
@@ -44,15 +35,23 @@ export function Wizard({ onDone }: { onDone: () => void }): React.JSX.Element {
       .finally(onDone)
   }
 
+  const close = (): void => {
+    window.lumanin
+      .invoke('settings.finishFirstRun')
+      .catch(() => undefined)
+      .then(() => window.lumanin.invoke('settings.close'))
+      .catch(() => undefined)
+  }
+
   // Esc never reaches the app's close handler while the wizard is up. On the
-  // first and last screens it is the same answer as "Skip setup"; in between,
-  // the visible buttons decide.
+  // first and last steps it is the same answer as "Skip setup"; on the apply
+  // step the visible buttons decide.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape' || isCaptureActive()) return
       event.stopPropagation()
       event.preventDefault()
-      if (step === 'welcome' || step === 'done') finish()
+      if (step === 'setup' || step === 'done') finish()
     }
     window.addEventListener('keydown', onKeyDown, true)
     return () => window.removeEventListener('keydown', onKeyDown, true)
@@ -69,95 +68,35 @@ export function Wizard({ onDone }: { onDone: () => void }): React.JSX.Element {
   return (
     <div className="wiz">
       <div className="wiz__card">
-        {DOTTED.includes(step) && (
-          <div className="wiz__dots" aria-label={`Step ${String(at)} of ${String(DOTTED.length)}`}>
-            {DOTTED.map((dot) => (
-              <span
-                key={dot}
-                className={`wiz__dot${ORDER.indexOf(dot) <= at ? ' wiz__dot--done' : ''}`}
-              />
-            ))}
-          </div>
-        )}
+        <div className="wiz__dots" aria-label={`Step ${String(at + 1)} of ${String(ORDER.length)}`}>
+          {ORDER.map((dot) => (
+            <span
+              key={dot}
+              className={`wiz__dot${ORDER.indexOf(dot) <= at ? ' wiz__dot--done' : ''}`}
+            />
+          ))}
+        </div>
 
-        {step === 'welcome' && <Welcome onNext={() => go(1)} onSkip={finish} />}
-        {step === 'theme' && <ThemeStep onBack={() => go(-1)} onNext={() => go(1)} />}
-        {step === 'hotkey' && <HotkeyStep onBack={() => go(-1)} onNext={() => go(1)} />}
-        {step === 'fskey' && <FileKeyStep onBack={() => go(-1)} onNext={() => go(1)} />}
-        {step === 'order' && <OrderStep onBack={() => go(-1)} onNext={() => go(1)} />}
-        {step === 'forder' && <FileOrderStep onBack={() => go(-1)} onNext={() => go(1)} />}
-        {step === 'setup' && <SetupStep onBack={() => go(-1)} onNext={() => go(1)} />}
-        {step === 'done' && <Done onFinish={finish} />}
+        {step === 'setup' && <SetupChoicesStep onLeave={finish} onNext={() => go(1)} />}
+        {step === 'apply' && <SetupStep onBack={() => go(-1)} onNext={() => go(1)} />}
+        {step === 'done' && <Done onOpenSettings={finish} onClose={close} />}
       </div>
     </div>
   )
 }
 
-/** Back on the left; Skip and Next together on the right. Skip keeps the default. */
-function Buttons({
-  onBack,
-  onSkip,
-  onNext,
-  nextLabel
-}: {
-  onBack: () => void
-  onSkip?: () => void
-  onNext: () => void
-  nextLabel?: string
-}): React.JSX.Element {
-  return (
-    <div className="wiz__buttons">
-      <button type="button" className="s-button" onClick={onBack}>
-        Back
-      </button>
-      <span className="wiz__button-pair">
-        {onSkip !== undefined && (
-          <button type="button" className="s-button" onClick={onSkip}>
-            Skip
-          </button>
-        )}
-        <button type="button" className="s-button s-button--primary wiz__next" onClick={onNext}>
-          {nextLabel ?? 'Next'}
-        </button>
-      </span>
-    </div>
-  )
-}
-
-function Welcome({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }): React.JSX.Element {
-  return (
-    <>
-      <div className="wiz__glyph">
-        <Logo className="wiz__logo" />
-      </div>
-      <h1 className="wiz__title">Set up Lumanin</h1>
-      <p className="wiz__lead">
-        A few steps. Skip any of them and the default stays.
-      </p>
-      <div className="wiz__buttons wiz__buttons--center">
-        <button type="button" className="s-button s-button--primary wiz__next" onClick={onNext}>
-          Start
-        </button>
-      </div>
-      <button type="button" className="wiz__skip" onClick={onSkip}>
-        Skip setup
-      </button>
-    </>
-  )
-}
-
-function ThemeStep({ onBack, onNext }: { onBack: () => void; onNext: () => void }): React.JSX.Element {
+function SetupChoicesStep({ onLeave, onNext }: { onLeave: () => void; onNext: () => void }): React.JSX.Element {
   const { state } = useSettingsState()
   if (state === null) return <></>
   const current = state.resolved.appearance.theme.value
 
   return (
     <>
-      <h1 className="wiz__title">Pick a look</h1>
-      <p className="wiz__lead">
-        The window updates as you pick. &ldquo;Follow the desktop&rdquo; keeps Lumanin matched to
-        the system theme when it changes.
-      </p>
+      <div className="wiz__head">
+        <Logo className="wiz__logo" />
+        <h1 className="wiz__title">Set up Lumanin</h1>
+      </div>
+      <p className="wiz__lead">Three short steps. Everything has a default, so change only what you want.</p>
       <div className="wiz__choices">
         <button
           type="button"
@@ -178,47 +117,18 @@ function ThemeStep({ onBack, onNext }: { onBack: () => void; onNext: () => void 
           </button>
         ))}
       </div>
-      <Buttons onBack={onBack} onSkip={onNext} onNext={onNext} />
-    </>
-  )
-}
-
-function HotkeyStep({ onBack, onNext }: { onBack: () => void; onNext: () => void }): React.JSX.Element {
-  const { state } = useSettingsState()
-  if (state === null) return <></>
-
-  return (
-    <>
-      <h1 className="wiz__title">Your search key</h1>
-      <p className="wiz__lead">
-        The key that opens the launcher from anywhere. Super+R is the default. Click below and
-        press a combination to choose your own.
-      </p>
-      <div className="wiz__center">
+      <Row label={GLOBAL_HOTKEY.label} help="The key that opens the launcher from anywhere. Super+R is the default.">
         <HotkeyCapture
           value={state.resolved.general.hotkey.value}
           onPick={(next) => {
             if (next !== null) guarded(setConfig(['general', 'hotkey'], next))
           }}
         />
-      </div>
-      <Buttons onBack={onBack} onSkip={onNext} onNext={onNext} />
-    </>
-  )
-}
-
-function FileKeyStep({ onBack, onNext }: { onBack: () => void; onNext: () => void }): React.JSX.Element {
-  const { state } = useSettingsState()
-  if (state === null) return <></>
-
-  return (
-    <>
-      <h1 className="wiz__title">Your file search key</h1>
-      <p className="wiz__lead">
-        File search has its own key, so files never crowd the app list. Super+Shift+R is the
-        default. Backspace while capturing removes the key.
-      </p>
-      <div className="wiz__center">
+      </Row>
+      <Row
+        label="File search key"
+        help="File search has its own key. Super+Shift+R is the default. Backspace while capturing removes the key."
+      >
         <HotkeyCapture
           value={state.resolved.fileSearch.hotkey.value}
           allowNone
@@ -226,95 +136,15 @@ function FileKeyStep({ onBack, onNext }: { onBack: () => void; onNext: () => voi
             guarded(setConfig(['file_search', 'hotkey'], next ?? ''))
           }}
         />
+      </Row>
+      <div className="wiz__buttons">
+        <button type="button" className="wiz__skip" onClick={onLeave}>
+          Skip setup
+        </button>
+        <button type="button" className="s-button s-button--primary wiz__next" onClick={onNext}>
+          Next
+        </button>
       </div>
-      <Buttons onBack={onBack} onSkip={onNext} onNext={onNext} />
-    </>
-  )
-}
-
-function OrderStep({ onBack, onNext }: { onBack: () => void; onNext: () => void }): React.JSX.Element {
-  const { state } = useSettingsState()
-  if (state === null) return <></>
-  // Inert groups (`files`, `calculator`) never appear: neither answers to a
-  // position, so offering to move them would be offering a dead lever.
-  const order = state.resolved.search.fallbackOrder.value.filter((group) =>
-    OFFERED_RESULT_GROUPS.includes(group)
-  )
-
-  const hints: Readonly<Record<ResultGroup, string>> = {
-    plugins: 'Your plugins',
-    apps: 'Installed applications',
-    commands: 'The launcher itself',
-    calculator: 'Nothing, the calculator is always first',
-    files: 'Nothing, file search is a plugin now',
-    web: 'Web searches'
-  }
-
-  return (
-    <>
-      <h1 className="wiz__title">What wins a search</h1>
-      <p className="wiz__lead">
-        When kinds of result tie, the higher one here goes first. The default puts plugins first,
-        then apps.
-      </p>
-      <div className="wiz__list">
-        <ReorderList
-          rows={[
-            ...order.map((group) => ({
-              id: group,
-              label: RESULT_GROUP_LABELS[group],
-              detail: hints[group],
-              on: true
-            })),
-            ...OFFERED_RESULT_GROUPS.filter((group) => !order.includes(group)).map((group) => ({
-              id: group,
-              label: RESULT_GROUP_LABELS[group],
-              detail: hints[group],
-              on: false
-            }))
-          ]}
-          onToggle={(id, next) => {
-            const nextOrder = next
-              ? [...order, id as ResultGroup]
-              : order.filter((candidate) => candidate !== id)
-            guarded(setConfig(['search', 'order'], nextOrder))
-          }}
-          onMove={(id, delta) => {
-            const moved = move(order, id as ResultGroup, delta)
-            if (moved !== null) guarded(setConfig(['search', 'order'], [...moved]))
-          }}
-        />
-      </div>
-      <Buttons onBack={onBack} onSkip={onNext} onNext={onNext} />
-    </>
-  )
-}
-
-function FileOrderStep({ onBack, onNext }: { onBack: () => void; onNext: () => void }): React.JSX.Element {
-  const { state } = useSettingsState()
-  if (state === null) return <></>
-  const order = completeFileOrder(state.resolved.fileSearch.order.value)
-
-  return (
-    <>
-      <h1 className="wiz__title">What wins a file search</h1>
-      <p className="wiz__lead">
-        When file names tie, the higher kind here ranks first.
-      </p>
-      <div className="wiz__list">
-        <ReorderList
-          rows={order.map((category: FileCategory) => ({
-            id: category,
-            label: FILE_CATEGORY_TITLES[category],
-            detail: FILE_CATEGORY_HINTS[category]
-          }))}
-          onMove={(id, delta) => {
-            const moved = move(order, id as FileCategory, delta)
-            if (moved !== null) guarded(setConfig(['file_search', 'order'], [...moved]))
-          }}
-        />
-      </div>
-      <Buttons onBack={onBack} onSkip={onNext} onNext={onNext} />
     </>
   )
 }
@@ -322,8 +152,7 @@ function FileOrderStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
 function SetupStep({ onBack, onNext }: { onBack: () => void; onNext: () => void }): React.JSX.Element {
   const { state } = useSettingsState()
   const [plan, setPlan] = useState<SetupPlanDto | null>(null)
-  const [showDetails, setShowDetails] = useState(false)
-  const [confirmingSkip, setConfirmingSkip] = useState(false)
+  const [showDetails, setShowDetails] = useState(true)
   const [applying, setApplying] = useState(false)
   const [applied, setApplied] = useState<
     | null
@@ -365,34 +194,6 @@ function SetupStep({ onBack, onNext }: { onBack: () => void; onNext: () => void 
           notes: []
         })
       })
-  }
-
-  // Skipping here is different from every other skip: the keys chosen two
-  // screens ago exist only in config.toml until this step writes the desktop's
-  // own shortcut config, so leaving now means they will not work yet.
-  if (confirmingSkip) {
-    return (
-      <>
-        <h1 className="wiz__title">Keys not applied yet</h1>
-        <p className="wiz__lead">
-          Your keys are saved but not yet written into this desktop&apos;s shortcut config, so
-          pressing them does nothing. Apply them later with{' '}
-          <code>lumanin doctor --fix</code> or from the Global Search screen.
-        </p>
-        <div className="wiz__buttons wiz__buttons--center">
-          <button type="button" className="s-button" onClick={onNext}>
-            Leave anyway
-          </button>
-          <button
-            type="button"
-            className="s-button s-button--primary wiz__next"
-            onClick={() => setConfirmingSkip(false)}
-          >
-            Go back
-          </button>
-        </div>
-      </>
-    )
   }
 
   return (
@@ -464,8 +265,8 @@ function SetupStep({ onBack, onNext }: { onBack: () => void; onNext: () => void 
             <span className="wiz__button-pair">
               {plan.pending ? (
                 <>
-                  <button type="button" className="s-button" onClick={() => setConfirmingSkip(true)}>
-                    Skip
+                  <button type="button" className="s-button" onClick={onNext}>
+                    Later
                   </button>
                   <button
                     type="button"
@@ -474,7 +275,7 @@ function SetupStep({ onBack, onNext }: { onBack: () => void; onNext: () => void 
                     aria-busy={applying}
                     onClick={apply}
                   >
-                    Set it up
+                    Apply
                     {applying && <Busy />}
                   </button>
                 </>
@@ -485,6 +286,12 @@ function SetupStep({ onBack, onNext }: { onBack: () => void; onNext: () => void 
               )}
             </span>
           </div>
+          {plan.pending && (
+            <p className="s-help wiz__after">
+              Later keeps the keys saved but not applied. Apply them any time on the Keys screen or
+              with <code>lumanin doctor --fix</code>.
+            </p>
+          )}
         </>
       )}
 
@@ -503,7 +310,7 @@ function SetupStep({ onBack, onNext }: { onBack: () => void; onNext: () => void 
               </p>
             ))}
           </div>
-          <div className="wiz__buttons wiz__buttons--center">
+          <div className="wiz__buttons">
             <button type="button" className="s-button s-button--primary wiz__next" onClick={onNext}>
               Next
             </button>
@@ -514,23 +321,26 @@ function SetupStep({ onBack, onNext }: { onBack: () => void; onNext: () => void 
   )
 }
 
-function Done({ onFinish }: { onFinish: () => void }): React.JSX.Element {
+function Done({ onOpenSettings, onClose }: { onOpenSettings: () => void; onClose: () => void }): React.JSX.Element {
   const { state } = useSettingsState()
   const key = state?.resolved.general.hotkey.value ?? 'Super+R'
 
   return (
     <>
-      <div className="wiz__glyph">
+      <div className="wiz__head">
         <Logo className="wiz__logo" />
+        <h1 className="wiz__title">All set</h1>
       </div>
-      <h1 className="wiz__title">All set</h1>
       <p className="wiz__lead">
         Press <span className="s-chip">{key}</span> and start typing. Change any of this later in
         Settings.
       </p>
-      <div className="wiz__buttons wiz__buttons--center">
-        <button type="button" className="s-button s-button--primary wiz__next" onClick={onFinish}>
-          Start using Lumanin
+      <div className="wiz__buttons">
+        <button type="button" className="s-button" onClick={onOpenSettings}>
+          Open Settings
+        </button>
+        <button type="button" className="s-button s-button--primary wiz__next" onClick={onClose}>
+          Close
         </button>
       </div>
     </>
