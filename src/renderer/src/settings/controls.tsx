@@ -101,6 +101,22 @@ export function Row({
   )
 }
 
+/** Something is in progress. Sits after a label or a sentence; the words stay. */
+export function Busy(): React.JSX.Element {
+  return (
+    <span className="s-busy" role="status" aria-label="Working">
+      <i />
+      <i />
+      <i />
+    </span>
+  )
+}
+
+/** A list with nothing in it, said in one sentence. */
+export function Empty({ children }: { children: ReactNode }): React.JSX.Element {
+  return <p className="s-empty">{children}</p>
+}
+
 export function Toggle({
   checked: truth,
   disabled,

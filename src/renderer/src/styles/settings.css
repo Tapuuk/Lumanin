@@ -255,6 +255,56 @@ body:has(.settings) {
   color: var(--lumanin-text-muted);
 }
 
+.s-empty {
+  margin: 0 0 10px;
+  user-select: text;
+  cursor: auto;
+  font-size: 12.5px;
+  color: var(--lumanin-text-muted);
+}
+
+/* Three dots after a label or sentence, pulsing while work is in progress. */
+.s-busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.s-busy i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--lumanin-accent);
+  animation: s-busy-pulse 0.9s ease-in-out infinite;
+}
+
+.s-busy i:nth-child(2) {
+  animation-delay: 150ms;
+}
+
+.s-busy i:nth-child(3) {
+  animation-delay: 300ms;
+}
+
+@keyframes s-busy-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .s-busy i {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
 .s-help code,
 .s-banner code {
   font: inherit;
