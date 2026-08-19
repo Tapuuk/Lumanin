@@ -41,7 +41,7 @@ export function focusRow(content: HTMLElement | null, direction: 1 | -1): boolea
         : rows.length - 1
       : Math.min(rows.length - 1, Math.max(0, current + direction))
   const row = rows[next]
-  const control = row?.querySelector<HTMLElement>(FOCUSABLE)
+  const control = row?.querySelector<HTMLElement>('[tabindex="0"]') ?? row?.querySelector<HTMLElement>(FOCUSABLE)
   if (row === undefined || control === null || control === undefined) return false
   control.focus()
   row.scrollIntoView({ block: 'nearest' })

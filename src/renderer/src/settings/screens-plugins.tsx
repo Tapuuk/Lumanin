@@ -6,7 +6,7 @@ import type {
   PluginInspectionDto,
   PluginPreferenceDto
 } from '@shared/ipc'
-import { Modal, Row, Section, TextControl, Toggle } from './controls'
+import { Modal, PickButton, Row, Section, TextControl, Toggle } from './controls'
 import { guarded, invokeChecked, useSettingsState } from './useSettings'
 
 /**
@@ -334,17 +334,12 @@ export function PreferenceRow({
     )
   } else if (preference.type === 'dropdown' && preference.data !== undefined) {
     control = (
-      <select
-        className="s-select"
+      <PickButton
+        title={preference.title}
         value={String(preference.value ?? preference.default ?? '')}
-        onChange={(event) => save(event.target.value)}
-      >
-        {preference.data.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.title}
-          </option>
-        ))}
-      </select>
+        options={preference.data.map((option) => ({ value: option.value, label: option.title }))}
+        onPick={save}
+      />
     )
   } else if (preference.type === 'password') {
     control = (

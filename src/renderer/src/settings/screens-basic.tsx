@@ -21,7 +21,7 @@ import {
   GLOBAL_HOTKEY
 } from '@shared/settings-model'
 import { boundState, useManagedBinds } from './bind'
-import { HotkeyCapture, rawChordFrom, ReorderList, Row, Section, SettingControl } from './controls'
+import { HotkeyCapture, rawChordFrom, RemoveButton, ReorderList, Row, Section, SettingControl } from './controls'
 import { guarded, sameList, setConfig, useOptimistic, useSettingsState } from './useSettings'
 import { PreferenceRow } from './screens-plugins'
 import { PluginHotkeysGroup } from './screens-search'
@@ -340,19 +340,13 @@ function KeyActionRow({
         {chords.map((chord) => (
           <span key={chord} className="s-chip">
             {chord}
-            <button
-              type="button"
-              className="s-chip__remove"
-              aria-label={`Remove ${chord}`}
-              onClick={() => save(chords.filter((candidate) => candidate !== chord))}
-            >
-              ✕
-            </button>
+            <RemoveButton what={chord} onClick={() => save(chords.filter((candidate) => candidate !== chord))} />
           </span>
         ))}
         <button
           type="button"
           className={`s-hotkey${capturing ? ' s-hotkey--capturing' : ''}`}
+          aria-pressed={capturing}
           onClick={() => setCapturing(true)}
           onBlur={() => setCapturing(false)}
           onKeyDown={(event) => {
@@ -381,7 +375,7 @@ function KeyActionRow({
             }
           }}
         >
-          {capturing ? 'Press a key…' : '+ Add'}
+          {capturing ? 'Press a key…' : '+ Add key'}
         </button>
         {note !== null && <div className="s-help">{note}</div>}
       </div>

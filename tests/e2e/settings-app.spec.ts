@@ -149,9 +149,9 @@ test('the visual system holds: one typeface, grid rows, muted help, a focus ring
   expect(helpColors.length).toBeGreaterThan(0)
   for (const color of helpColors) expect(color).toBe(muted)
 
-  // Keyboard focus draws the global ring: reach a select by Tab, not by click.
-  const select = page.locator('.s-select').first()
-  await select.focus()
+  // Keyboard focus draws the global ring: reach a pick button by Tab, not by click.
+  const pick = page.locator('.s-pick').first()
+  await pick.focus()
   await page.keyboard.press('Tab')
   await page.keyboard.press('Shift+Tab')
   const focused = await page.evaluate(() => {
@@ -159,13 +159,13 @@ test('the visual system holds: one typeface, grid rows, muted help, a focus ring
     const style = getComputedStyle(el)
     return { className: el.className, outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth }
   })
-  expect(focused.className).toContain('s-select')
+  expect(focused.className).toContain('s-pick')
   expect(focused.outlineStyle).toBe('solid')
   expect(focused.outlineWidth).not.toBe('0px')
 
   await section('Keys').click()
   expect(await page.locator('.s-hotkey').first().evaluate((el) => getComputedStyle(el).fontFamily)).toBe(font)
-  const boxes = await page.locator('.s-chip__remove, .s-iconbtn').evaluateAll((els) =>
+  const boxes = await page.locator('.s-remove, .s-iconbtn').evaluateAll((els) =>
     els.map((el) => {
       const rect = el.getBoundingClientRect()
       return { width: rect.width, height: rect.height }
@@ -250,26 +250,60 @@ test('two clicks back to back count as two: the second sees the first', async ()
   await expect(row.locator('.s-toggle')).toHaveAttribute('aria-checked', 'true')
 })
 
+const option = (value: string): ReturnType<Page['locator']> =>
+  page.locator(`[role="option"][data-value="${value}"]`)
+
 test('an enum writes its value and the screen redraws from the file', async () => {
   const row = page.locator('.s-row', { hasText: 'Escape at the root' })
-  await row.locator('select').selectOption('clear')
+  await row.locator('.s-pick').click()
+  await option('clear').click()
   await expect.poll(config).toContain('esc_at_root = "clear"')
-  await expect(row.locator('select')).toHaveValue('clear')
+  await expect(row.locator('.s-pick')).toContainText('Clear query')
 
-  await row.locator('select').selectOption('')
+  await row.locator('.s-pick').click()
+  await option('').click()
   await expect.poll(config).not.toContain('esc_at_root')
 })
 
-test('a number preset writes the number', async () => {
+test('the pick list narrows as you type, Enter picks, Escape leaves it alone', async () => {
+  const row = page.locator('.s-row', { hasText: 'Escape at the root' })
+  await row.locator('.s-pick').click()
+  const dialog = page.locator('.s-modal__box[role="dialog"]')
+  await dialog.locator('input').type('cl')
+  await expect(dialog.locator('[role="option"]')).toHaveCount(1)
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.s-modal')).toHaveCount(0)
+  await expect.poll(config).toContain('esc_at_root = "clear"')
+
+  await row.locator('.s-pick').click()
+  await expect(dialog).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.s-modal')).toHaveCount(0)
+  expect(config()).toContain('esc_at_root = "clear"')
+
+  await row.locator('.s-pick').click()
+  await option('').click()
+  await expect.poll(config).not.toContain('esc_at_root')
+})
+
+test('a number preset writes the number, and a typed value unchecks every preset', async () => {
   const row = page.locator('.s-row', { hasText: 'Panel width' })
-  await row.locator('select').selectOption('900')
+  await row.getByRole('radio', { name: 'Wide', exact: true }).click()
   await expect.poll(config).toContain('width = 900')
+  await expect(row.getByRole('radio', { name: 'Wide', exact: true })).toHaveAttribute('aria-checked', 'true')
+
+  const input = row.locator('input[type="number"]')
+  await input.fill('800')
+  await input.press('Enter')
+  await expect.poll(config).toContain('width = 800')
+  await expect(row.locator('[role="radio"][aria-checked="true"]')).toHaveCount(0)
 })
 
 test('the theme picker writes appearance.theme', async () => {
   await section('Panel').click()
   const row = page.locator('.s-row', { hasText: 'Theme' })
-  await row.locator('select').selectOption('tokyo-day')
+  await row.locator('.s-pick').click()
+  await option('tokyo-day').click()
   await expect.poll(config).toContain('theme = "tokyo-day"')
 
   // The settings app follows its own edit: the theme service repaints this
@@ -278,7 +312,8 @@ test('the theme picker writes appearance.theme', async () => {
     .poll(async () => await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--lumanin-bg')))
     .toContain('#')
 
-  await row.locator('select').selectOption('')
+  await row.locator('.s-pick').click()
+  await option('').click()
   await expect.poll(config).not.toContain('theme =')
 })
 
@@ -327,9 +362,9 @@ test('action keys: a captured chord is added, and removing it restores the defau
   // One at a time, waiting for the file round trip between clicks: the chip
   // list redraws from the file, and clicking into a stale list writes stale
   // chords back.
-  await row.locator('.s-chip', { hasText: 'Ctrl+J' }).locator('.s-chip__remove').click()
+  await row.locator('.s-chip', { hasText: 'Ctrl+J' }).locator('.s-remove').click()
   await expect(row.locator('.s-chip', { hasText: 'Ctrl+J' })).toHaveCount(0)
-  await row.locator('.s-chip', { hasText: 'Ctrl+K' }).locator('.s-chip__remove').click()
+  await row.locator('.s-chip', { hasText: 'Ctrl+K' }).locator('.s-remove').click()
   await expect.poll(config).not.toContain('action_panel')
 })
 
@@ -377,6 +412,43 @@ test('search: engines toggle and reorder as [search].engines', async () => {
       return match?.[1] ?? ''
     })
     .not.toContain(`"${firstEngine.toLowerCase()}"`)
+})
+
+test('search: Alt+Down moves the focused engine row and keeps focus on it', async () => {
+  await section('Search').click()
+  const engines = page.locator('.s-section', { hasText: 'Web search engines' })
+  const rowOf = (id: string): ReturnType<Page['locator']> => engines.locator(`.s-list__row[data-id="${id}"]`)
+  // Two enabled engines, in a known order: the test above switched the only
+  // default one off.
+  for (const id of ['google', 'ddg']) {
+    const toggle = rowOf(id).locator('.s-toggle')
+    if ((await toggle.getAttribute('aria-checked')) !== 'true') await toggle.click()
+    await expect.poll(config).toContain(`"${id}"`)
+    await expect(toggle).toHaveAttribute('aria-checked', 'true')
+  }
+  const firstRow = engines.locator('.s-list__row').first()
+  await expect(firstRow).toHaveAttribute('data-id', 'google')
+  const label = await firstRow.locator('.s-list__label').innerText()
+
+  // The move buttons stay out of the way until the row is hovered.
+  const down = firstRow.locator('[aria-label="Move down"]')
+  await page.mouse.move(0, 0)
+  await expect.poll(() => down.evaluate((el) => getComputedStyle(el).opacity)).toBe('0')
+  await firstRow.hover()
+  await expect.poll(() => down.evaluate((el) => getComputedStyle(el).opacity)).toBe('1')
+
+  await firstRow.locator('.s-toggle').focus()
+  await page.keyboard.press('Alt+ArrowDown')
+  await expect(engines.locator('.s-list__label').nth(1)).toHaveText(label)
+  expect(
+    await page.evaluate(() => document.activeElement?.closest('.s-list__row')?.getAttribute('data-id') ?? null)
+  ).toBe('google')
+  await expect
+    .poll(() => {
+      const match = /engines = \[([^\]]*)\]/.exec(config())
+      return match?.[1]?.split(',')[1] ?? ''
+    })
+    .toContain('"google"')
 })
 
 test('file search: hidden-files preference toggles, persists, and redraws from the store', async () => {
@@ -463,7 +535,6 @@ test('an alias cannot point at a web search: the picker does not offer one', asy
 test('a typed number commits on Enter', async () => {
   await section('Panel').click()
   const row = page.locator('.s-row', { hasText: 'Panel width' })
-  await row.locator('select').selectOption({ label: 'Type a number…' })
   const input = row.locator('input[type="number"]')
   await input.fill('850')
   await input.press('Enter')
@@ -525,12 +596,32 @@ test('Up and Down walk the rows, landing on the control so Space acts on it', as
   await expect(toggle).toHaveAttribute('aria-checked', 'true')
   await expect.poll(config).not.toContain('hide_on_blur')
 
-  // Down again lands in the second row; its select keeps the arrows from there.
+  // Down again lands in the second row, on its pick button; Enter opens the
+  // list and Escape closes it, leaving the button focused.
   await page.keyboard.press('ArrowDown')
   const rows = page.locator('.settings__content .s-row:visible')
   expect(await rows.nth(1).evaluate((el) => el.contains(document.activeElement))).toBe(true)
+  expect(await page.evaluate(() => document.activeElement?.className)).toBe('s-pick')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.s-modal__box[role="dialog"]')).toBeVisible()
   await page.keyboard.press('Escape')
-  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true)
+  await expect(page.locator('.s-modal')).toHaveCount(0)
+  expect(await page.evaluate(() => document.activeElement?.className)).toBe('s-pick')
+
+  // A row of presets lands on the checked pill, not the leftmost one, so a
+  // Space there keeps the value instead of swapping it for the first preset.
+  const width = page.locator('.s-row', { hasText: 'Panel width' })
+  const wide = width.getByRole('radio', { name: 'Wide', exact: true })
+  await wide.click()
+  await expect.poll(config).toContain('width = 900')
+  await page.locator('.settings__heading').click()
+  for (let i = 0; i < 12 && !(await width.evaluate((el) => el.contains(document.activeElement))); i++) {
+    await page.keyboard.press('ArrowDown')
+  }
+  expect(await wide.evaluate((el) => el === document.activeElement)).toBe(true)
+  await page.keyboard.press('Space')
+  await expect(wide).toHaveAttribute('aria-checked', 'true')
+  await expect.poll(config).toContain('width = 900')
 })
 
 test('a slash typed in a text field is a character, not the filter key', async () => {

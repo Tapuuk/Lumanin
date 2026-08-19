@@ -173,6 +173,7 @@ function editorFor(
     case 'enum':
       return (
         <EnumControl
+          label={setting.label}
           options={editor.options}
           freeform={setting.freeform === true}
           value={value === null || value === undefined ? '' : String(value)}
@@ -183,6 +184,7 @@ function editorFor(
     case 'number':
       return (
         <NumberControl
+          label={setting.label}
           value={typeof value === 'number' ? value : null}
           min={editor.min}
           max={editor.max}
@@ -208,19 +210,171 @@ function editorFor(
   }
 }
 
-// Sentinel option values for the custom/default select rows. The NUL escape
-// keeps them impossible to collide with a real theme name or number, while
-// staying visible in source (a literal NUL byte makes the file read as binary).
+// Sentinel value for the custom-name row. The NUL escape keeps it impossible
+// to collide with a real theme name, while staying visible in source (a
+// literal NUL byte makes the file read as binary).
 const CUSTOM = '\u0000custom'
-const DEFAULT = '\u0000default'
+
+export interface PickOption {
+  value: string
+  label: string
+  detail?: string
+}
+
+/**
+ * The one way a value is chosen from a list: a button showing the current
+ * choice that opens a filterable list in a dialog. No OS popup, so it looks
+ * the same on every desktop and its keys are ours.
+ */
+export function PickButton({
+  title,
+  value,
+  options,
+  text,
+  disabled,
+  onPick
+}: {
+  /** The dialog's title, usually the setting's label. */
+  title: string
+  value: string
+  options: readonly PickOption[]
+  /** What the button shows when it is not the picked option's label. */
+  text?: string | undefined
+  disabled?: boolean
+  onPick: (value: string) => void
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const close = useCallback(() => setOpen(false), [])
+  const label = text ?? options.find((option) => option.value === value)?.label ?? value
+  return (
+    <>
+      <button
+        type="button"
+        className="s-pick"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        disabled={disabled === true}
+        onClick={() => setOpen(true)}
+      >
+        <span className="s-pick__label">{label}</span>
+        <span className="s-pick__caret" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      {open && (
+        <PickOverlay
+          title={title}
+          value={value}
+          options={options}
+          onClose={close}
+          onPick={(next) => {
+            setOpen(false)
+            onPick(next)
+          }}
+        />
+      )}
+    </>
+  )
+}
+
+function PickOverlay({
+  title,
+  value,
+  options,
+  onPick,
+  onClose
+}: {
+  title: string
+  value: string
+  options: readonly PickOption[]
+  onPick: (value: string) => void
+  onClose: () => void
+}): React.JSX.Element {
+  const id = useId()
+  const [filter, setFilter] = useState('')
+  const shown = options.filter((option) => matchesFilter(filter, option.label, option.detail))
+  const [active, setActive] = useState(() => Math.max(0, options.findIndex((option) => option.value === value)))
+  const rowId = (option: PickOption): string => `${id}-${String(options.indexOf(option))}`
+  const activeRow = shown[Math.min(active, shown.length - 1)]
+
+  useEffect(() => {
+    if (activeRow !== undefined) document.getElementById(rowId(activeRow))?.scrollIntoView({ block: 'nearest' })
+  })
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
+    const last = shown.length - 1
+    const current = Math.min(active, last)
+    switch (event.key) {
+      case 'ArrowDown':
+        setActive(Math.min(last, current + 1))
+        break
+      case 'ArrowUp':
+        setActive(Math.max(0, current - 1))
+        break
+      case 'Enter':
+        if (activeRow !== undefined) onPick(activeRow.value)
+        break
+      default:
+        return
+    }
+    event.preventDefault()
+  }
+
+  return (
+    <Modal title={title} onClose={onClose}>
+      <input
+        className="s-input s-input--fill"
+        type="text"
+        placeholder="Type to narrow…"
+        aria-label="Narrow the choices"
+        role="combobox"
+        aria-expanded="true"
+        aria-controls={`${id}-list`}
+        aria-activedescendant={activeRow === undefined ? undefined : rowId(activeRow)}
+        value={filter}
+        onChange={(event) => {
+          setFilter(event.target.value)
+          setActive(0)
+        }}
+        onKeyDown={onKeyDown}
+        autoFocus
+      />
+      <div id={`${id}-list`} className="s-picklist s-picklist--overlay" role="listbox" aria-label={title}>
+        {shown.map((option) => {
+          const isActive = option === activeRow
+          return (
+            <button
+              key={option.value}
+              id={rowId(option)}
+              type="button"
+              role="option"
+              data-value={option.value}
+              aria-selected={isActive}
+              className={`s-pickrow${isActive ? ' s-pickrow--active' : ''}`}
+              tabIndex={-1}
+              onMouseMove={() => setActive(shown.indexOf(option))}
+              onClick={() => onPick(option.value)}
+            >
+              <span className="s-pickrow__label">{option.label}</span>
+              {option.detail !== undefined && <span className="s-pickrow__detail">{option.detail}</span>}
+            </button>
+          )
+        })}
+      </div>
+      {shown.length === 0 && <div className="s-help">Nothing matches.</div>}
+    </Modal>
+  )
+}
 
 function EnumControl({
+  label,
   options,
   freeform,
   value: truth,
   disabled,
   onSave
 }: {
+  label: string
   options: readonly { value: string; label: string }[]
   freeform: boolean
   value: string
@@ -232,43 +386,44 @@ function EnumControl({
   const listed = options.some((option) => option.value === value)
   const [custom, setCustom] = useState<string | null>(freeform && !listed && value !== '' ? value : null)
   // The value can change under us — the CLI or an editor writing the same
-  // file. Re-derive the custom state when it does, so the select never claims
-  // "default" while a custom theme is actually set.
+  // file. Re-derive the custom state when it does, so the button never claims
+  // "Default" while a custom theme is actually set.
   const [seen, setSeen] = useState(value)
   if (seen !== value) {
     setSeen(value)
     setCustom(freeform && !listed && value !== '' ? value : null)
   }
 
+  const rows: PickOption[] = [
+    { value: '', label: 'Default' },
+    ...options,
+    ...(freeform ? [{ value: CUSTOM, label: 'Custom name…' }] : [])
+  ]
+  const current = custom !== null ? CUSTOM : listed ? value : ''
+
   return (
     <div className="s-inline">
-      <select
-        className="s-select"
+      <PickButton
+        title={label}
+        value={current}
+        options={rows}
+        text={custom === null ? undefined : custom.length === 0 ? 'Custom name' : custom}
         disabled={disabled}
-        value={custom !== null ? CUSTOM : listed ? value : ''}
-        onChange={(event) => {
-          const next = event.target.value
+        onPick={(next) => {
           if (next === CUSTOM) {
-            setCustom(value)
+            setCustom(listed ? '' : value)
             return
           }
           setCustom(null)
           save(next)
         }}
-      >
-        <option value="">Default</option>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-        {freeform && <option value={CUSTOM}>Type a name…</option>}
-      </select>
+      />
       {custom !== null && (
         <TextControl
           value={custom}
           placeholder="Theme name"
           disabled={disabled}
+          autoFocus
           onSave={(next) => {
             if (next.trim().length > 0) save(next.trim())
           }}
@@ -279,6 +434,7 @@ function EnumControl({
 }
 
 function NumberControl({
+  label,
   value: truth,
   min,
   max,
@@ -287,6 +443,7 @@ function NumberControl({
   disabled,
   onSave
 }: {
+  label: string
   value: number | null
   min: number
   max: number
@@ -298,7 +455,6 @@ function NumberControl({
   const [value, commit] = useOptimistic(truth)
   const save = (next: number | null): void => commit(next, Promise.resolve(onSave(next)))
   const preset = presets.find((candidate) => candidate.value === value)
-  const [custom, setCustom] = useState<boolean>(presets.length > 0 && value !== null && preset === undefined)
   const [text, setText] = useState<string>(value === null ? '' : String(value))
   const [problem, setProblem] = useState<string | null>(null)
   // Follow a value changed by another writer (CLI, editor) — same reason as
@@ -309,7 +465,6 @@ function NumberControl({
     setSeen(value)
     if (!focused.current) {
       setText(value === null ? '' : String(value))
-      setCustom(presets.length > 0 && value !== null && preset === undefined)
       setProblem(null)
     }
   }
@@ -333,67 +488,87 @@ function NumberControl({
     save(parsed)
   }
 
-  if (presets.length === 0 || custom) {
+  const pick = (next: number): void => {
+    setText(String(next))
+    setProblem(null)
+    save(next)
+  }
+
+  const field = (
+    <input
+      className="s-input s-input--number"
+      type="number"
+      min={min}
+      max={max}
+      step={integer ? 1 : 0.1}
+      value={text}
+      placeholder={presets.length > 0 ? 'Default' : ''}
+      aria-label={presets.length > 0 ? 'Custom value' : label}
+      disabled={disabled}
+      onChange={(event) => setText(event.target.value)}
+      onFocus={() => {
+        focused.current = true
+      }}
+      onBlur={() => {
+        focused.current = false
+        commitDraft()
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') (event.target as HTMLInputElement).blur()
+      }}
+    />
+  )
+
+  if (presets.length === 0) {
     return (
       <div className="s-inline">
-        <input
-          className="s-input s-input--number"
-          type="number"
-          min={min}
-          max={max}
-          step={integer ? 1 : 0.1}
-          value={text}
-          disabled={disabled}
-          onChange={(event) => setText(event.target.value)}
-          onFocus={() => {
-            focused.current = true
-          }}
-          onBlur={() => {
-            focused.current = false
-            commitDraft()
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') (event.target as HTMLInputElement).blur()
-          }}
-        />
-        {presets.length > 0 && (
-          <button type="button" className="s-linkish" onClick={() => setCustom(false)}>
-            Choices
-          </button>
-        )}
+        {field}
         {problem !== null && <div className="s-error">{problem}</div>}
       </div>
     )
   }
 
+  // ArrowLeft/Right inside the group focus and save the neighbour, the way a
+  // radio group moves.
+  const onGroupKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    const pills = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]'))
+    const at = pills.findIndex((pill) => pill === document.activeElement)
+    if (at === -1) return
+    const next = Math.min(pills.length - 1, Math.max(0, at + (event.key === 'ArrowRight' ? 1 : -1)))
+    const to = pills[next]
+    const candidate = presets[next]
+    if (to === undefined || candidate === undefined) return
+    event.preventDefault()
+    to.focus()
+    if (candidate.value !== value) pick(candidate.value)
+  }
+
   return (
-    <select
-      className="s-select"
-      disabled={disabled}
-      value={preset !== undefined ? String(preset.value) : value === null ? DEFAULT : CUSTOM}
-      onChange={(event) => {
-        const next = event.target.value
-        if (next === DEFAULT) {
-          save(null)
-          return
-        }
-        if (next === CUSTOM) {
-          setText(value === null ? '' : String(value))
-          setCustom(true)
-          return
-        }
-        save(Number(next))
-      }}
-    >
-      <option value={DEFAULT}>Default</option>
-      {presets.map((candidate) => (
-        <option key={candidate.value} value={String(candidate.value)}>
-          {candidate.label}
-          {candidate.detail === undefined ? '' : ` (${candidate.detail})`}
-        </option>
-      ))}
-      <option value={CUSTOM}>Type a number…</option>
-    </select>
+    <div className="s-inline">
+      <div className="s-segments" role="radiogroup" aria-label={label} onKeyDown={onGroupKeyDown}>
+        {presets.map((candidate) => {
+          const checked = candidate.value === value
+          return (
+            <button
+              key={candidate.value}
+              type="button"
+              role="radio"
+              aria-checked={checked}
+              className="s-segments__pill"
+              disabled={disabled}
+              tabIndex={checked || (preset === undefined && candidate === presets[0]) ? 0 : -1}
+              onClick={() => pick(candidate.value)}
+            >
+              {candidate.label}
+            </button>
+          )
+        })}
+      </div>
+      {field}
+      {problem !== null && <div className="s-error">{problem}</div>}
+      {preset?.detail !== undefined && <div className="s-segments__detail">{preset.detail}</div>}
+    </div>
   )
 }
 
@@ -401,12 +576,14 @@ export function TextControl({
   value,
   placeholder,
   disabled,
+  autoFocus,
   onSave,
   onLiveChange
 }: {
   value: string
   placeholder?: string
   disabled?: boolean
+  autoFocus?: boolean
   onSave: (next: string) => void
   /** Every keystroke, for callers whose buttons enable off the draft. */
   onLiveChange?: (next: string) => void
@@ -418,9 +595,16 @@ export function TextControl({
   useEffect(() => {
     if (!focused.current) setText(value)
   }, [value])
+  // An effect rather than the attribute: a closing dialog hands focus back to
+  // its opener from its own cleanup, which runs after the attribute would have.
+  const input = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (autoFocus === true) input.current?.focus()
+  }, [autoFocus])
 
   return (
     <input
+      ref={input}
       className="s-input"
       type="text"
       value={text}
@@ -444,10 +628,37 @@ export function TextControl({
   )
 }
 
+/** The one add button: "+ Pin something", "+ Bind a key". */
+export function AddButton({
+  children,
+  onClick,
+  disabled
+}: {
+  children: ReactNode
+  onClick: () => void
+  disabled?: boolean
+}): React.JSX.Element {
+  return (
+    <button type="button" className="s-button s-button--add" disabled={disabled === true} onClick={onClick}>
+      {children}
+    </button>
+  )
+}
+
+/** The one remove button: a small ✕ that names what it removes. */
+export function RemoveButton({ what, onClick }: { what: string; onClick: () => void }): React.JSX.Element {
+  return (
+    <button type="button" className="s-remove" aria-label={`Remove ${what}`} onClick={onClick}>
+      ✕
+    </button>
+  )
+}
+
 /**
  * A reorderable, optionally toggleable list — engines, result groups, file
  * categories, pins. Buttons rather than drag: a keyboard-first app, and drag
- * with a hidden drop model is the least discoverable control there is.
+ * with a hidden drop model is the least discoverable control there is. The
+ * buttons show on hover or focus; Alt+Up and Alt+Down move the focused row.
  */
 export function ReorderList({
   rows,
@@ -460,53 +671,81 @@ export function ReorderList({
   onMove: (id: string, delta: number) => void
   onRemove?: (id: string) => void
 }): React.JSX.Element {
+  const list = useRef<HTMLDivElement>(null)
+  // Chromium drops focus from a node React reparents, so after a keyboard move
+  // the moved row's first control is focused again once the new order renders.
+  const pendingFocus = useRef<string | null>(null)
+  useLayoutEffect(() => {
+    const id = pendingFocus.current
+    if (id === null || list.current === null) return
+    pendingFocus.current = null
+    const row = Array.from(list.current.querySelectorAll<HTMLElement>('.s-list__row')).find(
+      (candidate) => candidate.dataset['id'] === id
+    )
+    row?.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled)')?.focus()
+  })
+
+  const move = (id: string, delta: number): void => {
+    pendingFocus.current = id
+    onMove(id, delta)
+  }
+
   return (
-    <div className="s-list">
-      {rows.map((row, index) => (
-        <div key={row.id} className={`s-list__row${row.on === false ? ' s-list__row--off' : ''}`}>
-          {onToggle !== undefined && (
-            <Toggle
-              checked={row.on !== false}
-              ariaLabel={row.label}
-              onChange={(next) => onToggle(row.id, next)}
-            />
-          )}
-          <div className="s-list__text">
-            <span className="s-list__label">{row.label}</span>
-            {row.detail !== undefined && <span className="s-list__detail">{row.detail}</span>}
-          </div>
-          <div className="s-list__buttons">
-            <button
-              type="button"
-              className="s-iconbtn"
-              aria-label="Move up"
-              disabled={index === 0 || row.on === false}
-              onClick={() => onMove(row.id, -1)}
-            >
-              ↑
-            </button>
-            <button
-              type="button"
-              className="s-iconbtn"
-              aria-label="Move down"
-              disabled={index === rows.length - 1 || row.on === false}
-              onClick={() => onMove(row.id, 1)}
-            >
-              ↓
-            </button>
-            {onRemove !== undefined && (
+    <div ref={list} className="s-list">
+      {rows.map((row, index) => {
+        const off = row.on === false
+        const canUp = index > 0 && !off
+        const canDown = index < rows.length - 1 && !off
+        return (
+          <div
+            key={row.id}
+            data-id={row.id}
+            className={`s-list__row${off ? ' s-list__row--off' : ''}`}
+            aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+            onKeyDown={(event) => {
+              if (!event.altKey || event.ctrlKey || event.metaKey) return
+              if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+              event.preventDefault()
+              event.stopPropagation()
+              if (event.key === 'ArrowUp' && canUp) move(row.id, -1)
+              if (event.key === 'ArrowDown' && canDown) move(row.id, 1)
+            }}
+          >
+            {onToggle !== undefined && (
+              <Toggle
+                checked={!off}
+                ariaLabel={row.label}
+                onChange={(next) => onToggle(row.id, next)}
+              />
+            )}
+            <div className="s-list__text">
+              <span className="s-list__label">{row.label}</span>
+              {row.detail !== undefined && <span className="s-list__detail">{row.detail}</span>}
+            </div>
+            <div className="s-list__buttons">
               <button
                 type="button"
-                className="s-iconbtn s-iconbtn--danger"
-                aria-label="Remove"
-                onClick={() => onRemove(row.id)}
+                className="s-iconbtn"
+                aria-label="Move up"
+                disabled={!canUp}
+                onClick={() => move(row.id, -1)}
               >
-                ✕
+                ↑
               </button>
-            )}
+              <button
+                type="button"
+                className="s-iconbtn"
+                aria-label="Move down"
+                disabled={!canDown}
+                onClick={() => move(row.id, 1)}
+              >
+                ↓
+              </button>
+              {onRemove !== undefined && <RemoveButton what={row.label} onClick={() => onRemove(row.id)} />}
+            </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -708,6 +947,7 @@ export function HotkeyCapture({
       <button
         type="button"
         className={`s-hotkey${capturing ? ' s-hotkey--capturing' : ''}`}
+        aria-pressed={capturing}
         disabled={disabled === true}
         onClick={() => {
           arm(true)

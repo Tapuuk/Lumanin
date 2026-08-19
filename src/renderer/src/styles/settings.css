@@ -327,7 +327,6 @@ body:has(.settings) {
   cursor: default;
 }
 
-.s-select,
 .s-input {
   padding: 5px 9px;
   border: 1px solid var(--lumanin-border);
@@ -347,7 +346,6 @@ body:has(.settings) {
 /* An env/flag-overridden setting renders its editor disabled — without this,
    a disabled field is pixel-identical to an editable one. Same treatment as
    the buttons and the toggle. */
-.s-select:disabled,
 .s-input:disabled {
   opacity: 0.5;
   cursor: default;
@@ -355,6 +353,101 @@ body:has(.settings) {
 
 .s-input--number {
   width: 90px;
+}
+
+.s-input--fill {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+/* The pick button: the current choice, opened into a filterable list. */
+.s-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 9px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--s-radius);
+  background: var(--lumanin-bg-hover);
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text);
+  max-width: min(280px, 100%);
+  text-align: left;
+  cursor: pointer;
+}
+
+.s-pick:hover:not(:disabled) {
+  border-color: var(--lumanin-accent);
+}
+
+.s-pick:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.s-pick__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.s-pick__caret {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--lumanin-text-muted);
+}
+
+/* Presets as one segmented control; the number field after it holds any other value. */
+.s-segments {
+  display: flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.s-segments__pill {
+  padding: 5px 12px;
+  border: 1px solid var(--lumanin-border);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text);
+  cursor: pointer;
+  margin-left: -1px;
+}
+
+.s-segments__pill:first-child {
+  margin-left: 0;
+  border-radius: var(--s-radius) 0 0 var(--s-radius);
+}
+
+.s-segments__pill:last-child {
+  border-radius: 0 var(--s-radius) var(--s-radius) 0;
+}
+
+.s-segments__pill:hover:not(:disabled) {
+  background: var(--lumanin-bg-hover);
+}
+
+.s-segments__pill[aria-checked="true"] {
+  position: relative;
+  border-color: var(--lumanin-accent);
+  color: var(--lumanin-accent);
+  background: var(--lumanin-bg-hover);
+}
+
+.s-segments__pill:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.s-segments__detail {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
 }
 
 .s-button {
@@ -385,6 +478,35 @@ body:has(.settings) {
 .s-button:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.s-button--add {
+  color: var(--lumanin-text-muted);
+  border-style: dashed;
+}
+
+.s-button--add:hover:not(:disabled) {
+  color: var(--lumanin-text);
+  border-style: solid;
+}
+
+.s-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  color: var(--lumanin-text-muted);
+  cursor: pointer;
+}
+
+.s-remove:hover {
+  color: var(--lumanin-err);
 }
 
 .s-linkish {
@@ -422,11 +544,6 @@ body:has(.settings) {
 .s-iconbtn:disabled {
   opacity: 0.35;
   cursor: default;
-}
-
-.s-iconbtn--danger:hover {
-  color: var(--lumanin-err);
-  border-color: var(--lumanin-err);
 }
 
 /* ------------------------------------------------------------------- lists */
@@ -482,6 +599,22 @@ body:has(.settings) {
   display: flex;
   gap: 4px;
   flex: 0 0 auto;
+}
+
+/* Move buttons show only for the row under the pointer or holding focus;
+   a dead end button is hidden outright, keeping the column aligned. */
+.s-list__buttons .s-iconbtn {
+  opacity: 0;
+  transition: opacity var(--lumanin-motion-duration, 120ms);
+}
+
+.s-list__row:hover .s-list__buttons .s-iconbtn,
+.s-list__row:focus-within .s-list__buttons .s-iconbtn {
+  opacity: 1;
+}
+
+.s-list__buttons .s-iconbtn:disabled {
+  visibility: hidden;
 }
 
 /* ------------------------------------------------------------------ banner */
@@ -610,6 +743,23 @@ body:has(.settings) {
 .s-hotkey--capturing {
   border-color: var(--lumanin-accent);
   color: var(--lumanin-accent);
+  animation: s-capture-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes s-capture-pulse {
+  0%,
+  100% {
+    border-color: var(--lumanin-accent);
+  }
+  50% {
+    border-color: var(--lumanin-border);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .s-hotkey--capturing {
+    animation: none;
+  }
 }
 
 .s-chords {
@@ -631,24 +781,8 @@ body:has(.settings) {
   color: var(--lumanin-text);
 }
 
-.s-chip__remove {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
+.s-chip .s-remove {
   margin: -4px -6px -4px 0;
-  border: none;
-  background: none;
-  font: inherit;
-  font-size: 11px;
-  color: var(--lumanin-text-muted);
-  cursor: pointer;
-  padding: 0;
-}
-
-.s-chip__remove:hover {
-  color: var(--lumanin-err);
 }
 
 .s-badge {
@@ -691,6 +825,19 @@ body:has(.settings) {
 
 .s-pickrow:hover {
   background: var(--lumanin-bg-hover);
+}
+
+.s-picklist--overlay {
+  max-height: 320px;
+  overflow: auto;
+}
+
+.s-pickrow--active {
+  background: var(--lumanin-bg-hover);
+}
+
+.s-pickrow--active .s-pickrow__label {
+  color: var(--lumanin-accent);
 }
 
 .s-pickrow__label {
