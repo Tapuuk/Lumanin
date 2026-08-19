@@ -71,6 +71,13 @@ test.afterAll(async () => {
 const section = (title: string): ReturnType<Page['locator']> =>
   page.locator('.settings__section', { hasText: title })
 
+/** A titled group on the current screen. */
+const group = (title: string): ReturnType<Page['locator']> =>
+  page.locator('.s-section', { has: page.locator('.s-section__title', { hasText: new RegExp(`^${title}$`) }) })
+
+/** The compositor bind banner: the one line about this desktop's shortcut config. */
+const bindBanner = (): ReturnType<Page['locator']> => page.locator('.s-banner', { hasText: /shortcut/i })
+
 test('a fresh home opens the first-run wizard; dismissing it writes the marker', async () => {
   // No config.toml has ever existed here, so the wizard fronts the window.
   await expect(page.locator('.wiz__title')).toContainText('Set up Lumanin')
@@ -102,17 +109,9 @@ test('a fresh home opens the first-run wizard; dismissing it writes the marker',
   expect(config()).toBe('')
 })
 
-test('opens themed, on the General screen, with every section listed', async () => {
-  await expect(page.locator('.settings__heading')).toHaveText('General')
-  for (const title of [
-    'General',
-    'Appearance',
-    'Global Search',
-    'File Search',
-    'Action Keys',
-    'Plugin Hotkeys',
-    'Plugins'
-  ]) {
+test('opens themed, on the Panel screen, with every section listed', async () => {
+  await expect(page.locator('.settings__heading')).toHaveText('Panel')
+  for (const title of ['Panel', 'Search', 'Keys', 'Plugins']) {
     await expect(section(title)).toBeVisible()
   }
 })
@@ -164,7 +163,7 @@ test('the visual system holds: one typeface, grid rows, muted help, a focus ring
   expect(focused.outlineStyle).toBe('solid')
   expect(focused.outlineWidth).not.toBe('0px')
 
-  await section('Action Keys').click()
+  await section('Keys').click()
   expect(await page.locator('.s-hotkey').first().evaluate((el) => getComputedStyle(el).fontFamily)).toBe(font)
   const boxes = await page.locator('.s-chip__remove, .s-iconbtn').evaluateAll((els) =>
     els.map((el) => {
@@ -177,7 +176,7 @@ test('the visual system holds: one typeface, grid rows, muted help, a focus ring
     expect(box.width).toBeGreaterThanOrEqual(24)
     expect(box.height).toBeGreaterThanOrEqual(24)
   }
-  await section('General').click()
+  await section('Panel').click()
 })
 
 test('general: the update check answers with a sentence, whatever the checkout says', async () => {
@@ -268,7 +267,7 @@ test('a number preset writes the number', async () => {
 })
 
 test('the theme picker writes appearance.theme', async () => {
-  await section('Appearance').click()
+  await section('Panel').click()
   const row = page.locator('.s-row', { hasText: 'Theme' })
   await row.locator('select').selectOption('tokyo-day')
   await expect.poll(config).toContain('theme = "tokyo-day"')
@@ -284,8 +283,8 @@ test('the theme picker writes appearance.theme', async () => {
 })
 
 test('file search: hotkey capture writes the chord, Backspace removes the key', async () => {
-  await section('File Search').click()
-  const row = page.locator('.s-row', { hasText: 'Hotkey' }).first()
+  await section('Keys').click()
+  const row = group('File search').locator('.s-row', { hasText: 'Hotkey' })
   await row.locator('.s-hotkey').click()
   await page.keyboard.press('Control+Alt+F')
   await expect.poll(config).toContain('hotkey = "Ctrl+Alt+F"')
@@ -297,7 +296,8 @@ test('file search: hotkey capture writes the chord, Backspace removes the key', 
 })
 
 test('file search: reordering categories writes the order', async () => {
-  const list = page.locator('.s-list').last()
+  await section('Search').click()
+  const list = group('File search').locator('.s-list')
   const first = await list.locator('.s-list__label').first().innerText()
   await list.locator('.s-list__row').first().locator('[aria-label="Move down"]').click()
   await expect.poll(config).toContain('order = [')
@@ -312,7 +312,7 @@ function firstCategoryId(title: string): string {
 }
 
 test('action keys: a captured chord is added, and removing it restores the default', async () => {
-  await section('Action Keys').click()
+  await section('Keys').click()
   // `hasText` also matches help prose (Back's help says "action panel"), so
   // the row is found by its exact label.
   const row = page.locator('.s-row', {
@@ -333,9 +333,9 @@ test('action keys: a captured chord is added, and removing it restores the defau
   await expect.poll(config).not.toContain('action_panel')
 })
 
-test('global search: the hotkey writes general.hotkey and raises the bind banner', async () => {
-  await section('Global Search').click()
-  const row = page.locator('.s-row', { hasText: 'Hotkey' }).first()
+test('keys: the launcher hotkey writes general.hotkey and raises the bind banner', async () => {
+  await section('Keys').click()
+  const row = group('Launcher').locator('.s-row', { hasText: 'Hotkey' })
   await row.locator('.s-hotkey').click()
   await page.keyboard.press('Control+Alt+L')
   await expect.poll(config).toContain('hotkey = "Ctrl+Alt+L"')
@@ -344,10 +344,27 @@ test('global search: the hotkey writes general.hotkey and raises the bind banner
   // on a bindable desktop the change is applied automatically and the banner
   // reports what happened; anywhere else the "bind it yourself" wording shows.
   // Either way, something says so.
-  await expect(page.locator('.s-banner').first()).toBeVisible()
+  await expect(bindBanner()).toBeVisible()
 })
 
-test('global search: engines toggle and reorder as [search].engines', async () => {
+test('keys: the bind banner is on the Keys screen only, and survives leaving it', async () => {
+  const notBindable = page.locator('.s-banner', { hasText: 'binds shortcuts through its own settings' })
+  if ((await notBindable.count()) === 0) {
+    // Bindable desktop: a global key says whether the desktop has it. The
+    // file-search key was removed above, and no key gets no badge.
+    await expect(group('Launcher').locator('.s-row', { hasText: 'Hotkey' }).locator('.s-badge')).toHaveCount(1)
+    await expect(group('File search').locator('.s-row', { hasText: 'Hotkey' }).locator('.s-badge')).toHaveCount(0)
+  }
+  for (const title of ['Panel', 'Search', 'Plugins']) {
+    await section(title).click()
+    await expect(bindBanner()).toHaveCount(0)
+  }
+  await section('Keys').click()
+  await expect(bindBanner()).toBeVisible()
+})
+
+test('search: engines toggle and reorder as [search].engines', async () => {
+  await section('Search').click()
   const engines = page.locator('.s-section', { hasText: 'Web search engines' })
   const firstRow = engines.locator('.s-list__row').first()
   const firstEngine = await firstRow.locator('.s-list__label').innerText()
@@ -363,7 +380,7 @@ test('global search: engines toggle and reorder as [search].engines', async () =
 })
 
 test('file search: hidden-files preference toggles, persists, and redraws from the store', async () => {
-  await section('File Search').click()
+  await section('Search').click()
   const row = page.locator('.s-row', { hasText: 'Hidden Files' }).first()
   await expect(row).toBeVisible()
   const toggle = row.locator('.s-toggle')
@@ -372,8 +389,8 @@ test('file search: hidden-files preference toggles, persists, and redraws from t
   // The switch shows the stored value, so it only flips once the save has
   // round-tripped and the screen re-fetched - which is the bug this guards.
   await expect(toggle).toHaveAttribute('aria-checked', 'true')
-  await section('General').click()
-  await section('File Search').click()
+  await section('Panel').click()
+  await section('Search').click()
   await expect(page.locator('.s-row', { hasText: 'Hidden Files' }).first().locator('.s-toggle')).toHaveAttribute(
     'aria-checked',
     'true'
@@ -405,7 +422,7 @@ const pickRow = (label: string): ReturnType<Page['locator']> =>
   page.locator('.s-pickrow', { has: page.locator('.s-pickrow__label', { hasText: new RegExp(`^${label}$`) }) })
 
 test('pins: the same target twice is refused with a note and written once', async () => {
-  await section('Global Search').click()
+  await section('Search').click()
   const pins = page.locator('.s-section', { hasText: 'Pins' })
   const pinFirstCommand = async (): Promise<void> => {
     await pins.locator('.s-button', { hasText: 'Pin something' }).click()
@@ -444,7 +461,7 @@ test('an alias cannot point at a web search: the picker does not offer one', asy
 })
 
 test('a typed number commits on Enter', async () => {
-  await section('General').click()
+  await section('Panel').click()
   const row = page.locator('.s-row', { hasText: 'Panel width' })
   await row.locator('select').selectOption({ label: 'Type a number…' })
   const input = row.locator('input[type="number"]')
@@ -454,7 +471,7 @@ test('a typed number commits on Enter', async () => {
 })
 
 test('Escape in a text field leaves the field and keeps the window', async () => {
-  await section('Global Search').click()
+  await section('Search').click()
   const input = page.locator('.s-section', { hasText: 'Aliases' }).locator('input')
   await input.click()
   await input.type('ff')
@@ -462,4 +479,67 @@ test('Escape in a text field leaves the field and keeps the window', async () =>
   expect(await input.evaluate((el) => el === document.activeElement)).toBe(false)
   await page.waitForTimeout(300)
   await expect(page.locator('.settings')).toBeVisible()
+})
+
+test('Ctrl+N switches sections from anywhere', async () => {
+  await page.keyboard.press('Control+3')
+  await expect(page.locator('.settings__heading')).toHaveText('Keys')
+  await page.keyboard.press('Control+1')
+  await expect(page.locator('.settings__heading')).toHaveText('Panel')
+})
+
+test('the filter hides what does not match, jumps to the section that does, and Esc clears it', async () => {
+  const filter = page.locator('.settings__filter')
+  await page.keyboard.press('Control+f')
+  expect(await filter.evaluate((el) => el === document.activeElement)).toBe(true)
+
+  await page.keyboard.type('focus is lost')
+  const visibleRows = page.locator('.settings__content .s-row:visible')
+  await expect(visibleRows).toHaveCount(1)
+  await expect(visibleRows.locator('.s-row__label')).toHaveText('Hide when focus is lost')
+  await expect(group('Appearance')).toBeHidden()
+
+  await filter.fill('')
+  await page.keyboard.type('action panel')
+  await expect(page.locator('.settings__heading')).toHaveText('Keys')
+
+  await page.keyboard.press('Escape')
+  await expect(filter).toHaveValue('')
+  expect(await filter.evaluate((el) => el === document.activeElement)).toBe(false)
+  await expect(page.locator('.settings')).toBeVisible()
+  await page.keyboard.press('Control+1')
+  await expect(group('Appearance')).toBeVisible()
+  expect(await page.locator('.settings__content .s-row:visible').count()).toBeGreaterThan(1)
+})
+
+test('Up and Down walk the rows, landing on the control so Space acts on it', async () => {
+  await page.keyboard.press('Control+1')
+  await page.locator('.settings__heading').click()
+  await page.keyboard.press('ArrowDown')
+  const toggle = page.locator('.s-row', { hasText: 'Hide when focus is lost' }).locator('.s-toggle')
+  expect(await toggle.evaluate((el) => el === document.activeElement)).toBe(true)
+  await page.keyboard.press('Space')
+  await expect(toggle).toHaveAttribute('aria-checked', 'false')
+  await expect.poll(config).toContain('hide_on_blur = false')
+  await page.keyboard.press('Space')
+  await expect(toggle).toHaveAttribute('aria-checked', 'true')
+  await expect.poll(config).not.toContain('hide_on_blur')
+
+  // Down again lands in the second row; its select keeps the arrows from there.
+  await page.keyboard.press('ArrowDown')
+  const rows = page.locator('.settings__content .s-row:visible')
+  expect(await rows.nth(1).evaluate((el) => el.contains(document.activeElement))).toBe(true)
+  await page.keyboard.press('Escape')
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true)
+})
+
+test('a slash typed in a text field is a character, not the filter key', async () => {
+  await section('Search').click()
+  const input = page.locator('.s-section', { hasText: 'Aliases' }).locator('input')
+  await input.click()
+  await input.type('a/b')
+  await expect(input).toHaveValue('a/b')
+  expect(await input.evaluate((el) => el === document.activeElement)).toBe(true)
+  await input.fill('')
+  await page.keyboard.press('Escape')
 })

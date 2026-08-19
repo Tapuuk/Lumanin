@@ -101,7 +101,13 @@ function planSignature(plan: BindPlanDto): string {
   ])
 }
 
-export function BindBanner(): React.JSX.Element | null {
+/**
+ * `visible` hides the banner without unmounting it: the baseline and the
+ * attempt record above must outlive a section switch, or an edit made a
+ * moment ago would come back as a pre-existing difference with an Apply
+ * button, and an in-flight write would lose its report.
+ */
+export function BindBanner({ visible }: { visible: boolean }): React.JSX.Element | null {
   const { state } = useSettingsState()
   const { plan, replan } = useBindPlan()
   const [applying, setApplying] = useState(false)
@@ -152,7 +158,7 @@ export function BindBanner(): React.JSX.Element | null {
     apply()
   }, [bindable, signature, applying, apply])
 
-  if (state === null) return null
+  if (!visible || state === null) return null
   if (!state.bindable) {
     return (
       <div className="s-banner s-banner--info">

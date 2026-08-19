@@ -3,18 +3,19 @@ import { OFFERED_RESULT_GROUPS, RESULT_GROUP_LABELS, type ResultGroup } from '@s
 import { BUILTIN_ENGINES } from '@shared/engines'
 import { formatHotkey, parseHotkey } from '@shared/hotkey'
 import type { PluginDto } from '@shared/ipc'
-import { GLOBAL_HOTKEY, HABIT_SETTING } from '@shared/settings-model'
+import { HABIT_SETTING } from '@shared/settings-model'
 import { boundState, useManagedBinds } from './bind'
-import { HotkeyCapture, Modal, ReorderList, Row, Section, SettingControl, TextControl } from './controls'
+import { HotkeyCapture, Modal, ReorderList, Section, SettingControl, TextControl } from './controls'
 import { describeKey } from './describe'
-import { move } from './screens-basic'
+import { FileSearchGroup, move } from './screens-basic'
 import { TargetPicker, type PickedTarget } from './TargetPicker'
 import { guarded, invokeChecked, sameList, setConfig, useOptimistic, useSettingsState } from './useSettings'
 
 /**
- * Global Search: the hotkey, ranking, engines, result order, pins and aliases —
- * the launcher's whole root behaviour, on one screen the way the CLI menu has
- * it. Plugin Hotkeys is beside it: same targets, same picker, different key.
+ * Search: ranking, engines, result order, pins, aliases and file search
+ * behaviour, all of the launcher's root behaviour on one screen. The CLI menu
+ * shares the settings model behind it. Plugin hotkeys live on Keys with the
+ * other keys: same targets, same picker, different key.
  */
 
 /** Apps + plugins, fetched once per screen: what `describeKey` resolves names from. */
@@ -32,6 +33,9 @@ function usePickerContext(): {
 }
 
 const NONE: readonly never[] = []
+
+const ENGINE_KEYWORDS = ['engine', ...BUILTIN_ENGINES.map((engine) => engine.name)].join(' ')
+const RESULT_KEYWORDS = ['ranking', ...OFFERED_RESULT_GROUPS.map((group) => RESULT_GROUP_LABELS[group])].join(' ')
 
 function samePins(
   a: readonly { key: string; title: string | null }[],
@@ -105,29 +109,11 @@ export function SearchScreen(): React.JSX.Element | null {
 
   return (
     <>
-      <Section>
-        <Row
-          label={GLOBAL_HOTKEY.label}
-          help={
-            resolved.general.hotkey.layer === 'env' || resolved.general.hotkey.layer === 'flag'
-              ? 'Set by the environment. Editing the file cannot change it.'
-              : GLOBAL_HOTKEY.help
-          }
-        >
-          <HotkeyCapture
-            value={resolved.general.hotkey.value}
-            disabled={
-              resolved.general.hotkey.layer === 'env' || resolved.general.hotkey.layer === 'flag'
-            }
-            onPick={(next) => {
-              if (next !== null) guarded(setConfig(['general', 'hotkey'], next))
-            }}
-          />
-        </Row>
+      <Section title="Ranking">
         <SettingControl setting={HABIT_SETTING} />
       </Section>
 
-      <Section title="Web search engines">
+      <Section title="Web search engines" keywords={ENGINE_KEYWORDS}>
         <p className="s-help">
           Every engine enabled here is offered under every query, in this order. Custom engines can
           be added in <code>lumanin config</code> for now.
@@ -157,7 +143,7 @@ export function SearchScreen(): React.JSX.Element | null {
         />
       </Section>
 
-      <Section title="Result order">
+      <Section title="Result order" keywords={RESULT_KEYWORDS}>
         <p className="s-help">Which kinds of result appear, and where the unranked ones sit.</p>
         <ReorderList
           rows={[
@@ -184,7 +170,7 @@ export function SearchScreen(): React.JSX.Element | null {
         />
       </Section>
 
-      <Section title="Pins">
+      <Section title="Pins" keywords="pinned top of the root">
         <p className="s-help">
           Always at the top of the root, in this order, matched by name like everything else.
         </p>
@@ -216,7 +202,7 @@ export function SearchScreen(): React.JSX.Element | null {
         </button>
       </Section>
 
-      <Section title="Aliases">
+      <Section title="Aliases" keywords="alias short word target">
         <p className="s-help">Type the word, get the thing: <code>ff</code> for Firefox.</p>
         {aliases.map(([alias, entry]) => (
           <div key={alias} className="s-list__row">
@@ -259,6 +245,8 @@ export function SearchScreen(): React.JSX.Element | null {
         </div>
       </Section>
 
+      <FileSearchGroup />
+
       {picking !== null && (
         <TargetPicker
           purpose={picking}
@@ -295,7 +283,7 @@ export function SearchScreen(): React.JSX.Element | null {
 
 // ---------------------------------------------------------------------------
 
-export function HotkeysScreen(): React.JSX.Element | null {
+export function PluginHotkeysGroup(): React.JSX.Element | null {
   const { state } = useSettingsState()
   const context = usePickerContext()
   const binds = useManagedBinds()
@@ -342,7 +330,7 @@ export function HotkeysScreen(): React.JSX.Element | null {
 
   return (
     <>
-      <Section>
+      <Section title="Plugin hotkeys" keywords="global key bind command category row action">
         <p className="s-help">
           A global key bound to one thing a plugin offers: a command, a category, a row, or one
           action on a row. The key is written into this desktop&apos;s own shortcut config, with

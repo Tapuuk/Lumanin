@@ -1,7 +1,18 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode
+} from 'react'
 import { ENV_PREFIX } from '@shared/identity'
 import { formatHotkey, KEY_ALIASES, MODIFIERS, parseHotkey, type Hotkey, type Modifier } from '@shared/hotkey'
 import type { Setting } from '@shared/settings-model'
+import { matchesFilter } from './sections'
 import { setConfig, useOptimistic, useSettingsState } from './useSettings'
 
 /**
@@ -11,12 +22,53 @@ import { setConfig, useOptimistic, useSettingsState } from './useSettings'
  * every other writer of `config.toml`.
  */
 
-export function Section({ title, children }: { title?: string; children: ReactNode }): React.JSX.Element {
+/** The sidebar's filter text. Rows and sections hide themselves when they do not match it. */
+export const FilterContext = createContext('')
+
+export function useFilter(): string {
+  return useContext(FilterContext)
+}
+
+/**
+ * How a Section learns what its Rows decided: each Row reports whether it
+ * matched, and the Section stays visible while any did. `own` says the
+ * Section's title or keywords matched, in which case its Rows all show.
+ */
+const SectionMatches = createContext<{
+  readonly own: boolean
+  readonly report: (id: string, matched: boolean) => void
+} | null>(null)
+
+export function Section({
+  title,
+  keywords,
+  children
+}: {
+  title?: string
+  /** Words a filter finds this section by, for content that is not Rows. */
+  keywords?: string
+  children: ReactNode
+}): React.JSX.Element {
+  const filter = useFilter()
+  const [matched, setMatched] = useState<ReadonlySet<string>>(() => new Set())
+  const report = useCallback((id: string, isMatch: boolean) => {
+    setMatched((previous) => {
+      if (previous.has(id) === isMatch) return previous
+      const next = new Set(previous)
+      if (isMatch) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }, [])
+  const own = matchesFilter(filter, title, keywords)
+  const hidden = filter.trim().length > 0 && !own && matched.size === 0
   return (
-    <section className="s-section">
-      {title !== undefined && <h2 className="s-section__title">{title}</h2>}
-      {children}
-    </section>
+    <SectionMatches.Provider value={{ own, report }}>
+      <section className="s-section" hidden={hidden}>
+        {title !== undefined && <h2 className="s-section__title">{title}</h2>}
+        {children}
+      </section>
+    </SectionMatches.Provider>
   )
 }
 
@@ -29,8 +81,17 @@ export function Row({
   help?: string
   children: ReactNode
 }): React.JSX.Element {
+  const filter = useFilter()
+  const section = useContext(SectionMatches)
+  const id = useId()
+  const matched = matchesFilter(filter, label, help)
+  const report = section?.report
+  useLayoutEffect(() => {
+    report?.(id, matched)
+    return () => report?.(id, false)
+  }, [report, id, matched])
   return (
-    <div className="s-row">
+    <div className="s-row" hidden={!matched && section?.own !== true}>
       <div className="s-row__text">
         <div className="s-row__label">{label}</div>
         {help !== undefined && <div className="s-row__help">{help}</div>}

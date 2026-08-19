@@ -96,7 +96,28 @@ body:has(.settings) {
   overflow-y: auto;
 }
 
+.settings__filter {
+  margin: 0 0 8px;
+  padding: 5px 9px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--s-radius);
+  background: var(--lumanin-bg-hover);
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text);
+  user-select: text;
+  cursor: text;
+}
+
+.settings__filter::placeholder {
+  color: var(--lumanin-text-faint);
+}
+
 .settings__section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 9px 14px;
   border: none;
   border-radius: var(--s-radius-large);
@@ -118,6 +139,11 @@ body:has(.settings) {
   color: var(--lumanin-accent);
 }
 
+.settings__section-key {
+  font-size: 11px;
+  color: var(--lumanin-text-faint);
+}
+
 .settings__content {
   flex: 1 1 auto;
   min-width: 0;
@@ -127,19 +153,10 @@ body:has(.settings) {
 }
 
 .settings__heading {
-  margin: 0 0 4px;
+  margin: 0 0 18px;
   font-size: 15px;
   font-weight: 600;
 }
-
-.settings__hint {
-  margin: 0 0 18px;
-  user-select: text;
-  cursor: auto;
-  font-size: 13px;
-  color: var(--lumanin-text-muted);
-}
-
 
 /* Scrollbars match the panel's thin bar. */
 .settings__sidebar::-webkit-scrollbar,
@@ -169,6 +186,12 @@ body:has(.settings) {
 
 .s-section {
   margin-bottom: 24px;
+}
+
+/* Filtered out. Stated here because .s-row sets its own display. */
+.s-section[hidden],
+.s-row[hidden] {
+  display: none;
 }
 
 .s-section__title {

@@ -32,8 +32,9 @@ export function PluginsScreen(): React.JSX.Element {
       <InstallSection onInstalled={refresh} />
       {plugins
         // A bundled plugin is a feature of the app that happens to be built as
-        // one; file search has its own screen. Listing it here reads as "a
-        // plugin called files", which it is not to anyone using the launcher.
+        // one; file search is edited under Search (behaviour) and Keys (its key).
+        // Listing it here reads as "a plugin called files", which it is not to
+        // anyone using the launcher.
         .filter((plugin) => !plugin.bundled)
         .map((plugin) => (
           <PluginCard key={plugin.name} plugin={plugin} onChanged={refresh} />
@@ -49,7 +50,7 @@ function PluginCard({ plugin, onChanged }: { plugin: PluginDto; onChanged: () =>
   const [problem, setProblem] = useState<string | null>(null)
 
   return (
-    <Section>
+    <Section keywords={`${plugin.title} ${plugin.name}`}>
       <div className="s-plugin__head">
         <Toggle
           checked={plugin.enabled}
@@ -532,7 +533,7 @@ function InstallSection({ onInstalled }: { onInstalled: () => void }): React.JSX
   }
 
   return (
-    <Section title="Install a plugin">
+    <Section title="Install a plugin" keywords="repository url directory fetch">
       <p className="s-help">
         From any public git repository over https: <code>owner/name</code>, a GitHub URL, or a
         directory path on this machine.
