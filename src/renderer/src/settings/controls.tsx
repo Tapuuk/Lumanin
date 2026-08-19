@@ -628,10 +628,37 @@ export function TextControl({
   )
 }
 
+/** The one add button: "+ Pin something", "+ Bind a key". */
+export function AddButton({
+  children,
+  onClick,
+  disabled
+}: {
+  children: ReactNode
+  onClick: () => void
+  disabled?: boolean
+}): React.JSX.Element {
+  return (
+    <button type="button" className="s-button s-button--add" disabled={disabled === true} onClick={onClick}>
+      {children}
+    </button>
+  )
+}
+
+/** The one remove button: a small ✕ that names what it removes. */
+export function RemoveButton({ what, onClick }: { what: string; onClick: () => void }): React.JSX.Element {
+  return (
+    <button type="button" className="s-remove" aria-label={`Remove ${what}`} onClick={onClick}>
+      ✕
+    </button>
+  )
+}
+
 /**
  * A reorderable, optionally toggleable list — engines, result groups, file
  * categories, pins. Buttons rather than drag: a keyboard-first app, and drag
- * with a hidden drop model is the least discoverable control there is.
+ * with a hidden drop model is the least discoverable control there is. The
+ * buttons show on hover or focus; Alt+Up and Alt+Down move the focused row.
  */
 export function ReorderList({
   rows,
@@ -644,53 +671,81 @@ export function ReorderList({
   onMove: (id: string, delta: number) => void
   onRemove?: (id: string) => void
 }): React.JSX.Element {
+  const list = useRef<HTMLDivElement>(null)
+  // Chromium drops focus from a node React reparents, so after a keyboard move
+  // the moved row's first control is focused again once the new order renders.
+  const pendingFocus = useRef<string | null>(null)
+  useLayoutEffect(() => {
+    const id = pendingFocus.current
+    if (id === null || list.current === null) return
+    pendingFocus.current = null
+    const row = Array.from(list.current.querySelectorAll<HTMLElement>('.s-list__row')).find(
+      (candidate) => candidate.dataset['id'] === id
+    )
+    row?.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled)')?.focus()
+  })
+
+  const move = (id: string, delta: number): void => {
+    pendingFocus.current = id
+    onMove(id, delta)
+  }
+
   return (
-    <div className="s-list">
-      {rows.map((row, index) => (
-        <div key={row.id} className={`s-list__row${row.on === false ? ' s-list__row--off' : ''}`}>
-          {onToggle !== undefined && (
-            <Toggle
-              checked={row.on !== false}
-              ariaLabel={row.label}
-              onChange={(next) => onToggle(row.id, next)}
-            />
-          )}
-          <div className="s-list__text">
-            <span className="s-list__label">{row.label}</span>
-            {row.detail !== undefined && <span className="s-list__detail">{row.detail}</span>}
-          </div>
-          <div className="s-list__buttons">
-            <button
-              type="button"
-              className="s-iconbtn"
-              aria-label="Move up"
-              disabled={index === 0 || row.on === false}
-              onClick={() => onMove(row.id, -1)}
-            >
-              ↑
-            </button>
-            <button
-              type="button"
-              className="s-iconbtn"
-              aria-label="Move down"
-              disabled={index === rows.length - 1 || row.on === false}
-              onClick={() => onMove(row.id, 1)}
-            >
-              ↓
-            </button>
-            {onRemove !== undefined && (
+    <div ref={list} className="s-list">
+      {rows.map((row, index) => {
+        const off = row.on === false
+        const canUp = index > 0 && !off
+        const canDown = index < rows.length - 1 && !off
+        return (
+          <div
+            key={row.id}
+            data-id={row.id}
+            className={`s-list__row${off ? ' s-list__row--off' : ''}`}
+            aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+            onKeyDown={(event) => {
+              if (!event.altKey || event.ctrlKey || event.metaKey) return
+              if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+              event.preventDefault()
+              event.stopPropagation()
+              if (event.key === 'ArrowUp' && canUp) move(row.id, -1)
+              if (event.key === 'ArrowDown' && canDown) move(row.id, 1)
+            }}
+          >
+            {onToggle !== undefined && (
+              <Toggle
+                checked={!off}
+                ariaLabel={row.label}
+                onChange={(next) => onToggle(row.id, next)}
+              />
+            )}
+            <div className="s-list__text">
+              <span className="s-list__label">{row.label}</span>
+              {row.detail !== undefined && <span className="s-list__detail">{row.detail}</span>}
+            </div>
+            <div className="s-list__buttons">
               <button
                 type="button"
-                className="s-iconbtn s-iconbtn--danger"
-                aria-label="Remove"
-                onClick={() => onRemove(row.id)}
+                className="s-iconbtn"
+                aria-label="Move up"
+                disabled={!canUp}
+                onClick={() => move(row.id, -1)}
               >
-                ✕
+                ↑
               </button>
-            )}
+              <button
+                type="button"
+                className="s-iconbtn"
+                aria-label="Move down"
+                disabled={!canDown}
+                onClick={() => move(row.id, 1)}
+              >
+                ↓
+              </button>
+              {onRemove !== undefined && <RemoveButton what={row.label} onClick={() => onRemove(row.id)} />}
+            </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -892,6 +947,7 @@ export function HotkeyCapture({
       <button
         type="button"
         className={`s-hotkey${capturing ? ' s-hotkey--capturing' : ''}`}
+        aria-pressed={capturing}
         disabled={disabled === true}
         onClick={() => {
           arm(true)

@@ -475,6 +475,35 @@ body:has(.settings) {
   cursor: default;
 }
 
+.s-button--add {
+  color: var(--lumanin-text-muted);
+  border-style: dashed;
+}
+
+.s-button--add:hover:not(:disabled) {
+  color: var(--lumanin-text);
+  border-style: solid;
+}
+
+.s-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  color: var(--lumanin-text-muted);
+  cursor: pointer;
+}
+
+.s-remove:hover {
+  color: var(--lumanin-err);
+}
+
 .s-linkish {
   border: none;
   background: none;
@@ -570,6 +599,22 @@ body:has(.settings) {
   display: flex;
   gap: 4px;
   flex: 0 0 auto;
+}
+
+/* Move buttons show only for the row under the pointer or holding focus;
+   a dead end button is hidden outright, keeping the column aligned. */
+.s-list__buttons .s-iconbtn {
+  opacity: 0;
+  transition: opacity var(--lumanin-motion-duration, 120ms);
+}
+
+.s-list__row:hover .s-list__buttons .s-iconbtn,
+.s-list__row:focus-within .s-list__buttons .s-iconbtn {
+  opacity: 1;
+}
+
+.s-list__buttons .s-iconbtn:disabled {
+  visibility: hidden;
 }
 
 /* ------------------------------------------------------------------ banner */
@@ -698,6 +743,23 @@ body:has(.settings) {
 .s-hotkey--capturing {
   border-color: var(--lumanin-accent);
   color: var(--lumanin-accent);
+  animation: s-capture-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes s-capture-pulse {
+  0%,
+  100% {
+    border-color: var(--lumanin-accent);
+  }
+  50% {
+    border-color: var(--lumanin-border);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .s-hotkey--capturing {
+    animation: none;
+  }
 }
 
 .s-chords {
