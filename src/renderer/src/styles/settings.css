@@ -1019,52 +1019,45 @@ body:has(.settings) {
 
 /* ------------------------------------------------------------------ wizard */
 
-/* First run fills the window: no chrome competing with it, one card, one
-   question at a time. */
+/* First run fills the window: no chrome competing with it, one top-anchored
+   card, three steps. */
 .wiz {
   position: fixed;
   inset: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   background: var(--lumanin-bg);
   z-index: 60;
 }
 
 .wiz__card {
-  width: min(460px, 88%);
-  max-height: 88%;
+  width: min(560px, 92%);
+  margin-top: 48px;
+  max-height: calc(100% - 96px);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  text-align: center;
+  text-align: left;
   padding: 8px;
 }
 
-.wiz__glyph {
-  color: var(--lumanin-accent);
-  margin-bottom: 10px;
+.wiz__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
 .wiz__logo {
-  width: 88px;
-  height: 88px;
+  width: 32px;
+  height: 32px;
+  flex: none;
   color: var(--lumanin-accent);
 }
 
-/* At wizard size the mark has to read as a search glass, not a star: the SVG's
-   own stroke widths are drawn for icon-theme sizes, so the ring and its handle
-   are thickened here (CSS wins over the presentation attribute) while the rays
-   keep their weight — the glass is the subject, the sun is the frame. */
-.wiz__logo > circle[fill='none'] {
-  stroke-width: 20;
-}
-.wiz__logo > line {
-  stroke-width: 24;
-}
-
 .wiz__title {
-  margin: 0 0 10px;
+  margin: 0;
   font-size: 24px;
   font-weight: 600;
   color: var(--lumanin-text);
@@ -1085,7 +1078,6 @@ body:has(.settings) {
 
 .wiz__dots {
   display: flex;
-  justify-content: center;
   gap: 8px;
   margin-bottom: 22px;
 }
@@ -1148,27 +1140,12 @@ body:has(.settings) {
   color: var(--lumanin-text-muted);
 }
 
-.wiz__center {
-  display: flex;
-  justify-content: center;
-  margin: 6px 0 26px;
-}
-
-.wiz__center .s-hotkey {
-  font-size: 16px;
-  padding: 10px 22px;
-}
-
 .wiz__buttons {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 4px;
-}
-
-.wiz__buttons--center {
-  justify-content: center;
+  margin-top: 16px;
 }
 
 .wiz__button-pair {
@@ -1177,11 +1154,16 @@ body:has(.settings) {
 }
 
 .wiz__next {
+  margin-left: auto;
   padding: 7px 22px;
 }
 
+.wiz__after {
+  margin: 12px 0 0;
+}
+
 .wiz__skip {
-  margin-top: 16px;
+  padding: 0;
   border: none;
   background: none;
   font: inherit;
@@ -1191,11 +1173,12 @@ body:has(.settings) {
 }
 
 .wiz__skip:hover {
-  color: var(--lumanin-text-muted);
+  color: var(--lumanin-text);
 }
 
 .wiz__details-toggle {
-  align-self: center;
+  align-self: flex-start;
+  padding: 0;
   margin: 0 0 14px;
   border: none;
   background: none;
@@ -1210,7 +1193,6 @@ body:has(.settings) {
 }
 
 .wiz__details {
-  text-align: left;
   margin-bottom: 16px;
 }
 
@@ -1229,9 +1211,3 @@ body:has(.settings) {
   background-clip: content-box;
 }
 
-
-/* Wizard lists (result order steps) are left-aligned inside a centred card. */
-.wiz__list {
-  text-align: left;
-  margin-bottom: 18px;
-}
