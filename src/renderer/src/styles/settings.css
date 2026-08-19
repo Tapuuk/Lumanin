@@ -204,7 +204,7 @@ body:has(.settings) {
 
 .s-row {
   display: grid;
-  grid-template-columns: minmax(150px, 200px) 1fr;
+  grid-template-columns: minmax(150px, 200px) 1fr auto;
   column-gap: 16px;
   align-items: start;
   padding: 6px 0;
@@ -216,6 +216,38 @@ body:has(.settings) {
   padding-top: 5px;
 }
 
+/* Reset and the "Saved" acknowledgement, level with the control's first line.
+   Always present so the columns line up across rows. */
+.s-row__aside {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-self: end;
+  min-height: 24px;
+  padding-top: 5px;
+}
+
+.s-row__saved {
+  font-size: 11px;
+  color: var(--lumanin-accent);
+  animation: s-saved-in 150ms ease-out;
+}
+
+@keyframes s-saved-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .s-row__saved {
+    animation: none;
+  }
+}
+
 @container (max-width: 400px) {
   .s-row {
     grid-template-columns: 1fr;
@@ -223,6 +255,16 @@ body:has(.settings) {
 
   .s-row__text {
     padding-top: 0;
+  }
+
+  .s-row__aside {
+    justify-self: start;
+    min-height: 0;
+    padding-top: 0;
+  }
+
+  .s-row__aside:empty {
+    display: none;
   }
 }
 
@@ -560,18 +602,18 @@ body:has(.settings) {
 }
 
 .s-linkish {
+  padding: 0;
   border: none;
   background: none;
   font: inherit;
   font-size: 12.5px;
+  text-align: left;
   color: var(--lumanin-accent);
   cursor: pointer;
 }
 
 .s-linkish:hover {
   color: var(--lumanin-text);
-  padding: 0;
-  text-align: left;
 }
 
 .s-iconbtn {

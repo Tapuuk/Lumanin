@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { SettingsSetValue, SettingsState } from '@shared/ipc'
 
 /**
@@ -16,24 +16,36 @@ interface SettingsStore {
   /** The last save that failed, as a sentence — dismissed by `clearSaveError`. */
   readonly saveError: string | null
   readonly clearSaveError: () => void
+  /** When this session's last write landed, as `Date.now()`; null until one has. */
+  readonly lastSavedAt: number | null
 }
 
 const SettingsContext = createContext<SettingsStore>({
   state: null,
   refresh: async () => {},
   saveError: null,
-  clearSaveError: () => {}
+  clearSaveError: () => {},
+  lastSavedAt: null
 })
+
+/**
+ * The row around a control listens here, and `useOptimistic` calls it once
+ * the truth confirms a value the control asked for. Controls outside a row get
+ * the no-op.
+ */
+export const RowSavedContext = createContext<() => void>(() => {})
 
 // The provider registers itself here so `guarded` — called from plain event
 // handlers all over the screens — can surface a failed write without every
 // call site wiring its own error state. One window, one provider, so a plain
 // module slot is enough.
 let notifySaveError: (message: string) => void = () => {}
+let notifySaved: () => void = () => {}
 
 export function SettingsProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [state, setState] = useState<SettingsState | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null)
 
   const refresh = useCallback(async () => {
     setState(await window.lumanin.invoke('settings.state'))
@@ -41,10 +53,12 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
 
   useEffect(() => {
     notifySaveError = setSaveError
+    notifySaved = () => setLastSavedAt(Date.now())
     void refresh()
     const off = window.lumanin.on('settings.changed', setState) as () => void
     return () => {
       notifySaveError = () => {}
+      notifySaved = () => {}
       off()
     }
   }, [refresh])
@@ -52,7 +66,7 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
   const clearSaveError = useCallback(() => setSaveError(null), [])
 
   return (
-    <SettingsContext.Provider value={{ state, refresh, saveError, clearSaveError }}>
+    <SettingsContext.Provider value={{ state, refresh, saveError, clearSaveError, lastSavedAt }}>
       {children}
     </SettingsContext.Provider>
   )
@@ -73,7 +87,17 @@ export function useOptimistic<T>(
   equal: (a: T, b: T) => boolean = Object.is
 ): [shown: T, commit: (next: T, work: Promise<unknown>) => void] {
   const [pending, setPending] = useState<{ readonly value: T } | null>(null)
-  if (pending !== null && equal(pending.value, value)) setPending(null)
+  const onSaved = useContext(RowSavedContext)
+  const confirmed = useRef(false)
+  if (pending !== null && equal(pending.value, value)) {
+    setPending(null)
+    confirmed.current = true
+  }
+  useEffect(() => {
+    if (!confirmed.current) return
+    confirmed.current = false
+    onSaved()
+  })
 
   const commit = useCallback((next: T, work: Promise<unknown>) => {
     const entry = { value: next }
@@ -97,6 +121,7 @@ export function sameList<T>(a: readonly T[], b: readonly T[]): boolean {
 export async function setConfig(path: readonly string[], value: SettingsSetValue): Promise<void> {
   const result = await window.lumanin.invoke('settings.set', { path, value })
   if (!result.ok) throw new Error(result.detail ?? 'the setting could not be saved')
+  notifySaved()
 }
 
 /**
@@ -117,4 +142,5 @@ export async function invokeChecked(
 ): Promise<void> {
   const result = await invoke()
   if (!result.ok) throw new Error(result.detail ?? fallback)
+  notifySaved()
 }
