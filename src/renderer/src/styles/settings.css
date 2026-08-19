@@ -260,6 +260,25 @@ body:has(.settings) {
   }
 }
 
+/* The content pane before the first state arrives. */
+.s-skeleton {
+  height: 28px;
+  margin: 6px 0;
+  border-radius: var(--s-radius);
+  background: var(--lumanin-bg-hover);
+  opacity: 0;
+  animation: s-skeleton-in 150ms step-end forwards;
+}
+
+@keyframes s-skeleton-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @container (max-width: 400px) {
   .s-row {
     grid-template-columns: 1fr;

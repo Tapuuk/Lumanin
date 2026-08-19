@@ -11,6 +11,7 @@ import { bundledPluginsDir, resolvePaths } from '../node/paths'
 import { applyCsp } from './csp'
 import { SettingsIpc } from './settings-ipc'
 import { SettingsWindow } from './settings-window'
+import { loadWindowBounds, saveWindowBounds } from './settings-window-state'
 import { ThemeService } from './theme'
 import { applyTextScale } from './text-scale'
 
@@ -111,8 +112,9 @@ function send<E extends EventName>(event: E, payload: EventMap[E]): void {
  * async, so an older snapshot must not land after a newer one.
  */
 let pushSequence = 0
-function pushState(): void {
+function pushState(reason: 'write' | 'watch'): void {
   const sequence = ++pushSequence
+  logger.debug('settings state push', { reason })
   void ipc
     .state()
     .then((state) => {
@@ -126,7 +128,7 @@ function pushState(): void {
 const ipc = new SettingsIpc({
   logger,
   paths,
-  bundledDir: bundledPluginsDir(__dirname),
+  bundledDir: bundledPluginsDir(__dirname, process.resourcesPath),
   theme,
   profile: profileReady,
   senderId: () => settingsWindow?.webContents?.id ?? null,
@@ -135,7 +137,7 @@ const ipc = new SettingsIpc({
   currentConfig: current,
   onWritten: () => {
     config = loadConfig({ fileContents: readConfigFile(), env: process.env })
-    pushState()
+    pushState('write')
   }
 })
 
@@ -154,7 +156,7 @@ function watchConfigFile(): void {
         void theme.refresh('config.toml changed')
         // Whoever wrote the file — this app, the CLI, an editor — the screens
         // re-draw from what is now true.
-        pushState()
+        pushState('watch')
       }, 120)
     })
     configWatcher.on('error', () => undefined)
@@ -173,20 +175,26 @@ app.whenReady().then(async () => {
   applyCsp(devServerUrl)
   ipc.register()
 
+  const savedBounds = loadWindowBounds(paths.state)
   settingsWindow = new SettingsWindow({
     logger,
     preloadPath: join(__dirname, '../preload/index.js'),
     rendererUrl: devServerUrl,
-    rendererFile: join(__dirname, '../renderer/settings.html')
+    rendererFile: join(__dirname, '../renderer/settings.html'),
+    savedBounds,
+    onBounds: (bounds) => {
+      try {
+        saveWindowBounds(paths.state, bounds)
+      } catch (error) {
+        logger.debug('settings window bounds not saved', { error })
+      }
+    }
   })
 
   // The theme chain needs the platform's appearance backend — Omarchy's
-  // palette, the portal's light/dark, and the desktop's text scale. The
-  // window's *size* depends on that last one, and on Wayland a window can only
-  // be sized when it is created (`setSize` on a mapped surface changes
-  // nothing - measured, same as the panel), so the probe runs first. It is
+  // palette, the portal's light/dark, and the desktop's text scale. It is
   // ~150 ms; the cap keeps a stuck probe from keeping the window away, at the
-  // cost of the built-in size and a repaint when the theme lands.
+  // cost of the built-in theme and a repaint when the real one lands.
   const attach = (async (): Promise<void> => {
     try {
       const probed = await profileReady()
@@ -201,8 +209,9 @@ app.whenReady().then(async () => {
       logger.warn('appearance probing failed; staying on the built-in theme', { error })
     }
   })()
-  await Promise.race([attach, new Promise<void>((done) => setTimeout(done, 1500))])
+  const attachOrCap = Promise.race([attach, new Promise<void>((done) => setTimeout(done, 1500))])
 
+  await attachOrCap
   settingsWindow.setScale(theme.payloadNow.textScale, theme.toolkitScaleNow)
   settingsWindow.open()
   {
