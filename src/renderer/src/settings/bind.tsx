@@ -108,7 +108,19 @@ function planSignature(plan: BindPlanDto): string {
  * moment ago would come back as a pre-existing difference with an Apply
  * button, and an in-flight write would lose its report.
  */
-export function BindBanner({ visible }: { visible: boolean }): React.JSX.Element | null {
+export function BindBanner({
+  visible,
+  full = true
+}: {
+  visible: boolean
+  /**
+   * Everything, or only what a write here caused. The Panel screen gets the
+   * latter: the position setting writes the compositor's rule, so its progress
+   * and outcome belong next to it, but the standing notes about how this
+   * desktop binds keys do not.
+   */
+  full?: boolean
+}): React.JSX.Element | null {
   const { state } = useSettingsState()
   const { plan, replan } = useBindPlan()
   const [applying, setApplying] = useState(false)
@@ -161,6 +173,7 @@ export function BindBanner({ visible }: { visible: boolean }): React.JSX.Element
 
   if (!visible || state === null) return null
   if (!state.bindable) {
+    if (!full) return null
     return (
       <div className="s-banner s-banner--info">
         This desktop binds shortcuts through its own settings. Add a shortcut there running{' '}
@@ -185,7 +198,7 @@ export function BindBanner({ visible }: { visible: boolean }): React.JSX.Element
       <div className={`s-banner${failures.length > 0 ? '' : ' s-banner--info'}`}>
         <div>
           {failures.length === 0 ? (
-            <span>Shortcuts updated. A backup of every touched file was kept.</span>
+            <span>Shortcut config updated. A backup of every touched file was kept.</span>
           ) : (
             failures.map((result) => (
               <div key={result.target} className="s-error">
@@ -239,6 +252,7 @@ export function BindBanner({ visible }: { visible: boolean }): React.JSX.Element
         </div>
       )
     }
+    if (!full) return null
   }
   if (signature !== null && plan !== null) {
     // A difference that predates this window — config.toml and the compositor

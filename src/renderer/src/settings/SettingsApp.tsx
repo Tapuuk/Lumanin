@@ -174,7 +174,7 @@ function Shell(): React.JSX.Element {
                 <SaveErrorBanner />
                 {/* Not while the wizard is up: its "Make it stick" step is the
                     one place first-run compositor writes happen. */}
-                {wizard !== true && <BindBanner visible={active === 'keys'} />}
+                {wizard !== true && <BindBanner visible={active === 'keys' || active === 'panel'} full={active === 'keys'} />}
                 {active === 'panel' && <PanelScreen />}
                 {active === 'search' && <SearchScreen />}
                 {active === 'keys' && <KeysScreen />}

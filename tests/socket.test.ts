@@ -238,4 +238,23 @@ describe('toggle coalescing', () => {
     expect(coalesceToggle(TOGGLE_COALESCE_MS, 0)).toBe(false)
     expect(coalesceToggle(TOGGLE_COALESCE_MS - 1, 0)).toBe(true)
   })
+
+  it('lets a fast hand through while a 40 Hz repeat still collapses', () => {
+    // Hammering the key by hand lands presses about 80-100 ms apart; a held key
+    // repeats every 25 ms. Every press of the hand must flip, the repeat must not.
+    let last: number | null = null
+    let flips = 0
+    for (const now of [0, 90, 180, 270, 360]) {
+      if (!coalesceToggle(now, last)) flips += 1
+      last = now
+    }
+    expect(flips).toBe(5)
+    last = null
+    flips = 0
+    for (const now of [0, 25, 50, 75, 100, 125, 150]) {
+      if (!coalesceToggle(now, last)) flips += 1
+      last = now
+    }
+    expect(flips).toBe(1)
+  })
 })

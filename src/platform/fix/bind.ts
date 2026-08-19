@@ -3,6 +3,7 @@ import { DEFAULT_HOTKEY, type HotkeyChoice } from './actions'
 import { planFixes, type BindPlan, type FixDirs, type FixPlan } from './index'
 import type { Hotkey } from '../../shared/hotkey'
 import { parseHotkey } from '../../shared/hotkey'
+import { panelTopFraction } from '../../shared/placement'
 import type { ResolvedConfig } from '../../shared/config'
 
 /**
@@ -38,12 +39,15 @@ export function bindableGnome(profile: PlatformProfile): boolean {
 }
 
 /**
- * The bind half of the fix plan: the key, and nothing else the desktop needs.
+ * The compositor-config half of the fix plan: the key binds and the panel
+ * window rule, the two things a setting drives. Nothing else the desktop
+ * needs - the autostart entry, the systemd unit - because the settings screens
+ * ask one question; installing those is `doctor --fix`'s job, and it asks first.
  *
- * Filtered by action id rather than by "everything applicable" because the
- * settings screens ask one question. Installing the window rules, the autostart
- * entry and the systemd unit as a side effect of changing a hotkey is `doctor
- * --fix`'s job, and it asks first.
+ * The window rule is in because `[general].top` lives in it: a position saved
+ * in `config.toml` that the compositor never hears about is a setting that does
+ * nothing, and on Hyprland the rule shares our managed block with the binds
+ * anyway, so it was already in every diff.
  */
 export function planBind(profile: PlatformProfile, dirs: FixDirs, choice: HotkeyChoice): BindPlan {
   const plan = planFixes(profile, dirs, choice)
@@ -57,7 +61,16 @@ export function planBind(profile: PlatformProfile, dirs: FixDirs, choice: Hotkey
   }
 }
 
-const BIND_ACTIONS = new Set(['hyprland-bind', 'sway-rules', 'kde-shortcuts', 'cosmic-shortcuts'])
+const BIND_ACTIONS = new Set([
+  'hyprland-bind',
+  'hyprland-rules',
+  'hyprland-lua-bind',
+  'hyprland-lua-rules',
+  'hyprland-lua-require',
+  'sway-rules',
+  'kde-shortcuts',
+  'cosmic-shortcuts'
+])
 
 /**
  * The full key set the managed block must carry, read from a resolved config.
@@ -74,6 +87,7 @@ export function choiceFromConfig(config: ResolvedConfig): HotkeyChoice {
   return {
     hotkey: main,
     explicit: true,
+    panelTop: panelTopFraction(config.general.top.value),
     fileSearch,
     extraBinds: config.hotkeys.value.flatMap((binding) => {
       const hotkey = parseHotkey(binding.bind)

@@ -179,25 +179,28 @@ export function usesHyprlandLua(configDir: string, exists: (path: string) => boo
  * screen. The settings app therefore must not share this window class at all —
  * it runs with its own — and these rules stay exactly as verified.
  */
-const hyprlandRules: FixAction = {
-  id: 'hyprland-rules',
-  title: 'Hyprland window rules for the panel',
-  why: 'Floats, places and pins the panel, and stops the compositor drawing its own border around it.',
-  file: 'hypr/hyprland.conf',
-  alternateFiles: ['hypr/windows.conf', 'hypr/looknfeel.conf'],
-  signature: /^\s*windowrule\s*=/m,
-  body: [
-    `windowrule = float on,        match:class ^(${WINDOW_CLASS})$`,
-    `windowrule = move (monitor_w-window_w)/2 monitor_h*${String(PANEL_TOP_FRACTION)}, match:class ^(${WINDOW_CLASS})$`,
-    `windowrule = pin on,          match:class ^(${WINDOW_CLASS})$`,
-    `windowrule = no_anim on,      match:class ^(${WINDOW_CLASS})$`,
-    `windowrule = no_shadow on,    match:class ^(${WINDOW_CLASS})$`,
-    `windowrule = no_blur on,      match:class ^(${WINDOW_CLASS})$`,
-    `windowrule = border_size 0,   match:class ^(${WINDOW_CLASS})$`,
-    `windowrule = rounding 0,      match:class ^(${WINDOW_CLASS})$`
-  ],
-  applicable: (p) => p.isHyprland,
-  when: (dir, exists) => !usesHyprlandLua(dir, exists)
+function hyprlandRules(choice: HotkeyChoice): FixAction {
+  const top = String(choice.panelTop ?? PANEL_TOP_FRACTION)
+  return {
+    id: 'hyprland-rules',
+    title: 'Hyprland window rules for the panel',
+    why: 'Floats, places and pins the panel, and stops the compositor drawing its own border around it.',
+    file: 'hypr/hyprland.conf',
+    alternateFiles: ['hypr/windows.conf', 'hypr/looknfeel.conf'],
+    signature: /^\s*windowrule\s*=/m,
+    body: [
+      `windowrule = float on,        match:class ^(${WINDOW_CLASS})$`,
+      `windowrule = move (monitor_w-window_w)/2 monitor_h*${top}, match:class ^(${WINDOW_CLASS})$`,
+      `windowrule = pin on,          match:class ^(${WINDOW_CLASS})$`,
+      `windowrule = no_anim on,      match:class ^(${WINDOW_CLASS})$`,
+      `windowrule = no_shadow on,    match:class ^(${WINDOW_CLASS})$`,
+      `windowrule = no_blur on,      match:class ^(${WINDOW_CLASS})$`,
+      `windowrule = border_size 0,   match:class ^(${WINDOW_CLASS})$`,
+      `windowrule = rounding 0,      match:class ^(${WINDOW_CLASS})$`
+    ],
+    applicable: (p) => p.isHyprland,
+    when: (dir, exists) => !usesHyprlandLua(dir, exists)
+  }
 }
 
 /**
@@ -247,6 +250,11 @@ export interface HotkeyChoice {
   readonly fileSearch?: Hotkey | null
   /** True when the value came from config or the environment, not the default. */
   readonly explicit: boolean
+  /**
+   * `[general].top` as a fraction of the monitor height, for the compositor
+   * rule that places the panel. Omitted means the default placement.
+   */
+  readonly panelTop?: number
   /**
    * `[[hotkeys]]` binds, written into the same managed block as the toggle
    * bind. Always pass the current set: the block is rewritten whole, so a
@@ -377,7 +385,7 @@ function hyprlandLuaBind(choice: HotkeyChoice): FixAction {
       const keys = toHyprlandLua(spec.hotkey)
       return [
         `hl.unbind(${luaString(keys)})`,
-        `hl.bind(${luaString(keys)}, hl.dsp.exec_cmd(${luaString(shellQuote(spec.argv))}), { description = ${luaString(`${APP_DISPLAY_NAME}: ${spec.label}`)} })`
+        `hl.bind(${luaString(keys)}, hl.dsp.exec_cmd(${luaString(shellQuote(spec.argv))}), { description = ${luaString(spec.label)} })`
       ]
     }),
     applicable: (p) => p.isHyprland,
@@ -394,37 +402,39 @@ function hyprlandLuaBind(choice: HotkeyChoice): FixAction {
  * second call turns out wrong on some version, the binds and the load-bearing
  * rule have already run - the panel floats, only prettiness is lost.
  *
- * `center` stands in for the `.conf`'s 32%-height `move` expression: whether
- * the Lua `move` accepts monitor-relative expressions is unverified, and a
- * centred panel beats a rules error. Revisit when a Lua Hyprland is in hand.
+ * `move` takes the same monitor-relative expressions as the `.conf` rule; the
+ * same form places the panel from a hand-written `hyprland.lua` on 0.56.
  */
-const hyprlandLuaRules: FixAction = {
-  id: 'hyprland-lua-rules',
-  title: 'Hyprland window rules for the panel (Lua config)',
-  why: 'Floats, places and pins the panel, and stops the compositor drawing its own border around it.',
-  file: 'hypr/lumanin.lua',
-  style: LUA_STYLE,
-  signature: /^\s*(hl\.window_rule\(|\s*(name|match)\s*=|\s*\}\))/m,
-  body: [
-    'hl.window_rule({',
-    '  name = "lumanin-panel",',
-    `  match = { class = "^(${WINDOW_CLASS})$" },`,
-    '  float = true,',
-    '  pin = true,',
-    '  center = true,',
-    '  border_size = 0,',
-    '})',
-    'hl.window_rule({',
-    '  name = "lumanin-panel-looks",',
-    `  match = { class = "^(${WINDOW_CLASS})$" },`,
-    '  no_anim = true,',
-    '  no_shadow = true,',
-    '  no_blur = true,',
-    '  rounding = 0,',
-    '})'
-  ],
-  applicable: (p) => p.isHyprland,
-  when: usesHyprlandLua
+function hyprlandLuaRules(choice: HotkeyChoice): FixAction {
+  const top = String(choice.panelTop ?? PANEL_TOP_FRACTION)
+  return {
+    id: 'hyprland-lua-rules',
+    title: 'Hyprland window rules for the panel (Lua config)',
+    why: 'Floats, places and pins the panel, and stops the compositor drawing its own border around it.',
+    file: 'hypr/lumanin.lua',
+    style: LUA_STYLE,
+    signature: /^\s*(hl\.window_rule\(|\s*(name|match)\s*=|\s*\}\))/m,
+    body: [
+      'hl.window_rule({',
+      '  name = "lumanin-panel",',
+      `  match = { class = "^(${WINDOW_CLASS})$" },`,
+      '  float = true,',
+      '  pin = true,',
+      `  move = { "(monitor_w-window_w)/2", "monitor_h*${top}" },`,
+      '  border_size = 0,',
+      '})',
+      'hl.window_rule({',
+      '  name = "lumanin-panel-looks",',
+      `  match = { class = "^(${WINDOW_CLASS})$" },`,
+      '  no_anim = true,',
+      '  no_shadow = true,',
+      '  no_blur = true,',
+      '  rounding = 0,',
+      '})'
+    ],
+    applicable: (p) => p.isHyprland,
+    when: usesHyprlandLua
+  }
 }
 
 /**
@@ -980,9 +990,9 @@ export function fixActions(options: FixOptions = { hotkey: DEFAULT_HOTKEY, expli
     // Lua binds before Lua rules: they share `lumanin.lua` and Lua executes
     // top-down, so an error in a rules call cannot cost the hotkey.
     hyprlandLuaBind(options),
-    hyprlandLuaRules,
+    hyprlandLuaRules(options),
     hyprlandLuaRequire,
-    hyprlandRules,
+    hyprlandRules(options),
     hyprlandBind(options),
     swayRules(options),
     kwinRules,

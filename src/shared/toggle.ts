@@ -14,11 +14,14 @@
 /**
  * How close together two toggles have to be before the second is ignored.
  *
- * Comfortably above a key repeat and comfortably below a deliberate second
- * press, so holding the key opens the panel once and a real double-tap still
- * closes it.
+ * Above a key repeat (25-40 ms at the usual 25-40 Hz rates) and below the
+ * fastest deliberate presses a hand produces (about 80-100 ms when the key is
+ * hammered), so holding the key opens the panel once and rapid presses still
+ * each flip it. It was 120 ms, which swallowed every press of a fast burst but
+ * the first: measured against a real daemon, 11 of 12 presses 90 ms apart did
+ * nothing, which reads as the panel lagging.
  */
-export const TOGGLE_COALESCE_MS = 120
+export const TOGGLE_COALESCE_MS = 60
 
 /**
  * Whether this toggle should be ignored as part of a burst.

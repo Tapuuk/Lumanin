@@ -21,7 +21,15 @@
  */
 export const PANEL_TOP_FRACTION = 0.32
 
+/** The same default as `[general].top` spells it: a whole percentage. */
+export const DEFAULT_PANEL_TOP_PERCENT = 32
+
+/** `[general].top` as the fraction the placement code works in. */
+export function panelTopFraction(percent: number): number {
+  return Math.min(0.9, Math.max(0, percent / 100))
+}
+
 /** The panel's top edge within a work area, in the work area's own coordinates. */
-export function panelTop(workAreaY: number, workAreaHeight: number): number {
-  return Math.round(workAreaY + workAreaHeight * PANEL_TOP_FRACTION)
+export function panelTop(workAreaY: number, workAreaHeight: number, fraction = PANEL_TOP_FRACTION): number {
+  return Math.round(workAreaY + workAreaHeight * fraction)
 }

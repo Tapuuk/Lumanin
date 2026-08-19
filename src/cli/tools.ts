@@ -18,6 +18,7 @@ import { loadConfig, type ResolvedConfig } from '../shared/config'
 import type { EnumerateData } from '../shared/protocol'
 import { DEFAULT_HOTKEY, type ExtraBind, type FixOptions, type HotkeyChoice } from '../platform/fix/actions'
 import { parseHotkey, type Hotkey } from '../shared/hotkey'
+import { panelTopFraction } from '../shared/placement'
 import { APP_ID } from '../shared/identity'
 import { bundledPluginsDir, resolvePaths } from '../node/paths'
 import { readVersion, request, resolveDaemonCommand, startDaemon } from './client'
@@ -382,6 +383,7 @@ function hotkeyChoice(config: ResolvedConfig): HotkeyChoice {
   return {
     hotkey: parsed ?? DEFAULT_HOTKEY,
     explicit: parsed !== null && setting.layer !== 'default',
+    panelTop: panelTopFraction(config.general.top.value),
     fileSearch: fileSearchHotkey(config),
     extraBinds: extraBindsFrom(config)
   }

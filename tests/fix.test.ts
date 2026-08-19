@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { detectPlatform, type PlatformProfile } from '../src/platform/detect'
 import { applyPlan, planFixes, planRevert, readManagedBinds, type FixDirs } from '../src/platform/fix/index'
+import { planBind } from '../src/platform/fix/bind'
 import {
   BLOCK_END,
   BLOCK_START,
@@ -454,6 +455,27 @@ describe('planFixes', () => {
     const conf = plan.edits.filter((e) => e.path.endsWith('hyprland.conf'))
     expect(conf.every((e) => e.state === 'not-applicable')).toBe(true)
     expect(existsSync(join(dir, 'hypr', 'hyprland.conf'))).toBe(false)
+  })
+
+  it('carries the panel position into the bind plan on both Hyprland formats', () => {
+    // `[general].top` lives in the window rule, and the settings screens write
+    // through planBind - so a changed position must reach the file from there,
+    // whether the rule shares the bind's file (.lua, .conf) or not.
+    const lua = tempConfig()
+    mkdirSync(join(lua, 'hypr'), { recursive: true })
+    writeFileSync(join(lua, 'hypr', 'hyprland.lua'), '')
+    const luaPlan = planBind(profile(HYPRLAND), dirs(lua), { hotkey: DEFAULT_HOTKEY, explicit: true, panelTop: 0.45 })
+    const ours = luaPlan.edits.find((e) => e.path.endsWith('hypr/lumanin.lua'))
+    expect(ours?.state).toBe('will-add')
+    expect(ours?.after).toContain('move = { "(monitor_w-window_w)/2", "monitor_h*0.45" }')
+    expect(ours?.after).not.toContain('center = true')
+    expect(ours?.after).toContain('{ description = "Lumanin" }')
+    expect(luaPlan.edits.some((e) => e.path.endsWith('hypr/hyprland.lua') && e.state === 'will-add')).toBe(true)
+
+    const conf = tempConfig()
+    const confPlan = planBind(profile(HYPRLAND), dirs(conf), { hotkey: DEFAULT_HOTKEY, explicit: true, panelTop: 0.45 })
+    const rules = confPlan.edits.find((e) => e.path.endsWith('hypr/hyprland.conf'))
+    expect(rules?.after).toContain('monitor_h*0.45')
   })
 
   it('reads a Lua bind back as exactly the target it wrote', () => {

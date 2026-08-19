@@ -2,7 +2,7 @@ import { BrowserWindow, dialog, screen } from 'electron'
 import { placementMode, type PlacementMode, type PlatformEnv } from '../platform/detect'
 import type { ResolvedConfig } from '../shared/config'
 import { WINDOW_CLASS } from '../shared/identity'
-import { panelTop, PANEL_TOP_FRACTION } from '../shared/placement'
+import { panelTop, panelTopFraction } from '../shared/placement'
 import type { Logger } from '../node/logger'
 import { applyTextScale } from './text-scale'
 
@@ -400,12 +400,13 @@ export class PanelWindow {
    *
    * The box is positioned as a whole and the search bar sits at the top of it,
    * so the bar lands at the same place on screen no matter how many results
-   * there are — at {@link PANEL_TOP_FRACTION}, matching the Wayland rule.
+   * there are — at `[general].top`, matching the Wayland rule.
    */
   private position(window: BrowserWindow): void {
     if (this.placement !== 'SELF') return
 
-    const preference = this.deps.config().general.openOnMonitor.value
+    const general = this.deps.config().general
+    const preference = general.openOnMonitor.value
     try {
       const display =
         preference === 'primary'
@@ -414,7 +415,7 @@ export class PanelWindow {
 
       const { width } = window.getBounds()
       const { x, y, width: dw, height: dh } = display.workArea
-      window.setPosition(Math.round(x + (dw - width) / 2), panelTop(y, dh))
+      window.setPosition(Math.round(x + (dw - width) / 2), panelTop(y, dh, panelTopFraction(general.top.value)))
     } catch (error) {
       this.deps.logger.warn('self-centering failed; accepting default placement', { error })
     }

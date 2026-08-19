@@ -466,7 +466,7 @@ test('keys: the launcher hotkey writes general.hotkey and raises the bind banner
   await expect(bindBanner()).toBeVisible()
 })
 
-test('keys: the bind banner is on the Keys screen only, and survives leaving it', async () => {
+test('keys: the bind banner lives on the Keys screen, reports on Panel, and survives leaving', async () => {
   const notBindable = page.locator('.s-banner', { hasText: 'binds shortcuts through its own settings' })
   if ((await notBindable.count()) === 0) {
     // Bindable desktop: a global key says whether the desktop has it. The
@@ -474,10 +474,16 @@ test('keys: the bind banner is on the Keys screen only, and survives leaving it'
     await expect(group('Launcher').locator('.s-row', { hasText: 'Hotkey' }).locator('.s-badge')).toHaveCount(1)
     await expect(group('File search').locator('.s-row', { hasText: 'Hotkey' }).locator('.s-badge')).toHaveCount(0)
   }
-  for (const title of ['Panel', 'Search', 'Plugins']) {
+  for (const title of ['Search', 'Plugins']) {
     await section(title).click()
     await expect(bindBanner()).toHaveCount(0)
   }
+  // Panel writes the compositor's window rule, so it shows a write's outcome
+  // there and nothing else: never the standing note about how keys are bound,
+  // never the offer to apply a pre-existing difference.
+  await section('Panel').click()
+  await expect(bindBanner().filter({ hasText: 'binds shortcuts through its own settings' })).toHaveCount(0)
+  await expect(bindBanner().getByRole('button', { name: 'Apply' })).toHaveCount(0)
   await section('Keys').click()
   await expect(bindBanner()).toBeVisible()
 })

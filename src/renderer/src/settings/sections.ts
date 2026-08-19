@@ -55,11 +55,11 @@ export function sectionIndex(
       ...settingTexts(appearanceSettings(themes))
     ],
     search: [
-      'Ranking',
-      'Web search engines',
       'Result order',
+      'Web search engines',
       'Pins',
       'Aliases',
+      'Ranking',
       'File search',
       'Category order',
       'hidden files',

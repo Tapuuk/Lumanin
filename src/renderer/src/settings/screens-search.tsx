@@ -118,8 +118,35 @@ export function SearchScreen(): React.JSX.Element | null {
 
   return (
     <>
-      <Section title="Ranking">
-        <SettingControl setting={HABIT_SETTING} />
+      <Section title="Result order" keywords={RESULT_KEYWORDS}>
+        <p className="s-help">
+          Which kinds of result take part. Plugin commands and web searches sit where you put them.
+          Applications and commands are ranked together by match quality, so their order here only
+          breaks ties.
+        </p>
+        <ReorderList
+          rows={[
+            ...order.map((group) => ({
+              id: group,
+              label: RESULT_GROUP_LABELS[group],
+              detail: groupHelp[group],
+              on: true
+            })),
+            ...OFFERED_RESULT_GROUPS.filter((group) => !order.includes(group)).map((group) => ({
+              id: group,
+              label: RESULT_GROUP_LABELS[group],
+              detail: groupHelp[group],
+              on: false
+            }))
+          ]}
+          onToggle={(id, next) => {
+            writeOrder(next ? [...order, id as ResultGroup] : order.filter((candidate) => candidate !== id))
+          }}
+          onMove={(id, delta) => {
+            const moved = move(order, id as ResultGroup, delta)
+            if (moved !== null) writeOrder(moved)
+          }}
+        />
       </Section>
 
       <Section title="Web search engines" keywords={ENGINE_KEYWORDS}>
@@ -148,33 +175,6 @@ export function SearchScreen(): React.JSX.Element | null {
           onMove={(id, delta) => {
             const moved = move(enabledEngines, id, delta)
             if (moved !== null) writeEngines(moved)
-          }}
-        />
-      </Section>
-
-      <Section title="Result order" keywords={RESULT_KEYWORDS}>
-        <p className="s-help">Which kinds of result appear, and where the unranked ones sit.</p>
-        <ReorderList
-          rows={[
-            ...order.map((group) => ({
-              id: group,
-              label: RESULT_GROUP_LABELS[group],
-              detail: groupHelp[group],
-              on: true
-            })),
-            ...OFFERED_RESULT_GROUPS.filter((group) => !order.includes(group)).map((group) => ({
-              id: group,
-              label: RESULT_GROUP_LABELS[group],
-              detail: groupHelp[group],
-              on: false
-            }))
-          ]}
-          onToggle={(id, next) => {
-            writeOrder(next ? [...order, id as ResultGroup] : order.filter((candidate) => candidate !== id))
-          }}
-          onMove={(id, delta) => {
-            const moved = move(order, id as ResultGroup, delta)
-            if (moved !== null) writeOrder(moved)
           }}
         />
       </Section>
@@ -248,6 +248,15 @@ export function SearchScreen(): React.JSX.Element | null {
             Choose its target…
           </button>
         </div>
+      </Section>
+
+      <Section title="Ranking" keywords="frecency habit recent often closeness match">
+        <p className="s-help">
+          Rows are sorted by how closely they match what you typed: a name that starts with it
+          first, then a word inside the name, then keywords. Your habits only decide the order among
+          rows that match equally well.
+        </p>
+        <SettingControl setting={HABIT_SETTING} />
       </Section>
 
       <FileSearchGroup />

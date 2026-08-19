@@ -1,4 +1,5 @@
 import { BUILTIN_ENGINES } from '../shared/engines'
+import { panelTopFraction } from '../shared/placement'
 import {
   OFFERED_RESULT_GROUPS,
   RESULT_GROUP_LABELS,
@@ -476,7 +477,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
    * replaces atomically — the same contract `doctor --fix` has, because it is
    * the same code.
    */
-  const offerBind = async (hotkey: Hotkey, purpose: 'main' | 'block' = 'main'): Promise<void> => {
+  const offerBind = async (hotkey: Hotkey, purpose: 'main' | 'block' | 'panel' = 'main'): Promise<void> => {
     // The managed block is rewritten whole, so both callers plan the same edit —
     // but they are not the same question. Setting the global hotkey is "bind
     // this key"; leaving the Hotkeys screen is "make the file match the list".
@@ -486,9 +487,15 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     const asks =
       purpose === 'main'
         ? `Bind ${formatHotkey(hotkey)} on this desktop?`
-        : 'Update this desktop’s shortcuts?'
+        : purpose === 'panel'
+          ? 'Move the panel in this desktop’s window rule?'
+          : 'Update this desktop’s shortcuts?'
 
     if (deps.planBind === null) {
+      // The panel's position is the compositor's to honour; where there is no
+      // rule to write, the daemon places the window itself or the desktop
+      // centres it, and there is nothing to ask.
+      if (purpose === 'panel') return
       // Silence here would be the worst answer: the setting saved, nothing
       // happened, and no way to tell those apart. The hotkey is only a real bind
       // where there is a compositor config we know how to write.
@@ -511,6 +518,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     const plan = deps.planBind({
       hotkey,
       explicit: true,
+      panelTop: panelTopFraction(resolved().general.top.value),
       fileSearch: draftFileSearchHotkey(),
       extraBinds: draftExtraBinds()
     })
@@ -521,13 +529,14 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
 
     if (pending.length === 0 && runnable.length === 0) {
       const blocked = plan.edits.find((edit) => edit.state === 'blocked')
+      if (purpose === 'panel' && blocked === undefined) return
       await menu.show(
         blocked === undefined ? 'Nothing to change' : 'Cannot write the bind',
         blocked === undefined
           ? [
               purpose === 'main'
                 ? `This desktop already binds ${formatHotkey(hotkey)}.`
-                : 'Your desktop already binds exactly what your config asks for.',
+                : 'Your desktop already has exactly what your config asks for.',
               '',
               s.dim('If this is not a desktop we can write a bind for, `lumanin doctor`'),
               s.dim('prints the line to add yourself.')
@@ -548,7 +557,11 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
       [
         ...(alsoRules
           ? [
-              s.dim('Our block in this file also holds the panel window rules, and a'),
+              s.dim(
+                purpose === 'panel'
+                  ? 'Our block in this file also holds the keybinds, and a'
+                  : 'Our block in this file also holds the panel window rules, and a'
+              ),
               s.dim('block is rewritten whole - so they are in the diff too.'),
               ''
             ]
@@ -562,7 +575,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
 
     const results = (await deps.applyBind?.({ ...plan, edits: pending, commands: runnable })) ?? []
     await menu.show(
-      results.every((result) => result.ok) ? 'Bound' : 'Some writes failed',
+      results.every((result) => result.ok) ? (purpose === 'panel' ? 'Moved' : 'Bound') : 'Some writes failed',
       [
         ...results.map((result) => `${result.ok ? s.good('✔') : s.bad('✘')} ${result.path} - ${result.detail}`),
         '',
@@ -573,6 +586,17 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         `${s.warn('!')} The setting itself is still unsaved - Save from the main menu.`
       ]
     )
+  }
+
+  /**
+   * The panel's position lives in the compositor's rule where there is one, so
+   * changing it gets the same diff-and-consent the hotkey gets, with the new
+   * value in it.
+   */
+  const afterNumber = async (setting: Setting): Promise<void> => {
+    if (setting.path.join('.') !== 'general.top') return
+    const main = parseHotkey(resolved().general.hotkey.value)
+    if (main !== null) await offerBind(main, 'panel')
   }
 
   const editSetting = async (setting: Setting): Promise<void> => {
@@ -678,10 +702,12 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         if (chosen.value === null) return
         if (chosen.value === USE_DEFAULT) {
           setValue(draft, setting.path, undefined)
+          await afterNumber(setting)
           return
         }
         if (chosen.value !== TYPE_ONE) {
           setValue(draft, setting.path, Number(chosen.value))
+          await afterNumber(setting)
           return
         }
       }
@@ -702,6 +728,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
       })
       if (typed === null) return
       setValue(draft, setting.path, typed.trim().length === 0 ? undefined : Number(typed))
+      await afterNumber(setting)
       return
     }
 

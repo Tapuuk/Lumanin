@@ -867,6 +867,68 @@ describe('the config menu, end to end', () => {
    * removal: what is left is the compositor's copy, and only the file write
    * clears that. So the key runs the write rather than nothing.
    */
+  it('offers the window-rule diff when the panel height changes', async () => {
+    // `[general].top` lives in the compositor's rule where there is one, so
+    // picking a new value plans the same managed-block write the hotkey gets,
+    // carrying the fraction, and asks about the panel rather than about a key.
+    const { term, input, frames, configFile } = driver()
+    const planned: (number | undefined)[] = []
+    const pending = runConfigUi({
+      term,
+      env: {},
+      configFile,
+      home: '/nonexistent',
+      extensionsDir: '/nonexistent',
+      bundledDir: '/nonexistent',
+      dataDir: '/nonexistent',
+      applyChanges: null,
+      restartDaemon: null,
+      planBind: (choice) => {
+        planned.push(choice.panelTop)
+        return {
+          edits: [
+            {
+              path: '/home/x/.config/hypr/lumanin.lua',
+              state: 'will-update',
+              before: 'monitor_h*0.32',
+              after: 'monitor_h*0.45',
+              diff: '-  move = { "(monitor_w-window_w)/2", "monitor_h*0.32" },\n+  move = { "(monitor_w-window_w)/2", "monitor_h*0.45" },',
+              actions: [
+                {
+                  id: 'hyprland-lua-rules',
+                  title: 'rules',
+                  why: 'why',
+                  file: 'hypr/lumanin.lua',
+                  signature: /window_rule/,
+                  body: [],
+                  applicable: () => true
+                }
+              ]
+            }
+          ],
+          commands: [],
+          notes: []
+        }
+      },
+      applyBind: (plan) =>
+        Promise.resolve(plan.edits.map((edit) => ({ path: edit.path, ok: true, detail: 'written' }))),
+      enumerateItems: null,
+      readBinds: () => []
+    })
+    await beat()
+
+    // General, then the rows: hide on blur, Esc, monitor, width, length, height.
+    await type(input, [ENTER, DOWN, DOWN, DOWN, DOWN, DOWN, ENTER])
+    expect(frames()).toContain('Panel height')
+    // Use the default, then Top, Default, Centre.
+    await type(input, [DOWN, DOWN, DOWN, ENTER])
+    expect(frames()).toContain('Move the panel in this desktop\u2019s window rule?')
+    expect(frames()).toContain('monitor_h*0.45')
+    expect(planned).toEqual([0.45])
+
+    await leave(input, frames, pending)
+  })
+
   it('takes remove on an already-removed row as "clear the bind too"', async () => {
     const { term, input, frames, configFile } = driver()
     writeFileSync(configFile, '[[hotkeys]]\nbind = "Super+P"\ntarget = "app:firefox.desktop"\n')

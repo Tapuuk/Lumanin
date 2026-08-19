@@ -143,8 +143,8 @@ export const GENERAL_SETTINGS: readonly Setting[] = [
   },
   {
     path: ['general', 'height'],
-    label: 'Panel height',
-    help: 'A ceiling, not a fixed height. Applied the next time the panel opens and clamped to the screen.',
+    label: 'Panel length',
+    help: 'How far down the list can grow, in pixels. Applied the next time the panel opens and clamped to the screen.',
     editor: {
       kind: 'number',
       min: 240,
@@ -159,6 +159,25 @@ export const GENERAL_SETTINGS: readonly Setting[] = [
     },
     read: (c) => c.general.height,
     envKey: 'HEIGHT'
+  },
+  {
+    path: ['general', 'top'],
+    label: 'Panel height',
+    help: 'How far down the screen the panel sits, as a percentage of the screen height. On Hyprland the managed window rule is rewritten with it.',
+    editor: {
+      kind: 'number',
+      min: 0,
+      max: 90,
+      integer: true,
+      presets: [
+        { value: 10, label: 'Top', detail: '10%' },
+        { value: 32, label: 'Default', detail: '32%' },
+        { value: 45, label: 'Centre', detail: '45%' },
+        { value: 60, label: 'Low', detail: '60%' }
+      ]
+    },
+    read: (c) => c.general.top,
+    envKey: 'TOP'
   }
 ]
 
@@ -235,16 +254,16 @@ export function appearanceSettings(
  * migration nobody asked for.
  */
 export const HABIT_LEVELS: readonly { readonly value: number; readonly label: string; readonly detail: string }[] = [
-  { value: 0, label: 'Off', detail: 'name match alone decides' },
-  { value: 0.3, label: 'A little', detail: 'habit breaks ties' },
+  { value: 0, label: 'Off', detail: 'match quality alone decides' },
+  { value: 0.3, label: 'A little', detail: 'habit only breaks near ties' },
   { value: 0.6, label: 'Balanced', detail: 'default' },
-  { value: 0.9, label: 'A lot', detail: 'what you use most wins whenever it matches' }
+  { value: 0.9, label: 'A lot', detail: 'what you open most wins whenever it matches' }
 ]
 
 export const HABIT_SETTING: Setting = {
   path: ['search', 'frecency_weight'],
-  label: 'Favour what you use',
-  help: 'How much your habits reorder results.',
+  label: 'Favour what you open',
+  help: 'How much the things you open often and recently climb above equally close matches. Never lifts a weaker match above a better one.',
   editor: { kind: 'number', min: 0, max: 1, integer: false, presets: HABIT_LEVELS },
   read: (c) => c.search.frecencyWeight,
   envKey: 'FRECENCY_WEIGHT'

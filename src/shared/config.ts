@@ -1,5 +1,6 @@
 import { parse as parseToml, TomlError } from 'smol-toml'
 import { DEFAULT_ENGINE_IDS, engineById } from './engines'
+import { DEFAULT_PANEL_TOP_PERCENT } from './placement'
 import {
   DEFAULT_KEYS,
   KEY_ACTIONS,
@@ -218,6 +219,8 @@ export interface ResolvedConfig {
     readonly openOnMonitor: Resolved<OpenOnMonitor>
     readonly width: Resolved<number>
     readonly height: Resolved<number>
+    /** Where the panel's top edge sits, as a percentage of the screen height from the top. */
+    readonly top: Resolved<number>
   }
   readonly appearance: {
     /** `null` means "use the resolution chain" rather than a forced theme. */
@@ -1077,6 +1080,14 @@ export function loadConfig(options: LoadOptions): ResolvedConfig {
         fileKey: 'height',
         fallback: 480,
         coerce: asDimension(240, 4096)
+      }),
+      top: r.resolve({
+        flagKey: 'top',
+        envKey: 'TOP',
+        section: 'general',
+        fileKey: 'top',
+        fallback: DEFAULT_PANEL_TOP_PERCENT,
+        coerce: asDimension(0, 90)
       })
     },
     appearance: {
