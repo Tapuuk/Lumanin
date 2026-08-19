@@ -931,6 +931,30 @@ body:has(.settings) {
   background: var(--lumanin-bg-hover);
 }
 
+.s-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
+}
+
+.s-crumbs__item {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.s-crumbs__sep {
+  color: var(--lumanin-text-muted);
+}
+
+.s-crumbs__current {
+  color: var(--lumanin-text);
+  font-weight: 600;
+}
+
 .s-picklist--overlay {
   max-height: 320px;
   overflow: auto;
