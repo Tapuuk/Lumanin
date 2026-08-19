@@ -5,7 +5,7 @@ import { formatHotkey, parseHotkey } from '@shared/hotkey'
 import type { PluginDto } from '@shared/ipc'
 import { HABIT_SETTING } from '@shared/settings-model'
 import { boundState, useManagedBinds } from './bind'
-import { HotkeyCapture, Modal, ReorderList, Section, SettingControl, TextControl } from './controls'
+import { AddButton, HotkeyCapture, Modal, RemoveButton, ReorderList, Section, SettingControl, TextControl } from './controls'
 import { describeKey } from './describe'
 import { FileSearchGroup, move } from './screens-basic'
 import { TargetPicker, type PickedTarget } from './TargetPicker'
@@ -190,16 +190,14 @@ export function SearchScreen(): React.JSX.Element | null {
           onRemove={(id) => writePins(pins.filter((pin) => pin.key !== id))}
         />
         {pinNote !== null && <div className="s-error">{pinNote}</div>}
-        <button
-          type="button"
-          className="s-button"
+        <AddButton
           onClick={() => {
             setPinNote(null)
             setPicking('pin')
           }}
         >
           + Pin something
-        </button>
+        </AddButton>
       </Section>
 
       <Section title="Aliases" keywords="alias short word target">
@@ -210,10 +208,8 @@ export function SearchScreen(): React.JSX.Element | null {
             <div className="s-list__text">
               <span className="s-list__label">{describeKey(entry.key, entry.title, { ...context, state })}</span>
             </div>
-            <button
-              type="button"
-              className="s-iconbtn s-iconbtn--danger"
-              aria-label={`Remove alias ${alias}`}
+            <RemoveButton
+              what={`alias ${alias}`}
               onClick={() =>
                 guarded(
                   invokeChecked(
@@ -222,9 +218,7 @@ export function SearchScreen(): React.JSX.Element | null {
                   )
                 )
               }
-            >
-              ✕
-            </button>
+            />
           </div>
         ))}
         <div className="s-inline">
@@ -360,10 +354,8 @@ export function PluginHotkeysGroup(): React.JSX.Element | null {
               <span className={`s-badge${bound === 'bound' ? ' s-badge--ok' : ''}`}>
                 {bound === 'bound' ? 'Bound' : 'Not bound yet'}
               </span>
-              <button
-                type="button"
-                className="s-iconbtn s-iconbtn--danger"
-                aria-label="Remove"
+              <RemoveButton
+                what={describeKey(entry.target, entry.title ?? null, { ...context, state })}
                 onClick={() =>
                   write(
                     entries
@@ -371,15 +363,11 @@ export function PluginHotkeysGroup(): React.JSX.Element | null {
                       .map((candidate) => toDto(candidate.bind, candidate.target, candidate.title))
                   )
                 }
-              >
-                ✕
-              </button>
+              />
             </div>
           )
         })}
-        <button type="button" className="s-button" onClick={() => setPicking(true)}>
-          + Bind a key
-        </button>
+        <AddButton onClick={() => setPicking(true)}>+ Bind a key</AddButton>
         {orphans.length > 0 && (
           <div className="s-banner s-banner--info">
             Still bound in {orphans[0]?.path ?? 'the compositor config'} but no longer listed here:{' '}
