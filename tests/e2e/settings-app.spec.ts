@@ -299,6 +299,30 @@ test('a number preset writes the number, and a typed value unchecks every preset
   await expect(row.locator('[role="radio"][aria-checked="true"]')).toHaveCount(0)
 })
 
+test('a confirmed write says Saved at the row and the footer names the file and the time', async () => {
+  const row = page.locator('.s-row', { hasText: 'Hide when focus is lost' })
+  await row.locator('.s-toggle').click()
+  await expect(row.locator('.s-row__saved')).toHaveText('Saved')
+  await expect.poll(config).toContain('hide_on_blur = false')
+  const footer = page.locator('.settings__footer')
+  await expect(footer).toContainText(configFile())
+  await expect(footer).toContainText('Saved at')
+
+  await row.locator('.s-toggle').click()
+  await expect.poll(config).not.toContain('hide_on_blur')
+})
+
+test('a value from the file offers Reset, which deletes the key', async () => {
+  const row = page.locator('.s-row', { hasText: 'Panel width' })
+  const reset = row.getByRole('button', { name: 'Reset Panel width' })
+  await row.getByRole('radio', { name: 'Wide', exact: true }).click()
+  await expect.poll(config).toContain('width = 900')
+  await expect(reset).toBeVisible()
+  await reset.click()
+  await expect.poll(config).not.toContain('width')
+  await expect(reset).toHaveCount(0)
+})
+
 test('the theme picker writes appearance.theme', async () => {
   await section('Panel').click()
   const row = page.locator('.s-row', { hasText: 'Theme' })
@@ -474,9 +498,24 @@ test('file search: hidden-files preference toggles, persists, and redraws from t
   )
 })
 
-test('plugins: file search is a feature of the app, not a card on the plugins list', async () => {
+test('plugins: the bundled file search is listed under Built in, with a toggle and no Remove', async () => {
   await section('Plugins').click()
-  await expect(page.locator('.s-plugin__title', { hasText: 'Files' })).toHaveCount(0)
+  const heading = page.locator('.settings__content .s-section__title', { hasText: /^Built in$/ })
+  await expect(heading).toBeVisible()
+  const files = page.locator('.s-section', { has: page.locator('.s-plugin__title', { hasText: 'Files' }) })
+  await expect(files).toBeVisible()
+  // The card comes after the heading, not among the installed plugins.
+  expect(await heading.evaluate((el, card) => Boolean(el.compareDocumentPosition(card) & 4), await files.elementHandle())).toBe(true)
+  await expect(files.locator('.s-plugin__head .s-toggle')).toHaveAttribute('aria-checked', 'true')
+  await files.locator('.s-plugin__title').click()
+  await expect(files.locator('.s-plugin__body')).toBeVisible()
+  await expect(files.locator('.s-button', { hasText: /^Remove$/ })).toHaveCount(0)
+  await files.locator('.s-plugin__title').click()
+})
+
+test('plugins: with nothing installed the list says so, above the built-in ones', async () => {
+  await section('Plugins').click()
+  await expect(page.locator('.s-empty')).toHaveText('No plugins installed. The ones that ship with the app are listed below.')
 })
 
 test('a garbage install source is refused with a sentence, nothing spawned', async () => {
@@ -486,6 +525,16 @@ test('a garbage install source is refused with a sentence, nothing spawned', asy
   await install.locator('input').blur()
   await install.locator('.s-button', { hasText: 'Fetch' }).click()
   await expect(install.locator('.s-error')).toBeVisible()
+})
+
+test('empty Pins, Aliases and Plugin hotkeys each say so in one sentence', async () => {
+  await section('Search').click()
+  await expect(page.locator('.s-section', { hasText: 'Pins' }).locator('.s-empty')).toHaveText('Nothing pinned.')
+  await expect(page.locator('.s-section', { hasText: 'Aliases' }).locator('.s-empty')).toHaveText('No aliases.')
+  await section('Keys').click()
+  await expect(page.locator('.s-section', { hasText: 'Plugin hotkeys' }).locator('.s-empty')).toHaveText(
+    'No plugin keys yet.'
+  )
 })
 
 // A picker row by its exact label; `hasText` alone also matches the Plugins
