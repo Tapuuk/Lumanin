@@ -211,21 +211,9 @@ app.whenReady().then(async () => {
   })()
   const attachOrCap = Promise.race([attach, new Promise<void>((done) => setTimeout(done, 1500))])
 
-  if (savedBounds !== null) {
-    // The size is already known, so the window is created now and its renderer
-    // loads while the probe runs; it is shown once the theme has landed.
-    settingsWindow.open(attachOrCap)
-    await attachOrCap
-    settingsWindow.setScale(theme.payloadNow.textScale, theme.toolkitScaleNow)
-  } else {
-    // First open: the default size depends on the text scale, and on Wayland a
-    // window can only be sized when it is created (`setSize` on a mapped
-    // surface changes nothing - measured, same as the panel), so the probe
-    // runs first.
-    await attachOrCap
-    settingsWindow.setScale(theme.payloadNow.textScale, theme.toolkitScaleNow)
-    settingsWindow.open()
-  }
+  await attachOrCap
+  settingsWindow.setScale(theme.payloadNow.textScale, theme.toolkitScaleNow)
+  settingsWindow.open()
   {
     const contents = settingsWindow.webContents
     if (contents) applyTextScale(contents, theme.payloadNow.textScale)

@@ -207,6 +207,9 @@ test('general: the update check answers with a sentence, whatever the checkout s
   await expect(row).toContainText(/checkout at|package|installed/i)
 })
 
+/** Where the log stood before the most recent write whose watcher push may still be pending. */
+let lastWriteOffset = 0
+
 test('a toggled setting lands in config.toml, and toggling back to the default deletes the key', async () => {
   const row = page.locator('.s-row', { hasText: 'Hide when focus is lost' })
   await row.locator('.s-toggle').click()
@@ -220,6 +223,7 @@ test('a toggled setting lands in config.toml, and toggling back to the default d
 
   // Back to the default: the key is *deleted*, not written as `true`, so the
   // default stays free to improve underneath this config.
+  lastWriteOffset = logSize()
   await row.locator('.s-toggle').click()
   await expect.poll(config).not.toContain('hide_on_blur')
 })
@@ -264,11 +268,17 @@ test('a save pushes the new state itself, before the file watcher does', async (
   const row = page.locator('.s-row', { hasText: 'Hide when focus is lost' })
   await page.evaluate(() => {
     window.__pushedHideOnBlur = null
+    // The latest push, not the first: the previous test's watcher push may
+    // still land here, and "latest wins" in the app means nothing stale can
+    // land after this test's own write.
     window.lumanin.on('settings.changed', (state) => {
-      if (window.__pushedHideOnBlur === null) window.__pushedHideOnBlur = state.resolved.general.hideOnBlur.value
+      window.__pushedHideOnBlur = state.resolved.general.hideOnBlur.value
     })
   })
 
+  // The previous test's last write is still being followed by its watcher
+  // push (the debounce); let it be logged, or it would be the first reason seen.
+  await expect.poll(() => pushReasonsAfter(lastWriteOffset)).toContain('watch')
   const offset = logSize()
   await row.locator('.s-toggle').click()
   await expect.poll(config).toContain('hide_on_blur = false')

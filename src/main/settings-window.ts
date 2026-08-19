@@ -153,13 +153,8 @@ export class SettingsWindow {
     }, BOUNDS_REPORT_DELAY_MS)
   }
 
-  /**
-   * Open the window, creating it if there is none, and give it the focus.
-   * `revealGate` holds the first showing back until it settles (the theme
-   * landing, so the first frame is themed); the first paint is waited for as
-   * well, either way.
-   */
-  open(revealGate?: Promise<void>): void {
+  /** Open the window, creating it if there is none, and give it the focus. */
+  open(): void {
     const existing = this.window
     if (existing !== null && !existing.isDestroyed()) {
       existing.show()
@@ -238,17 +233,14 @@ export class SettingsWindow {
       window.focus()
       logger.info('settings window shown', { sinceStartMs: Math.round(process.uptime() * 1000) })
     }
+    window.once('ready-to-show', reveal)
     // `ready-to-show` is the first paint — and on Wayland a hidden window may
     // never be given a frame to paint, so waiting for it can wait forever
     // (observed on sway: the window existed, the DOM was live, and not one
     // frame was ever produced). The timer is the honest fallback: one beat for
     // the pretty first-paint path, then shown regardless, because a window
     // that flashes its background once beats a window that never appears.
-    const painted = new Promise<void>((done) => {
-      window.once('ready-to-show', () => done())
-      setTimeout(done, 500)
-    })
-    void Promise.all([painted, revealGate?.catch(() => undefined)]).then(reveal)
+    setTimeout(reveal, 500)
 
     // Closed means closed: the daemon keeps running, the window is rebuilt on
     // the next `lumanin settings`. `destroy` in flight sets `window` first, so
