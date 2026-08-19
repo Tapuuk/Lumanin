@@ -1,6 +1,7 @@
 import { BrowserWindow, screen } from 'electron'
 import { SETTINGS_WINDOW_TITLE } from '../shared/identity'
 import type { Logger } from '../node/logger'
+import { SETTINGS_WINDOW_MIN_HEIGHT, SETTINGS_WINDOW_MIN_WIDTH, type WindowBounds } from './settings-window-state'
 import { hardenNavigation } from './window'
 
 /**
@@ -20,6 +21,10 @@ export interface SettingsWindowDeps {
   /** Dev server URL, or `null` to load the built renderer from disk. */
   readonly rendererUrl: string | null
   readonly rendererFile: string
+  /** Where the window was last left, or `null` on a first open. */
+  readonly savedBounds: WindowBounds | null
+  /** The window's bounds after the user resized or moved it, and at close. */
+  readonly onBounds: (bounds: WindowBounds) => void
 }
 
 const DEFAULT_WIDTH = 920
@@ -32,8 +37,9 @@ const DEFAULT_HEIGHT = 620
 // past the surface and the right third of every row was clipped. The layout
 // reflows fine down to well under this (measured: no horizontal overflow at
 // 480); the minimum only stops it becoming a sliver.
-const MIN_WIDTH = 480
-const MIN_HEIGHT = 360
+const MIN_WIDTH = SETTINGS_WINDOW_MIN_WIDTH
+const MIN_HEIGHT = SETTINGS_WINDOW_MIN_HEIGHT
+const BOUNDS_REPORT_DELAY_MS = 300
 
 export class SettingsWindow {
   private window: BrowserWindow | null = null
@@ -76,7 +82,10 @@ export class SettingsWindow {
   private applyingTimer: ReturnType<typeof setTimeout> | null = null
 
   private fittedSize(): { width: number; height: number } {
-    const wanted = { width: DEFAULT_WIDTH * this.zoom, height: DEFAULT_HEIGHT * this.zoom }
+    return this.clampToWorkArea({ width: DEFAULT_WIDTH * this.zoom, height: DEFAULT_HEIGHT * this.zoom })
+  }
+
+  private clampToWorkArea(wanted: { width: number; height: number }): { width: number; height: number } {
     let area: { width: number; height: number } | null = null
     try {
       const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
@@ -84,7 +93,9 @@ export class SettingsWindow {
     } catch {
       area = null
     }
-    if (area === null) return { width: Math.round(wanted.width), height: Math.round(wanted.height) }
+    if (area === null) {
+      return { width: Math.max(MIN_WIDTH, Math.round(wanted.width)), height: Math.max(MIN_HEIGHT, Math.round(wanted.height)) }
+    }
     // Work areas are compositor-logical; window sizes are DIPs, which differ by
     // the toolkit scale (same arithmetic as the panel's `fittedSize`).
     const maxW = (area.width / this.toolkitScale) * 0.94
@@ -95,8 +106,60 @@ export class SettingsWindow {
     }
   }
 
-  /** Open the window, creating it if there is none, and give it the focus. */
-  open(): void {
+  /**
+   * The saved size clamped to the display, and the saved position only when
+   * that rectangle still lands on some display's work area - a monitor that
+   * was unplugged must not take the window with it. Positions are best
+   * effort anyway: Wayland compositors ignore them, X11 honours them.
+   */
+  private restoredBounds(saved: WindowBounds): { width: number; height: number; x?: number; y?: number } {
+    const size = this.clampToWorkArea(saved)
+    let onScreen = false
+    try {
+      onScreen = screen.getAllDisplays().some(({ workArea }) => {
+        return (
+          saved.x < workArea.x + workArea.width &&
+          saved.x + size.width > workArea.x &&
+          saved.y < workArea.y + workArea.height &&
+          saved.y + size.height > workArea.y
+        )
+      })
+    } catch {
+      onScreen = false
+    }
+    return onScreen ? { ...size, x: saved.x, y: saved.y } : size
+  }
+
+  private boundsTimer: ReturnType<typeof setTimeout> | null = null
+
+  /** What the user left the window at; nothing while it is minimized or fullscreen. */
+  private reportBounds(window: BrowserWindow): void {
+    if (this.boundsTimer !== null) {
+      clearTimeout(this.boundsTimer)
+      this.boundsTimer = null
+    }
+    // Not `isMaximized`: a tiling compositor reports every tiled window as
+    // maximized (measured on Hyprland), which would mean never saving there.
+    if (window.isDestroyed() || window.isMinimized() || window.isFullScreen()) return
+    const { width, height, x, y } = window.getBounds()
+    this.deps.onBounds({ width, height, x, y })
+  }
+
+  private scheduleBoundsReport(window: BrowserWindow): void {
+    if (this.boundsTimer !== null) clearTimeout(this.boundsTimer)
+    this.boundsTimer = setTimeout(() => {
+      this.boundsTimer = null
+      this.reportBounds(window)
+    }, BOUNDS_REPORT_DELAY_MS)
+  }
+
+  /**
+   * Open the window, creating it if there is none, and give it the focus.
+   * `revealGate` holds the first showing back until it settles (the theme
+   * landing, so the first frame is themed); the first paint is waited for as
+   * well, either way.
+   */
+  open(revealGate?: Promise<void>): void {
     const existing = this.window
     if (existing !== null && !existing.isDestroyed()) {
       existing.show()
@@ -104,14 +167,17 @@ export class SettingsWindow {
       return
     }
 
-    const { logger, preloadPath, rendererUrl, rendererFile } = this.deps
+    const { logger, preloadPath, rendererUrl, rendererFile, savedBounds } = this.deps
 
-    const size = this.fittedSize()
-    this.userSized = false
+    const size: { width: number; height: number; x?: number; y?: number } =
+      savedBounds === null ? this.fittedSize() : this.restoredBounds(savedBounds)
+    // A restored size is the user's own; the text scale must not overrule it.
+    this.userSized = savedBounds !== null
     const window = new BrowserWindow({
       title: SETTINGS_WINDOW_TITLE,
       width: size.width,
       height: size.height,
+      ...(size.x !== undefined && size.y !== undefined ? { x: size.x, y: size.y } : {}),
       minWidth: MIN_WIDTH,
       minHeight: MIN_HEIGHT,
       // Shown on ready-to-show instead: the first paint should already be the
@@ -145,7 +211,10 @@ export class SettingsWindow {
     const createdAt = Date.now()
     window.on('resize', () => {
       if (!this.applying && Date.now() - createdAt > 1500) this.userSized = true
+      this.scheduleBoundsReport(window)
     })
+    window.on('move', () => this.scheduleBoundsReport(window))
+    window.on('close', () => this.reportBounds(window))
 
     window.webContents.on('did-fail-load', (_e, code, description, url) => {
       logger.error('settings renderer failed to load', { code, description, url })
@@ -167,20 +236,28 @@ export class SettingsWindow {
       if (window.isDestroyed() || window.isVisible()) return
       window.show()
       window.focus()
+      logger.info('settings window shown', { sinceStartMs: Math.round(process.uptime() * 1000) })
     }
-    window.once('ready-to-show', reveal)
     // `ready-to-show` is the first paint — and on Wayland a hidden window may
     // never be given a frame to paint, so waiting for it can wait forever
     // (observed on sway: the window existed, the DOM was live, and not one
     // frame was ever produced). The timer is the honest fallback: one beat for
     // the pretty first-paint path, then shown regardless, because a window
     // that flashes its background once beats a window that never appears.
-    setTimeout(reveal, 500)
+    const painted = new Promise<void>((done) => {
+      window.once('ready-to-show', () => done())
+      setTimeout(done, 500)
+    })
+    void Promise.all([painted, revealGate?.catch(() => undefined)]).then(reveal)
 
     // Closed means closed: the daemon keeps running, the window is rebuilt on
     // the next `lumanin settings`. `destroy` in flight sets `window` first, so
     // the handler tolerates already being forgotten.
     window.on('closed', () => {
+      if (this.boundsTimer !== null) {
+        clearTimeout(this.boundsTimer)
+        this.boundsTimer = null
+      }
       if (this.window === window) this.window = null
     })
 
@@ -194,6 +271,7 @@ export class SettingsWindow {
       title: SETTINGS_WINDOW_TITLE,
       width: size.width,
       height: size.height,
+      restored: savedBounds !== null,
       zoom: this.zoom,
       toolkitScale: this.toolkitScale
     })

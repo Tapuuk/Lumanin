@@ -11,6 +11,7 @@ import { bundledPluginsDir, resolvePaths } from '../node/paths'
 import { applyCsp } from './csp'
 import { SettingsIpc } from './settings-ipc'
 import { SettingsWindow } from './settings-window'
+import { loadWindowBounds, saveWindowBounds } from './settings-window-state'
 import { ThemeService } from './theme'
 import { applyTextScale } from './text-scale'
 
@@ -127,7 +128,7 @@ function pushState(reason: 'write' | 'watch'): void {
 const ipc = new SettingsIpc({
   logger,
   paths,
-  bundledDir: bundledPluginsDir(__dirname),
+  bundledDir: bundledPluginsDir(__dirname, process.resourcesPath),
   theme,
   profile: profileReady,
   senderId: () => settingsWindow?.webContents?.id ?? null,
@@ -174,20 +175,26 @@ app.whenReady().then(async () => {
   applyCsp(devServerUrl)
   ipc.register()
 
+  const savedBounds = loadWindowBounds(paths.state)
   settingsWindow = new SettingsWindow({
     logger,
     preloadPath: join(__dirname, '../preload/index.js'),
     rendererUrl: devServerUrl,
-    rendererFile: join(__dirname, '../renderer/settings.html')
+    rendererFile: join(__dirname, '../renderer/settings.html'),
+    savedBounds,
+    onBounds: (bounds) => {
+      try {
+        saveWindowBounds(paths.state, bounds)
+      } catch (error) {
+        logger.debug('settings window bounds not saved', { error })
+      }
+    }
   })
 
   // The theme chain needs the platform's appearance backend — Omarchy's
-  // palette, the portal's light/dark, and the desktop's text scale. The
-  // window's *size* depends on that last one, and on Wayland a window can only
-  // be sized when it is created (`setSize` on a mapped surface changes
-  // nothing - measured, same as the panel), so the probe runs first. It is
+  // palette, the portal's light/dark, and the desktop's text scale. It is
   // ~150 ms; the cap keeps a stuck probe from keeping the window away, at the
-  // cost of the built-in size and a repaint when the theme lands.
+  // cost of the built-in theme and a repaint when the real one lands.
   const attach = (async (): Promise<void> => {
     try {
       const probed = await profileReady()
@@ -202,10 +209,23 @@ app.whenReady().then(async () => {
       logger.warn('appearance probing failed; staying on the built-in theme', { error })
     }
   })()
-  await Promise.race([attach, new Promise<void>((done) => setTimeout(done, 1500))])
+  const attachOrCap = Promise.race([attach, new Promise<void>((done) => setTimeout(done, 1500))])
 
-  settingsWindow.setScale(theme.payloadNow.textScale, theme.toolkitScaleNow)
-  settingsWindow.open()
+  if (savedBounds !== null) {
+    // The size is already known, so the window is created now and its renderer
+    // loads while the probe runs; it is shown once the theme has landed.
+    settingsWindow.open(attachOrCap)
+    await attachOrCap
+    settingsWindow.setScale(theme.payloadNow.textScale, theme.toolkitScaleNow)
+  } else {
+    // First open: the default size depends on the text scale, and on Wayland a
+    // window can only be sized when it is created (`setSize` on a mapped
+    // surface changes nothing - measured, same as the panel), so the probe
+    // runs first.
+    await attachOrCap
+    settingsWindow.setScale(theme.payloadNow.textScale, theme.toolkitScaleNow)
+    settingsWindow.open()
+  }
   {
     const contents = settingsWindow.webContents
     if (contents) applyTextScale(contents, theme.payloadNow.textScale)

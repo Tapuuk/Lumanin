@@ -68,8 +68,13 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   // A normal application: closing its window quits it — no daemon lifecycle to
-  // work around, which is itself part of what is being verified.
-  await app.close()
+  // work around, which is itself part of what is being verified. The last test
+  // does exactly that, so by now there may be nothing left to close.
+  try {
+    await app.close()
+  } catch {
+    // Already gone.
+  }
 })
 
 const section = (title: string): ReturnType<Page['locator']> =>
@@ -784,4 +789,18 @@ test('a slash typed in a text field is a character, not the filter key', async (
   expect(await input.evaluate((el) => el === document.activeElement)).toBe(true)
   await input.fill('')
   await page.keyboard.press('Escape')
+})
+
+test('closing the window remembers its size and position, and quits the app', async () => {
+  const closed = app.waitForEvent('close')
+  await page.locator('.settings__close').click()
+  await closed
+
+  const saved = JSON.parse(readFileSync(join(root, 'state', 'lumanin', 'settings-window.json'), 'utf8')) as Record<
+    string,
+    unknown
+  >
+  for (const field of ['width', 'height', 'x', 'y']) {
+    expect(Number.isInteger(saved[field]), field).toBe(true)
+  }
 })
