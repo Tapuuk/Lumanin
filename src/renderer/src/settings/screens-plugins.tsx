@@ -6,7 +6,7 @@ import type {
   PluginInspectionDto,
   PluginPreferenceDto
 } from '@shared/ipc'
-import { Modal, PickButton, Row, Section, TextControl, Toggle } from './controls'
+import { Busy, Empty, Modal, PickButton, Row, Section, TextControl, Toggle, useFilter } from './controls'
 import { guarded, invokeChecked, useSettingsState } from './useSettings'
 
 /**
@@ -17,7 +17,8 @@ import { guarded, invokeChecked, useSettingsState } from './useSettings'
 
 export function PluginsScreen(): React.JSX.Element {
   const { state } = useSettingsState()
-  const [plugins, setPlugins] = useState<readonly PluginDto[]>([])
+  const filter = useFilter()
+  const [plugins, setPlugins] = useState<readonly PluginDto[] | null>(null)
 
   const refresh = useCallback(() => {
     guarded(window.lumanin.invoke('settings.plugins').then(setPlugins))
@@ -27,18 +28,28 @@ export function PluginsScreen(): React.JSX.Element {
     refresh()
   }, [refresh, state])
 
+  if (plugins === null) return <InstallSection onInstalled={refresh} />
+  const installed = plugins.filter(({ bundled }) => !bundled)
+  const bundled = plugins.filter(({ bundled }) => bundled)
+
   return (
     <>
       <InstallSection onInstalled={refresh} />
-      {plugins
-        // A bundled plugin is a feature of the app that happens to be built as
-        // one; file search is edited under Search (behaviour) and Keys (its key).
-        // Listing it here reads as "a plugin called files", which it is not to
-        // anyone using the launcher.
-        .filter((plugin) => !plugin.bundled)
-        .map((plugin) => (
-          <PluginCard key={plugin.name} plugin={plugin} onChanged={refresh} />
-        ))}
+      {installed.map((plugin) => (
+        <PluginCard key={plugin.name} plugin={plugin} onChanged={refresh} />
+      ))}
+      {installed.length === 0 && (
+        <Section>
+          <Empty>
+            No plugins installed.
+            {bundled.length > 0 && ' The ones that ship with the app are listed below.'}
+          </Empty>
+        </Section>
+      )}
+      {bundled.length > 0 && filter.trim().length === 0 && <h2 className="s-section__title">Built in</h2>}
+      {bundled.map((plugin) => (
+        <PluginCard key={plugin.name} plugin={plugin} onChanged={refresh} />
+      ))}
     </>
   )
 }
@@ -226,8 +237,15 @@ function ExportModal({ plugin, onClose }: { plugin: PluginDto; onClose: () => vo
             <button type="button" className="s-button" onClick={onClose}>
               Cancel
             </button>
-            <button type="button" className="s-button s-button--primary" disabled={busy} onClick={doExport}>
-              {busy ? 'Exporting…' : 'Export'}
+            <button
+              type="button"
+              className="s-button s-button--primary"
+              disabled={busy}
+              aria-busy={busy}
+              onClick={doExport}
+            >
+              Export
+              {busy && <Busy />}
             </button>
           </div>
         </>
@@ -281,8 +299,15 @@ function ExportModal({ plugin, onClose }: { plugin: PluginDto; onClose: () => vo
               Close
             </button>
             {result.ghReady === true && (published === null || !published.ok) && (
-              <button type="button" className="s-button s-button--primary" disabled={busy} onClick={doPublish}>
-                {busy ? 'Publishing…' : 'Create repository & push'}
+              <button
+                type="button"
+                className="s-button s-button--primary"
+                disabled={busy}
+                aria-busy={busy}
+                onClick={doPublish}
+              >
+                Create repository & push
+                {busy && <Busy />}
               </button>
             )}
           </div>
@@ -435,8 +460,9 @@ function OfficialList({
     <div className="s-official">
       {plugins === null && (
         <div className="s-inline">
-          <button type="button" className="s-button" disabled={loading} onClick={browse}>
-            {loading ? 'Loading…' : 'Browse official plugins'}
+          <button type="button" className="s-button" disabled={loading} aria-busy={loading} onClick={browse}>
+            Browse official plugins
+            {loading && <Busy />}
           </button>
           {error !== null && <div className="s-error">{error}</div>}
         </div>
@@ -500,7 +526,7 @@ function InstallSection({ onInstalled }: { onInstalled: () => void }): React.JSX
         setAllowDependencies(false)
       })
       .catch((cause: unknown) => {
-        // Without this a rejection leaves "Fetching…" up with dead buttons.
+        // Without this a rejection leaves the button busy with the rest dead.
         setInspecting(false)
         setInspection({ ok: false, error: cause instanceof Error ? cause.message : String(cause) })
       })
@@ -544,9 +570,11 @@ function InstallSection({ onInstalled }: { onInstalled: () => void }): React.JSX
           type="button"
           className="s-button"
           disabled={source.trim().length === 0 || inspecting}
+          aria-busy={inspecting}
           onClick={() => inspect()}
         >
-          {inspecting ? 'Fetching…' : 'Fetch & review'}
+          Fetch & review
+          {inspecting && <Busy />}
         </button>
       </div>
       {inspecting && progress.length > 0 && (
@@ -611,9 +639,11 @@ function InstallSection({ onInstalled }: { onInstalled: () => void }): React.JSX
                   inspection.dependencies.length > 0 &&
                   !allowDependencies)
               }
+              aria-busy={installing}
               onClick={install}
             >
-              {installing ? 'Installing…' : 'Install'}
+              Install
+              {installing && <Busy />}
             </button>
           </div>
         </Modal>

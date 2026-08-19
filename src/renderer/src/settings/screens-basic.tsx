@@ -21,7 +21,7 @@ import {
   GLOBAL_HOTKEY
 } from '@shared/settings-model'
 import { boundState, useManagedBinds } from './bind'
-import { HotkeyCapture, rawChordFrom, RemoveButton, ReorderList, Row, Section, SettingControl } from './controls'
+import { Busy, HotkeyCapture, rawChordFrom, RemoveButton, ReorderList, Row, Section, SettingControl } from './controls'
 import { guarded, sameList, setConfig, useOptimistic, useSettingsState } from './useSettings'
 import { PreferenceRow } from './screens-plugins'
 import { PluginHotkeysGroup } from './screens-search'
@@ -98,8 +98,15 @@ function UpdatesSection(): React.JSX.Element {
             : `${check.current}${check.kind === 'git' ? `, checkout at ${check.root}` : ''}`
         }
       >
-        <button type="button" className="s-button" disabled={checking || applying} onClick={runCheck}>
-          {checking ? 'Checking...' : 'Check for updates'}
+        <button
+          type="button"
+          className="s-button"
+          disabled={checking || applying}
+          aria-busy={checking}
+          onClick={runCheck}
+        >
+          Check for updates
+          {checking && <Busy />}
         </button>
       </Row>
       {problem !== null && <div className="s-banner">{problem}</div>}
@@ -132,9 +139,11 @@ function UpdatesSection(): React.JSX.Element {
               type="button"
               className="s-button s-button--primary"
               disabled={applying || check.dirty}
+              aria-busy={applying}
               onClick={runApply}
             >
-              {applying ? 'Updating...' : 'Update now'}
+              Update now
+              {applying && <Busy />}
             </button>
           </div>
           <pre className="s-progress">{check.changes.slice(0, 20).join('\n')}</pre>

@@ -7,7 +7,7 @@ import {
   type FileCategory
 } from '@shared/files'
 import type { SetupPlanDto } from '@shared/ipc'
-import { HotkeyCapture, isCaptureActive, ReorderList } from './controls'
+import { Busy, HotkeyCapture, isCaptureActive, ReorderList } from './controls'
 import { Logo } from './Logo'
 import { move } from './screens-basic'
 import { guarded, setConfig, useSettingsState } from './useSettings'
@@ -336,7 +336,7 @@ function SetupStep({ onBack, onNext }: { onBack: () => void; onNext: () => void 
       .then(setPlan)
       .catch(() => {
         // A failed probe still needs a step that can be left: an empty plan
-        // renders the "nothing to write" path instead of "Having a look…".
+        // renders the "nothing to write" path instead of the busy lead.
         setPlan({ edits: [], commands: [], notes: [], pending: false, manual: [] })
       })
   }, [])
@@ -352,7 +352,7 @@ function SetupStep({ onBack, onNext }: { onBack: () => void; onNext: () => void 
         setApplied(outcome)
       })
       .catch((cause: unknown) => {
-        // Without this a rejection wedges the step on "Setting up…".
+        // Without this a rejection wedges the step on a busy button.
         setApplying(false)
         setApplied({
           results: [
@@ -399,7 +399,12 @@ function SetupStep({ onBack, onNext }: { onBack: () => void; onNext: () => void 
     <>
       <h1 className="wiz__title">Make it stick</h1>
 
-      {plan === null && <p className="wiz__lead">Checking your desktop&hellip;</p>}
+      {plan === null && (
+        <p className="wiz__lead">
+          Checking your desktop
+          <Busy />
+        </p>
+      )}
 
       {plan !== null && applied === null && (
         <>
@@ -466,9 +471,11 @@ function SetupStep({ onBack, onNext }: { onBack: () => void; onNext: () => void 
                     type="button"
                     className="s-button s-button--primary wiz__next"
                     disabled={applying}
+                    aria-busy={applying}
                     onClick={apply}
                   >
-                    {applying ? 'Setting up…' : 'Set it up'}
+                    Set it up
+                    {applying && <Busy />}
                   </button>
                 </>
               ) : (

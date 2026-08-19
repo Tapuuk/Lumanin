@@ -13,7 +13,7 @@ import { ENV_PREFIX } from '@shared/identity'
 import { formatHotkey, KEY_ALIASES, MODIFIERS, parseHotkey, type Hotkey, type Modifier } from '@shared/hotkey'
 import type { Setting } from '@shared/settings-model'
 import { matchesFilter } from './sections'
-import { setConfig, useOptimistic, useSettingsState } from './useSettings'
+import { RowSavedContext, setConfig, useOptimistic, useSettingsState } from './useSettings'
 
 /**
  * The generic building blocks every screen is made of. Each control saves on
@@ -75,10 +75,13 @@ export function Section({
 export function Row({
   label,
   help,
+  onReset,
   children
 }: {
   label: string
   help?: string
+  /** Offered as a "Reset" button beside the control when the value comes from the file. */
+  onReset?: (() => void) | undefined
   children: ReactNode
 }): React.JSX.Element {
   const filter = useFilter()
@@ -90,15 +93,54 @@ export function Row({
     report?.(id, matched)
     return () => report?.(id, false)
   }, [report, id, matched])
+
+  const [savedAt, setSavedAt] = useState<number | null>(null)
+  const stampSaved = useCallback(() => setSavedAt(Date.now()), [])
+  useEffect(() => {
+    if (savedAt === null) return
+    const timer = setTimeout(() => setSavedAt(null), 1500)
+    return () => clearTimeout(timer)
+  }, [savedAt])
+
   return (
     <div className="s-row" hidden={!matched && section?.own !== true}>
       <div className="s-row__text">
         <div className="s-row__label">{label}</div>
         {help !== undefined && <div className="s-row__help">{help}</div>}
       </div>
-      <div className="s-row__control">{children}</div>
+      <RowSavedContext.Provider value={stampSaved}>
+        <div className="s-row__control">{children}</div>
+      </RowSavedContext.Provider>
+      <div className="s-row__aside">
+        {onReset !== undefined && (
+          <button type="button" className="s-linkish" aria-label={`Reset ${label}`} onClick={onReset}>
+            Reset
+          </button>
+        )}
+        {savedAt !== null && (
+          <span key={savedAt} className="s-row__saved" aria-live="polite">
+            Saved
+          </span>
+        )}
+      </div>
     </div>
   )
+}
+
+/** Something is in progress. Sits after a label or a sentence; the words stay. */
+export function Busy(): React.JSX.Element {
+  return (
+    <span className="s-busy" role="status" aria-label="Working">
+      <i />
+      <i />
+      <i />
+    </span>
+  )
+}
+
+/** A list with nothing in it, said in one sentence. */
+export function Empty({ children }: { children: ReactNode }): React.JSX.Element {
+  return <p className="s-empty">{children}</p>
 }
 
 export function Toggle({
@@ -153,7 +195,7 @@ export function SettingControl({ setting }: { setting: Setting }): React.JSX.Ele
     : setting.help
 
   return (
-    <Row label={setting.label} help={help}>
+    <Row label={setting.label} help={help} onReset={read.layer === 'file' ? () => void save(null) : undefined}>
       {editorFor(setting, read.value, overridden, save)}
       {error !== null && <div className="s-error">{error}</div>}
     </Row>
