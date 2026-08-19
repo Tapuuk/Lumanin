@@ -115,7 +115,7 @@ function Shell(): React.JSX.Element {
               // Esc with text clears it and leaves; the shell's Esc order
               // then continues from an empty filter next time. Down enters
               // the rows.
-              if (event.key === 'Escape' && filter.length > 0) {
+              if (event.key === 'Escape' && filter.trim().length > 0) {
                 event.preventDefault()
                 event.stopPropagation()
                 applyFilter('')

@@ -72,6 +72,7 @@ export function useShellKeyboard({
         const section = SECTIONS[Number(event.key) - 1]
         if (section === undefined) return
         event.preventDefault()
+        if (isEditable(document.activeElement)) (document.activeElement as HTMLElement).blur()
         setActive(section.id)
         return
       }
@@ -97,7 +98,7 @@ export function useShellKeyboard({
         active.blur()
         return
       }
-      if (filter.length > 0) {
+      if (filter.trim().length > 0) {
         setFilter('')
         return
       }
