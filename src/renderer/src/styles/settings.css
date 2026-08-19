@@ -397,6 +397,54 @@ body:has(.settings) {
   color: var(--lumanin-text-muted);
 }
 
+/* Presets as one segmented control; the number field after it holds any other value. */
+.s-segments {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.s-segments__pill {
+  padding: 5px 12px;
+  border: 1px solid var(--lumanin-border);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text);
+  cursor: pointer;
+  margin-left: -1px;
+}
+
+.s-segments__pill:first-child {
+  margin-left: 0;
+  border-radius: var(--s-radius) 0 0 var(--s-radius);
+}
+
+.s-segments__pill:last-child {
+  border-radius: 0 var(--s-radius) var(--s-radius) 0;
+}
+
+.s-segments__pill:hover:not(:disabled) {
+  background: var(--lumanin-bg-hover);
+}
+
+.s-segments__pill[aria-checked="true"] {
+  position: relative;
+  border-color: var(--lumanin-accent);
+  color: var(--lumanin-accent);
+  background: var(--lumanin-bg-hover);
+}
+
+.s-segments__pill:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.s-segments__detail {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
+}
+
 .s-button {
   padding: 6px 16px;
   border: 1px solid var(--lumanin-border);

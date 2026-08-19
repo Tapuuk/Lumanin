@@ -184,6 +184,7 @@ function editorFor(
     case 'number':
       return (
         <NumberControl
+          label={setting.label}
           value={typeof value === 'number' ? value : null}
           min={editor.min}
           max={editor.max}
@@ -209,11 +210,10 @@ function editorFor(
   }
 }
 
-// Sentinel option values for the custom/default rows. The NUL escape
-// keeps them impossible to collide with a real theme name or number, while
-// staying visible in source (a literal NUL byte makes the file read as binary).
+// Sentinel value for the custom-name row. The NUL escape keeps it impossible
+// to collide with a real theme name, while staying visible in source (a
+// literal NUL byte makes the file read as binary).
 const CUSTOM = '\u0000custom'
-const DEFAULT = '\u0000default'
 
 export interface PickOption {
   value: string
@@ -440,6 +440,7 @@ function EnumControl({
 }
 
 function NumberControl({
+  label,
   value: truth,
   min,
   max,
@@ -448,6 +449,7 @@ function NumberControl({
   disabled,
   onSave
 }: {
+  label: string
   value: number | null
   min: number
   max: number
@@ -459,7 +461,6 @@ function NumberControl({
   const [value, commit] = useOptimistic(truth)
   const save = (next: number | null): void => commit(next, Promise.resolve(onSave(next)))
   const preset = presets.find((candidate) => candidate.value === value)
-  const [custom, setCustom] = useState<boolean>(presets.length > 0 && value !== null && preset === undefined)
   const [text, setText] = useState<string>(value === null ? '' : String(value))
   const [problem, setProblem] = useState<string | null>(null)
   // Follow a value changed by another writer (CLI, editor) — same reason as
@@ -470,7 +471,6 @@ function NumberControl({
     setSeen(value)
     if (!focused.current) {
       setText(value === null ? '' : String(value))
-      setCustom(presets.length > 0 && value !== null && preset === undefined)
       setProblem(null)
     }
   }
@@ -494,67 +494,87 @@ function NumberControl({
     save(parsed)
   }
 
-  if (presets.length === 0 || custom) {
+  const pick = (next: number): void => {
+    setText(String(next))
+    setProblem(null)
+    save(next)
+  }
+
+  const field = (
+    <input
+      className="s-input s-input--number"
+      type="number"
+      min={min}
+      max={max}
+      step={integer ? 1 : 0.1}
+      value={text}
+      placeholder={presets.length > 0 ? 'Default' : ''}
+      aria-label={presets.length > 0 ? 'Custom value' : label}
+      disabled={disabled}
+      onChange={(event) => setText(event.target.value)}
+      onFocus={() => {
+        focused.current = true
+      }}
+      onBlur={() => {
+        focused.current = false
+        commitDraft()
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') (event.target as HTMLInputElement).blur()
+      }}
+    />
+  )
+
+  if (presets.length === 0) {
     return (
       <div className="s-inline">
-        <input
-          className="s-input s-input--number"
-          type="number"
-          min={min}
-          max={max}
-          step={integer ? 1 : 0.1}
-          value={text}
-          disabled={disabled}
-          onChange={(event) => setText(event.target.value)}
-          onFocus={() => {
-            focused.current = true
-          }}
-          onBlur={() => {
-            focused.current = false
-            commitDraft()
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') (event.target as HTMLInputElement).blur()
-          }}
-        />
-        {presets.length > 0 && (
-          <button type="button" className="s-linkish" onClick={() => setCustom(false)}>
-            Choices
-          </button>
-        )}
+        {field}
         {problem !== null && <div className="s-error">{problem}</div>}
       </div>
     )
   }
 
+  // ArrowLeft/Right inside the group focus and save the neighbour, the way a
+  // radio group moves.
+  const onGroupKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    const pills = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]'))
+    const at = pills.findIndex((pill) => pill === document.activeElement)
+    if (at === -1) return
+    const next = Math.min(pills.length - 1, Math.max(0, at + (event.key === 'ArrowRight' ? 1 : -1)))
+    const to = pills[next]
+    const candidate = presets[next]
+    if (to === undefined || candidate === undefined) return
+    event.preventDefault()
+    to.focus()
+    if (candidate.value !== value) pick(candidate.value)
+  }
+
   return (
-    <select
-      className="s-select"
-      disabled={disabled}
-      value={preset !== undefined ? String(preset.value) : value === null ? DEFAULT : CUSTOM}
-      onChange={(event) => {
-        const next = event.target.value
-        if (next === DEFAULT) {
-          save(null)
-          return
-        }
-        if (next === CUSTOM) {
-          setText(value === null ? '' : String(value))
-          setCustom(true)
-          return
-        }
-        save(Number(next))
-      }}
-    >
-      <option value={DEFAULT}>Default</option>
-      {presets.map((candidate) => (
-        <option key={candidate.value} value={String(candidate.value)}>
-          {candidate.label}
-          {candidate.detail === undefined ? '' : ` (${candidate.detail})`}
-        </option>
-      ))}
-      <option value={CUSTOM}>Type a number…</option>
-    </select>
+    <div className="s-inline">
+      <div className="s-segments" role="radiogroup" aria-label={label} onKeyDown={onGroupKeyDown}>
+        {presets.map((candidate) => {
+          const checked = candidate.value === value
+          return (
+            <button
+              key={candidate.value}
+              type="button"
+              role="radio"
+              aria-checked={checked}
+              className="s-segments__pill"
+              disabled={disabled}
+              tabIndex={checked || (preset === undefined && candidate === presets[0]) ? 0 : -1}
+              onClick={() => pick(candidate.value)}
+            >
+              {candidate.label}
+            </button>
+          )
+        })}
+      </div>
+      {field}
+      {problem !== null && <div className="s-error">{problem}</div>}
+      {preset?.detail !== undefined && <div className="s-segments__detail">{preset.detail}</div>}
+    </div>
   )
 }
 
