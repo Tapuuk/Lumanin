@@ -278,7 +278,16 @@ test('a save pushes the new state itself, before the file watcher does', async (
 
   // The previous test's last write is still being followed by its watcher
   // push (the debounce); let it be logged, or it would be the first reason seen.
+  // The first 'watch' may be the earlier click's, so wait until the pushes go
+  // quiet for longer than the watcher debounce before taking the offset.
   await expect.poll(() => pushReasonsAfter(lastWriteOffset)).toContain('watch')
+  await expect
+    .poll(async () => {
+      const before = pushReasonsAfter(lastWriteOffset).length
+      await new Promise((resolve) => setTimeout(resolve, 250))
+      return pushReasonsAfter(lastWriteOffset).length === before
+    })
+    .toBe(true)
   const offset = logSize()
   await row.locator('.s-toggle').click()
   await expect.poll(config).toContain('hide_on_blur = false')
