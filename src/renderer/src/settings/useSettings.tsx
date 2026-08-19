@@ -89,8 +89,9 @@ export function useOptimistic<T>(
   const [pending, setPending] = useState<{ readonly value: T } | null>(null)
   const onSaved = useContext(RowSavedContext)
   const confirmed = useRef(false)
-  const latest = useRef(value)
-  latest.current = value
+  const shown = pending === null ? value : pending.value
+  const latest = useRef(shown)
+  latest.current = shown
   if (pending !== null && equal(pending.value, value)) {
     setPending(null)
     confirmed.current = true
@@ -116,7 +117,7 @@ export function useOptimistic<T>(
     [equal]
   )
 
-  return [pending === null ? value : pending.value, commit]
+  return [shown, commit]
 }
 
 /** Comparator for `useOptimistic` over an ordered list of primitives. */
