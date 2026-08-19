@@ -438,6 +438,79 @@ function hyprlandLuaRules(choice: HotkeyChoice): FixAction {
 }
 
 /**
+ * The Lua config can do what the `.conf` one cannot: react. Hyprland 0.56 has no
+ * pinned guard on its float path, so a bind such as Omarchy's `SUPER + T`
+ * (`hl.dsp.window.float({ action = "toggle" })`) tiles the focused panel, and a
+ * second toggle re-floats it unpinned, elsewhere and larger. `float`, `pin` and
+ * `move` are static rules consumed once at map, so nothing restores it short of
+ * hiding and showing the window, which ends the open session.
+ *
+ * This handler undoes such a change within a frame: `window.update_rules` is
+ * emitted unconditionally at the end of `propertiesChanged`, which every
+ * floating change goes through; `window.pin` and `window.fullscreen` cover the
+ * other two dispatchers. The dispatches are deferred by a 1 ms one-shot timer
+ * because `update_rules` fires synchronously inside the layout's own
+ * `setFloating`, between its remove and its move, and dispatching from there
+ * re-enters the layout and drifts the size. The size is the one first seen at
+ * `window.open`, so a re-float cannot settle on Hyprland's remembered floating
+ * size; the position is the rule's formula, with the monitor's physical size
+ * divided by its scale because the Lua monitor object reports pixels.
+ *
+ * Everything runs inside `pcall`: a renamed API on some version must not cost
+ * the binds or the rules, which precede this in the file.
+ *
+ * The hyprlang `.conf` form has no event handlers and therefore no guard; there,
+ * pressing the hotkey twice re-maps the panel and the static rules restore it.
+ */
+function hyprlandLuaFloatGuard(choice: HotkeyChoice): FixAction {
+  const top = String(choice.panelTop ?? PANEL_TOP_FRACTION)
+  return {
+    id: 'hyprland-lua-float-guard',
+    title: 'Hyprland float guard for the panel (Lua config)',
+    why: 'Undoes a bind that tiles, unpins or fullscreens the panel; the compositor has no rule that forbids it.',
+    file: 'hypr/lumanin.lua',
+    style: LUA_STYLE,
+    signature: /^\s*(hl\.on\("window\.|local (function )?lumanin_)/m,
+    body: [
+      'local lumanin_sizes = {}',
+      'local function lumanin_is_panel(w)',
+      `  return w ~= nil and w.class == "${WINDOW_CLASS}"`,
+      'end',
+      'hl.on("window.open", function(w)',
+      '  if lumanin_is_panel(w) then lumanin_sizes[w.address] = { x = w.size.x, y = w.size.y } end',
+      'end)',
+      'local function lumanin_guard(w)',
+      '  if not lumanin_is_panel(w) or not w.mapped then return end',
+      '  if w.floating and w.pinned and w.fullscreen == 0 then return end',
+      '  hl.timer(function()',
+      '    pcall(function()',
+      '      if not w.mapped then return end',
+      '      if w.fullscreen ~= 0 then hl.dispatch(hl.dsp.window.fullscreen({ window = w, action = "unset" })) end',
+      '      if not w.floating then hl.dispatch(hl.dsp.window.float({ window = w, action = "enable" })) end',
+      '      if not w.pinned then hl.dispatch(hl.dsp.window.pin({ window = w, action = "enable" })) end',
+      '      local s = lumanin_sizes[w.address]',
+      '      if s and (w.size.x ~= s.x or w.size.y ~= s.y) then',
+      '        hl.dispatch(hl.dsp.window.resize({ window = w, x = s.x, y = s.y }))',
+      '      end',
+      '      local m = w.monitor',
+      '      if m then',
+      '        local mw, mh = m.width / m.scale, m.height / m.scale',
+      '        local ww = s and s.x or w.size.x',
+      `        hl.dispatch(hl.dsp.window.move({ window = w, x = math.floor(m.x + (mw - ww) / 2 + 0.5), y = math.floor(m.y + mh * ${top} + 0.5) }))`,
+      '      end',
+      '    end)',
+      '  end, { timeout = 1, type = "oneshot" })',
+      'end',
+      'hl.on("window.update_rules", lumanin_guard)',
+      'hl.on("window.pin", lumanin_guard)',
+      'hl.on("window.fullscreen", lumanin_guard)'
+    ],
+    applicable: (p) => p.isHyprland,
+    when: usesHyprlandLua
+  }
+}
+
+/**
  * The one line in the user's own `hyprland.lua`: load our file if it is there.
  *
  * `require("lumanin")` resolves relative to `hyprland.lua`'s directory
@@ -991,6 +1064,7 @@ export function fixActions(options: FixOptions = { hotkey: DEFAULT_HOTKEY, expli
     // top-down, so an error in a rules call cannot cost the hotkey.
     hyprlandLuaBind(options),
     hyprlandLuaRules(options),
+    hyprlandLuaFloatGuard(options),
     hyprlandLuaRequire,
     hyprlandRules(options),
     hyprlandBind(options),

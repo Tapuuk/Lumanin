@@ -66,6 +66,7 @@ const BIND_ACTIONS = new Set([
   'hyprland-rules',
   'hyprland-lua-bind',
   'hyprland-lua-rules',
+  'hyprland-lua-float-guard',
   'hyprland-lua-require',
   'sway-rules',
   'kde-shortcuts',

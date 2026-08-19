@@ -47,6 +47,10 @@ describe("panel placement", () => {
     expect(lua?.body.find((line) => line.includes("move "))).toContain(
       '"monitor_h*0.45"',
     );
+    const guard = actions.find(
+      (action) => action.id === "hyprland-lua-float-guard",
+    );
+    expect(guard?.body.join("\n")).toContain("mh * 0.45");
     expect(panelTopFraction(120)).toBe(0.9);
     expect(panelTopFraction(-5)).toBe(0);
   });

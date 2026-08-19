@@ -442,6 +442,15 @@ describe('planFixes', () => {
     expect(body).toContain('hl.bind("SUPER + R", hl.dsp.exec_cmd("lumanin toggle")')
     expect(body).toContain('hl.window_rule({')
     expect(body.indexOf('hl.bind(')).toBeLessThan(body.indexOf('hl.window_rule('))
+    // The float guard comes last: it is the one part that reacts at runtime,
+    // and a Lua error in it must not cost the hotkey or the rules above it.
+    expect(body).toContain('hl.on("window.open"')
+    expect(body).toContain('hl.on("window.update_rules", lumanin_guard)')
+    expect(body).toContain('hl.on("window.pin", lumanin_guard)')
+    expect(body).toContain('hl.on("window.fullscreen", lumanin_guard)')
+    expect(body).toContain('action = "enable"')
+    expect(body).not.toContain('action = "toggle"')
+    expect(body.indexOf('hl.window_rule(')).toBeLessThan(body.indexOf('hl.on('))
 
     const require_ = plan.edits.find((e) => e.path.endsWith('hypr/hyprland.lua'))
     // will-add is the block's state, not the file's - the file exists, our
@@ -503,6 +512,32 @@ describe('planFixes', () => {
     const binds = readManagedBinds(profile(HYPRLAND), dirs(dir))
     expect(binds.some((bind) => bind.target === target)).toBe(true)
     expect(binds.some((bind) => bind.target === null)).toBe(true)
+  })
+
+  it('keeps the Lua float guard out of the bind reader and stable across rewrites', () => {
+    const dir = tempConfig()
+    mkdirSync(join(dir, 'hypr'), { recursive: true })
+    writeFileSync(join(dir, 'hypr', 'hyprland.lua'), '')
+    const options = { hotkey: DEFAULT_HOTKEY, explicit: true }
+
+    const first = planFixes(profile(HYPRLAND), dirs(dir), options)
+    applyPlan(first.edits, 'stamp')
+    const written = readFileSync(join(dir, 'hypr', 'lumanin.lua'), 'utf8')
+    expect(written).toContain('hl.on("window.update_rules", lumanin_guard)')
+
+    // Planning again against what was written changes nothing.
+    const second = planFixes(profile(HYPRLAND), dirs(dir), options)
+    const ours = second.edits.find((e) => e.path.endsWith('hypr/lumanin.lua'))
+    expect(ours?.state).toBe('up-to-date')
+
+    // The guard's Lua lines are not binds; only the real bind decodes.
+    const binds = readManagedBinds(profile(HYPRLAND), dirs(dir))
+    expect(binds).toHaveLength(1)
+    expect(binds[0]?.target).toBeNull()
+
+    // The hyprlang form has no handlers.
+    const conf = first.edits.filter((e) => e.path.endsWith('hyprland.conf'))
+    expect(conf.every((e) => !e.after.includes('hl.on('))).toBe(true)
   })
 
   it('refuses to create a sway config out of nothing', () => {

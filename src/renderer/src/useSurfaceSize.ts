@@ -1,4 +1,5 @@
 import { useLayoutEffect } from 'react'
+import { surfaceSize } from '@shared/surface-size'
 
 /**
  * Pins the panel to the window's real surface size.
@@ -28,17 +29,26 @@ import { useLayoutEffect } from 'react'
  * fractional pixel is left empty rather than painted off the edge. Sizing to
  * the bare `outerWidth` under a 1.17 zoom made the panel 17% wider than the
  * viewport and took the right border with it.
+ *
+ * And one CSS pixel less than that, on both axes. `outerWidth` comes back from
+ * the Wayland configure round-trip rounded up (1307 logical / 1.1875 zoom is
+ * 1100.63, reported as 1101 on a 1634 px buffer), which puts the panel's 1 px
+ * outline on the buffer's last column and, with a full list, its last row. When
+ * the window's physical box is not integer (monitor scale 1.25 with a position
+ * from `monitor_h * 0.35`, or a window the compositor re-floated somewhere
+ * fractional) Hyprland rounds the box and that last column or row is simply not
+ * shown, and the right or bottom edge of the outline goes with it. Measured on
+ * this machine: at the rule's position the right border sat on buffer column
+ * 1633 of 1634 and survived; moved to x=118,y=302 it was gone. Leaving the last
+ * CSS pixel empty makes a dropped column or row transparent backdrop instead.
  */
 export function useSurfaceSize(zoom: number): void {
   useLayoutEffect(() => {
     const root = document.documentElement
-    const factor = Number.isFinite(zoom) && zoom > 0 ? zoom : 1
 
     const sync = (): void => {
-      // Fall back to the viewport if the window object ever reports 0 (it does
-      // during teardown); a panel sized 0 is worse than one pixel of overhang.
-      const width = window.outerWidth ? Math.floor(window.outerWidth / factor) : window.innerWidth
-      const height = window.outerHeight ? Math.floor(window.outerHeight / factor) : window.innerHeight
+      const width = surfaceSize(window.outerWidth, window.innerWidth, zoom)
+      const height = surfaceSize(window.outerHeight, window.innerHeight, zoom)
       root.style.setProperty('--lumanin-surface-width', `${String(width)}px`)
       root.style.setProperty('--lumanin-surface-height', `${String(height)}px`)
     }
