@@ -46,6 +46,18 @@ function SaveErrorBanner(): React.JSX.Element | null {
   )
 }
 
+/** Where the settings live, and when this session last wrote there. */
+function Footer(): React.JSX.Element | null {
+  const { state, lastSavedAt } = useSettingsState()
+  if (state === null) return null
+  return (
+    <footer className="settings__footer">
+      <span>{state.configPath}</span>
+      {lastSavedAt !== null && <span>Saved at {new Date(lastSavedAt).toLocaleTimeString()}</span>}
+    </footer>
+  )
+}
+
 function Shell(): React.JSX.Element {
   const { state, refresh } = useSettingsState()
   const [active, setActive] = useState<SectionId>('panel')
@@ -164,6 +176,7 @@ function Shell(): React.JSX.Element {
           </main>
         </FilterContext.Provider>
       </div>
+      <Footer />
     </div>
   )
 }

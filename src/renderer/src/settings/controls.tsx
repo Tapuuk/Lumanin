@@ -81,7 +81,7 @@ export function Row({
   label: string
   help?: string
   /** Offered as a "Reset" button beside the control when the value comes from the file. */
-  onReset?: () => void
+  onReset?: (() => void) | undefined
   children: ReactNode
 }): React.JSX.Element {
   const filter = useFilter()
@@ -195,7 +195,7 @@ export function SettingControl({ setting }: { setting: Setting }): React.JSX.Ele
     : setting.help
 
   return (
-    <Row label={setting.label} help={help}>
+    <Row label={setting.label} help={help} onReset={read.layer === 'file' ? () => void save(null) : undefined}>
       {editorFor(setting, read.value, overridden, save)}
       {error !== null && <div className="s-error">{error}</div>}
     </Row>
