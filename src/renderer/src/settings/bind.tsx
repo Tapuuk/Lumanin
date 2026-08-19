@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BindPlanDto, ManagedBindDto } from '@shared/ipc'
 import { formatHotkey } from '@shared/hotkey'
 import { useSettingsState } from './useSettings'
+import { Busy } from './controls'
 
 /**
  * The compositor half of every global key: `config.toml` says what the user
@@ -170,7 +171,12 @@ export function BindBanner({ visible }: { visible: boolean }): React.JSX.Element
   }
 
   if (applying) {
-    return <div className="s-banner">Writing this desktop&apos;s shortcut config…</div>
+    return (
+      <div className="s-banner">
+        Writing this desktop&apos;s shortcut config
+        <Busy />
+      </div>
+    )
   }
 
   if (outcome !== null) {

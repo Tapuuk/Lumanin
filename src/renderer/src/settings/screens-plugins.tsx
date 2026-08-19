@@ -6,7 +6,7 @@ import type {
   PluginInspectionDto,
   PluginPreferenceDto
 } from '@shared/ipc'
-import { Modal, PickButton, Row, Section, TextControl, Toggle } from './controls'
+import { Busy, Modal, PickButton, Row, Section, TextControl, Toggle } from './controls'
 import { guarded, invokeChecked, useSettingsState } from './useSettings'
 
 /**
@@ -226,8 +226,15 @@ function ExportModal({ plugin, onClose }: { plugin: PluginDto; onClose: () => vo
             <button type="button" className="s-button" onClick={onClose}>
               Cancel
             </button>
-            <button type="button" className="s-button s-button--primary" disabled={busy} onClick={doExport}>
-              {busy ? 'Exporting…' : 'Export'}
+            <button
+              type="button"
+              className="s-button s-button--primary"
+              disabled={busy}
+              aria-busy={busy}
+              onClick={doExport}
+            >
+              Export
+              {busy && <Busy />}
             </button>
           </div>
         </>
@@ -281,8 +288,15 @@ function ExportModal({ plugin, onClose }: { plugin: PluginDto; onClose: () => vo
               Close
             </button>
             {result.ghReady === true && (published === null || !published.ok) && (
-              <button type="button" className="s-button s-button--primary" disabled={busy} onClick={doPublish}>
-                {busy ? 'Publishing…' : 'Create repository & push'}
+              <button
+                type="button"
+                className="s-button s-button--primary"
+                disabled={busy}
+                aria-busy={busy}
+                onClick={doPublish}
+              >
+                Create repository & push
+                {busy && <Busy />}
               </button>
             )}
           </div>
@@ -435,8 +449,9 @@ function OfficialList({
     <div className="s-official">
       {plugins === null && (
         <div className="s-inline">
-          <button type="button" className="s-button" disabled={loading} onClick={browse}>
-            {loading ? 'Loading…' : 'Browse official plugins'}
+          <button type="button" className="s-button" disabled={loading} aria-busy={loading} onClick={browse}>
+            Browse official plugins
+            {loading && <Busy />}
           </button>
           {error !== null && <div className="s-error">{error}</div>}
         </div>
@@ -500,7 +515,7 @@ function InstallSection({ onInstalled }: { onInstalled: () => void }): React.JSX
         setAllowDependencies(false)
       })
       .catch((cause: unknown) => {
-        // Without this a rejection leaves "Fetching…" up with dead buttons.
+        // Without this a rejection leaves the button busy with the rest dead.
         setInspecting(false)
         setInspection({ ok: false, error: cause instanceof Error ? cause.message : String(cause) })
       })
@@ -544,9 +559,11 @@ function InstallSection({ onInstalled }: { onInstalled: () => void }): React.JSX
           type="button"
           className="s-button"
           disabled={source.trim().length === 0 || inspecting}
+          aria-busy={inspecting}
           onClick={() => inspect()}
         >
-          {inspecting ? 'Fetching…' : 'Fetch & review'}
+          Fetch & review
+          {inspecting && <Busy />}
         </button>
       </div>
       {inspecting && progress.length > 0 && (
@@ -611,9 +628,11 @@ function InstallSection({ onInstalled }: { onInstalled: () => void }): React.JSX
                   inspection.dependencies.length > 0 &&
                   !allowDependencies)
               }
+              aria-busy={installing}
               onClick={install}
             >
-              {installing ? 'Installing…' : 'Install'}
+              Install
+              {installing && <Busy />}
             </button>
           </div>
         </Modal>

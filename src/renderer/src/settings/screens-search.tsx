@@ -5,7 +5,17 @@ import { formatHotkey, parseHotkey } from '@shared/hotkey'
 import type { PluginDto } from '@shared/ipc'
 import { HABIT_SETTING } from '@shared/settings-model'
 import { boundState, useManagedBinds } from './bind'
-import { AddButton, HotkeyCapture, Modal, RemoveButton, ReorderList, Section, SettingControl, TextControl } from './controls'
+import {
+  AddButton,
+  Empty,
+  HotkeyCapture,
+  Modal,
+  RemoveButton,
+  ReorderList,
+  Section,
+  SettingControl,
+  TextControl
+} from './controls'
 import { describeKey } from './describe'
 import { FileSearchGroup, move } from './screens-basic'
 import { TargetPicker, type PickedTarget } from './TargetPicker'
@@ -174,6 +184,7 @@ export function SearchScreen(): React.JSX.Element | null {
         <p className="s-help">
           Always at the top of the root, in this order, matched by name like everything else.
         </p>
+        {pins.length === 0 && <Empty>Nothing pinned.</Empty>}
         <ReorderList
           rows={pins.map((pin) => ({
             id: pin.key,
@@ -202,6 +213,7 @@ export function SearchScreen(): React.JSX.Element | null {
 
       <Section title="Aliases" keywords="alias short word target">
         <p className="s-help">Type the word, get the thing: <code>ff</code> for Firefox.</p>
+        {aliases.length === 0 && <Empty>No aliases.</Empty>}
         {aliases.map(([alias, entry]) => (
           <div key={alias} className="s-list__row">
             <span className="s-chip">{alias}</span>
@@ -330,6 +342,7 @@ export function PluginHotkeysGroup(): React.JSX.Element | null {
           action on a row. The key is written into this desktop&apos;s own shortcut config, with
           the diff shown first.
         </p>
+        {entries.length === 0 && <Empty>No plugin keys yet.</Empty>}
         {entries.map((entry, index) => {
           const bound = boundState(binds, normalized(entry.bind), entry.target)
           return (
