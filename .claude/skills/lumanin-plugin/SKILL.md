@@ -234,6 +234,23 @@ signed in - doing that setup is part of this step, not homework for the user:
 - then re-run the underlying command, reopen the launcher, and re-verify - repeat until the
   view shows real data.
 
+**Run the whole test pass yourself before handing the plugin over.** The user gets a finished
+plugin, not a checklist. In the real window, with the plugin installed:
+
+- open every command the manifest declares, not just the first one,
+- pick every category in the dropdown and confirm each shows its own rows,
+- type a query that matches, a query that matches nothing, and a query with one typo,
+- dispatch every action that is safe to repeat (copy, open, show details); for a destructive or
+  irreversible action, verify it appears in the Ctrl+K panel with the right title and shortcut
+  and say plainly that you did not fire it,
+- if the manifest declares preferences, set each one to a non-default value and confirm the
+  plugin honours it,
+- restart the session (close the window, reopen) once, so module-load crashes and stale caches
+  show up.
+
+Fix what fails and run the pass again from the top. Hand the plugin over only when a full pass
+is clean, and say what you ran in one or two sentences.
+
 Do not add `@types/*` or TypeScript tooling to the plugin - the build path compiles TypeScript
 directly. It strips types rather than checking them, so a type error does not stop the build:
 check what you emit against `reference.md`, and treat a runtime error card as the type check.
