@@ -53,7 +53,13 @@ export interface SearchOutcome {
  * exit past 1 reaches the error card.
  */
 export function parseSearchOutput({ stdout, stderr, exitCode, error }: SearchOutcome): string {
-  if (error !== undefined) throw error
+  if (error !== undefined) {
+    // A timeout arrives as { error, exitCode: null } with whatever the tool had
+    // printed by then — a failed spawn has that shape too, but never any
+    // stdout. What was found before the clock ran out is worth showing.
+    if (exitCode === null && stdout.length > 0) return stdout
+    throw error
+  }
   if (exitCode !== 0 && exitCode !== 1) {
     const line = stderr.trim().split('\n')[0] ?? ''
     throw new Error(line.length > 0 ? line : `search tool exited with code ${String(exitCode)}`)

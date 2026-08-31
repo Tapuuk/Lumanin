@@ -95,6 +95,16 @@ describe('parseSearchOutput', () => {
     expect(() => parseSearchOutput(outcome)).toThrow('fd: invalid pattern')
   })
 
+  it('returns partial stdout when a timeout killed the tool mid-print', () => {
+    const outcome = {
+      stdout: '/home/alice/notes.txt\n',
+      stderr: '',
+      exitCode: null,
+      error: new Error('fd pattern timed out after 4000 ms')
+    }
+    expect(parseSearchOutput(outcome)).toBe('/home/alice/notes.txt\n')
+  })
+
   it('rethrows a failed spawn regardless of exit code', () => {
     const spawnError = new Error('spawn fd ENOENT')
     const outcome = { stdout: '', stderr: '', exitCode: null, error: spawnError }

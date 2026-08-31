@@ -631,8 +631,27 @@ async function withHeadlessList<T>(
   }
 
   const host = extensionHost
-  const session = await host.launch(command, { ...context, enumerate: true })
-  headlessSessions.set(session.sessionId, label ?? command.spec.title)
+  // Registered before the command runs, not after `launch` resolves: a
+  // `confirmAlert` fired during the initial render must already find the
+  // session here, or `emit` would forward it to a renderer that does not exist.
+  const name = label ?? command.spec.title
+  let launchedId: string | null = null
+  let session
+  try {
+    session = await host.launch(
+      command,
+      { ...context, enumerate: true },
+      {
+        onSession: (sessionId) => {
+          launchedId = sessionId
+          headlessSessions.set(sessionId, name)
+        }
+      }
+    )
+  } catch (error) {
+    if (launchedId !== null) headlessSessions.delete(launchedId)
+    throw error
+  }
   let keep = false
   try {
     const deadline = Date.now() + ENUMERATE_TIMEOUT_MS
@@ -702,6 +721,10 @@ async function runItemAction(
     (tree, sessionId) => {
       const handlerId = actionHandlerOf(tree, item, action)
       if (handlerId === null) {
+        // Nothing was dispatched, so there is nothing to keep alive: release
+        // the worker now rather than retaining a session with no work in it.
+        headlessSessions.delete(sessionId)
+        extensionHost?.close(sessionId)
         return { ok: false, detail: `that plugin no longer offers “${action}” on that row` }
       }
 

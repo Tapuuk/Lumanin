@@ -236,6 +236,12 @@ export class ExtensionHost {
     options: {
       readonly launchArguments?: Readonly<Record<string, string>>
       readonly launchType?: 'userInitiated' | 'background'
+      /**
+       * Called with the session id before the command runs. A headless caller
+       * needs its bookkeeping in place before the first render, because a
+       * `confirmAlert` fired during startup consults it.
+       */
+      readonly onSession?: (sessionId: string) => void
     } = {}
   ): Promise<SessionInfo> {
     const stored = this.deps.store.preferences(
@@ -315,6 +321,7 @@ export class ExtensionHost {
 
     const live: LiveSession = { info, command, tree: emptyTree(), revision: 0, failure: null }
     this.sessions.set(sessionId, live)
+    options.onSession?.(sessionId)
     try {
       await peer.call(HOST_METHODS.CREATE, spec)
     } catch (error) {
