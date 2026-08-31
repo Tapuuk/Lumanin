@@ -18,6 +18,8 @@ import { guarded, useSettingsState } from './useSettings'
 export interface PickedTarget {
   readonly key: string
   readonly title: string | null
+  /** The row's own icon, for a pin; absent for anything that is not a plugin row. */
+  readonly icon?: string | null
   /** A human label for the screen that opened the picker. */
   readonly label: string
   /** Set only when the picker was asked for a key as well. */
@@ -127,8 +129,8 @@ export function TargetPicker({
   }, [])
 
   // A key binding needs a chord as well, asked for on one more level of the same list.
-  const pick = (key: string, title: string | null, label: string): void => {
-    const picked: PickedTarget = { key, title, label }
+  const pick = (key: string, title: string | null, label: string, icon: string | null = null): void => {
+    const picked: PickedTarget = { key, title, label, icon }
     if (purpose === 'hotkey') setStep({ at: 'key', picked, back: step })
     else onPick(picked)
   }
@@ -278,7 +280,7 @@ export function TargetPicker({
           value: SELF,
           label: `Open on “${item.title}”`,
           detail: 'Opens the list with this row selected',
-          onRow: () => pick(base, item.title, item.title)
+          onRow: () => pick(base, item.title, item.title, item.icon)
         },
         ...item.actions
           // An action title containing `!` cannot be written unambiguously —
@@ -288,7 +290,8 @@ export function TargetPicker({
             value: action,
             label: action,
             detail: 'Runs without opening a window',
-            onRow: () => pick(`${base}!${action}`, `${item.title} - ${action}`, `${item.title} - ${action}`)
+            onRow: () =>
+              pick(`${base}!${action}`, `${item.title} - ${action}`, `${item.title} - ${action}`, item.icon)
           }))
       ]
       break

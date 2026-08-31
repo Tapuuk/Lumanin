@@ -88,7 +88,11 @@ export function qtCombined(hotkey: Hotkey): number | null {
   if (key === undefined) return null
 
   let combined = key
-  for (const modifier of hotkey.mods) combined |= QT_MODIFIERS[modifier] ?? 0
+  for (const modifier of hotkey.mods) {
+    const bit = QT_MODIFIERS[modifier]
+    if (bit === undefined) return null
+    combined |= bit
+  }
   return combined
 }
 

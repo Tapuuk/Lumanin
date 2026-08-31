@@ -45,7 +45,7 @@ describe('shell: targets', () => {
       fileContents: '[search]\npins = ["shell:systemctl suspend"]\n',
       env: {}
     })
-    expect(config.search.pins.value).toEqual([{ key: 'shell:systemctl suspend', title: null }])
+    expect(config.search.pins.value).toEqual([{ key: 'shell:systemctl suspend', title: null, icon: null }])
     expect(config.problems).toEqual([])
   })
 
@@ -54,7 +54,7 @@ describe('shell: targets', () => {
       fileContents: '[search]\npins = ["extension:hacker-news/frontpage"]\n',
       env: {}
     })
-    expect(config.search.pins.value).toEqual([{ key: 'extension:hacker-news/frontpage', title: null }])
+    expect(config.search.pins.value).toEqual([{ key: 'extension:hacker-news/frontpage', title: null, icon: null }])
   })
 
   it('shows a pinned command line on the empty root', () => {
@@ -332,12 +332,12 @@ describe('category and item pins', () => {
     expect(composeExt('', '').length).toBe(0)
   })
 
-  it('draws an item pin with its stored title', () => {
+  it('draws an item pin with its stored title, once its title is typed', () => {
     const rows = composeExt(
-      '',
+      'git',
       '[search]\npins = [{ id = "extension:1password/search#logins:a1b2", title = "GitHub" }]\n'
     )
-    expect(rows).toEqual([
+    expect(rows.filter((row) => row.kind === 'extension')).toEqual([
       {
         id: 'extension:1password/search#logins:a1b2',
         title: 'GitHub',
@@ -355,10 +355,10 @@ describe('category and item pins', () => {
 
   it('draws an action pin — one action on one row — with its stored title', () => {
     const rows = composeExt(
-      '',
+      'git',
       '[search]\npins = [{ id = "extension:1password/search#logins:a1b2!Copy Password", title = "GitHub — Copy Password" }]\n'
     )
-    expect(rows).toEqual([
+    expect(rows.filter((row) => row.kind === 'extension')).toEqual([
       {
         id: 'extension:1password/search#logins:a1b2!Copy Password',
         title: 'GitHub — Copy Password',
@@ -370,7 +370,7 @@ describe('category and item pins', () => {
 
   it('names a row of a command that declares no categories, with an empty one', () => {
     const rows = composeRoot({
-      query: '',
+      query: 'ngi',
       config: loadConfig({
         fileContents: '[search]\npins = [{ id = "extension:units/list#:nginx", title = "nginx" }]\n',
         env: {}
@@ -389,7 +389,7 @@ describe('category and item pins', () => {
       apps: [],
       resolveAlias: () => null
     })
-    expect(rows).toEqual([
+    expect(rows.filter((row) => row.kind === 'extension')).toEqual([
       {
         id: 'extension:units/list#:nginx',
         title: 'nginx',

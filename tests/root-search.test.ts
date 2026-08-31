@@ -296,6 +296,26 @@ describe('the plugins group', () => {
       resolveAlias: () => null
     })
 
+  it('keeps a pinned item off the empty root, and hoists it while it is typed', () => {
+    // A category pin is a favourite and belongs on the empty root. An item pin
+    // is a row inside the plugin's search: it answers to its title and to
+    // nothing else, so with nothing typed it is not there.
+    const file =
+      '[search]\npins = ["extension:godot/search#project", { id = "extension:godot/search#project:dawn!Run", title = "Dawnline - Run" }]\n'
+    expect(composeWith('', file).map((row) => row.id)).toEqual(['extension:godot/search#project'])
+    expect(composeWith('dawn', file).map((row) => row.id)).toContain(
+      'extension:godot/search#project:dawn!Run'
+    )
+  })
+
+  it('draws a pinned item with the icon it was pinned with, and without the search mark', () => {
+    const file =
+      '[search]\npins = [{ id = "extension:godot/search#project:dawn", title = "Dawnline", icon = "lumanin-icon://pin/abc.png" }]\n'
+    const row = composeWith('dawn', file).find((candidate) => candidate.id === 'extension:godot/search#project:dawn')
+    expect(row?.icon).toBe('lumanin-icon://pin/abc.png')
+    expect(row?.badge).toBeUndefined()
+  })
+
   it('puts a plugin’s command above the application of the same name, by default', () => {
     const rows = composeWith('godot')
     expect(rows[0]?.id).toBe('extension:godot/search')

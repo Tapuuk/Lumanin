@@ -1,3 +1,4 @@
+import { rootIconOf } from './pin-icon'
 /**
  * The render tree: what an extension's React tree looks like on the wire.
  *
@@ -150,6 +151,8 @@ export interface EnumeratedItem {
    * is what a key bound to "Dawnline → Open project" has to name.
    */
   readonly actions: readonly string[]
+  /** The row's icon as a URL the root can draw, or `null` when it has none it can keep. */
+  readonly icon: string | null
 }
 
 /**
@@ -161,7 +164,7 @@ export interface EnumeratedItem {
  * `isLoading` is still true, so the caller knows to keep polling; an empty
  * array is a real answer meaning the category has no items.
  */
-export function listItemsOf(root: RenderNode): readonly EnumeratedItem[] | null {
+export function listItemsOf(root: RenderNode, extension = ''): readonly EnumeratedItem[] | null {
   const views = root.children.filter(
     (child): child is RenderNode => !isRenderText(child) && child.type === INTERNAL_TYPES.VIEW
   )
@@ -184,7 +187,8 @@ export function listItemsOf(root: RenderNode): readonly EnumeratedItem[] | null 
           id: stringOr(child.props['id'], null),
           title: stringOr(child.props['title'], ''),
           subtitle: stringOr(child.props['subtitle'], null),
-          actions: actionsOf(child).map((action) => action.title)
+          actions: actionsOf(child).map((action) => action.title),
+          icon: rootIconOf(child.props['icon'], extension)
         })
       }
     }

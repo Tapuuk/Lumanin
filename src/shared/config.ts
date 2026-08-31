@@ -187,6 +187,8 @@ const PINNABLE_KINDS = new Set(['app', 'command', 'web', 'extension', 'shell'])
 export interface PinEntry {
   readonly key: string
   readonly title: string | null
+  /** The row's own face, kept at pin time as a URL the root can draw; `null` means the command's icon. */
+  readonly icon: string | null
 }
 
 /**
@@ -592,15 +594,16 @@ export function pinEntriesOf(raw: unknown, report: (message: string) => void = (
   for (const entry of raw) {
     if (typeof entry === 'string') {
       const key = entry.trim()
-      if (key.length > 0) entries.push({ key, title: null })
+      if (key.length > 0) entries.push({ key, title: null, icon: null })
       continue
     }
     if (typeof entry === 'object' && entry !== null && !Array.isArray(entry)) {
-      const { id, title } = entry as Record<string, unknown>
+      const { id, title, icon } = entry as Record<string, unknown>
       if (typeof id === 'string' && id.trim().length > 0) {
         entries.push({
           key: id.trim(),
-          title: typeof title === 'string' && title.length > 0 ? title : null
+          title: typeof title === 'string' && title.length > 0 ? title : null,
+          icon: typeof icon === 'string' && icon.length > 0 ? icon : null
         })
         continue
       }
@@ -787,7 +790,7 @@ function pinsFrom(
   const envKey = `${ENV_PREFIX}PINS`
   const fromEnv = env[envKey]
   if (fromEnv !== undefined) {
-    const keys = (asStringList(fromEnv) ?? []).map((key) => ({ key, title: null }))
+    const keys = (asStringList(fromEnv) ?? []).map((key) => ({ key, title: null, icon: null }))
     return { value: clean(keys, envKey), layer: 'env', origin: envKey }
   }
 
@@ -995,7 +998,7 @@ function readAliases(file: Record<string, unknown>): Readonly<Record<string, Pin
     if (alias.length === 0 || /\s/.test(alias)) continue
 
     if (typeof value === 'string') {
-      if (value.length > 0) aliases[alias.toLowerCase()] = { key: value, title: null }
+      if (value.length > 0) aliases[alias.toLowerCase()] = { key: value, title: null, icon: null }
       continue
     }
     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
@@ -1003,7 +1006,8 @@ function readAliases(file: Record<string, unknown>): Readonly<Record<string, Pin
       if (typeof id === 'string' && id.trim().length > 0) {
         aliases[alias.toLowerCase()] = {
           key: id.trim(),
-          title: typeof title === 'string' && title.length > 0 ? title : null
+          title: typeof title === 'string' && title.length > 0 ? title : null,
+          icon: null
         }
       }
     }

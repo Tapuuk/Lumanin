@@ -1,6 +1,16 @@
 import { APP_DISPLAY_NAME, APP_ID, WINDOW_CLASS } from '../../shared/identity'
 import { PANEL_TOP_FRACTION } from '../../shared/placement'
-import { formatHotkey, parseHotkey, toCosmic, toHyprland, toHyprlandLua, toKde, toSway, type Hotkey } from '../../shared/hotkey'
+import {
+  formatHotkey,
+  parseHotkey,
+  toCosmic,
+  toHyprland,
+  toHyprlandLua,
+  toKde,
+  toSway,
+  unsupportedModifiers,
+  type Hotkey
+} from '../../shared/hotkey'
 import type { BlockStyle } from './block'
 import { mergeKwinRule, removeKwinRule } from './kwin'
 import type { PlatformProfile } from '../detect'
@@ -910,11 +920,10 @@ function kdeShortcuts(specs: readonly BindSpec[], explicit: boolean): FixAction 
     // daemon deletes that shape on its next start anyway.
     preserveMatch: /^(\[services\]\[|\s*_launch\s*=[^,\n]*$)/,
     preserveUserEdits: !explicit,
-    body: specs.flatMap((spec) => [
-      `[services][${kdeDesktopName(spec)}]`,
-      `_launch=${toKde(spec.hotkey)}`,
-      ''
-    ]),
+    body: specs.flatMap((spec) => {
+      const shortcut = toKde(spec.hotkey)
+      return shortcut === null ? [] : [`[services][${kdeDesktopName(spec)}]`, `_launch=${shortcut}`, '']
+    }),
     applicable: (p) => p.isKde
   }
 }
@@ -951,12 +960,13 @@ function cosmicShortcuts(specs: readonly BindSpec[], explicit: boolean): FixActi
     style: { comment: '//', container: 'braces' },
     signature: /Spawn\(/,
     preserveUserEdits: !explicit,
-    body: specs.map(
+    body: specs.flatMap((spec) => {
       // A RON string, holding a shell command line: cosmic-comp passes it to
       // `/bin/sh -c` verbatim (verified in cosmic-comp's `input/actions.rs`), so
       // it needs shell quoting *and* RON escaping, in that order.
-      (spec) => `    ${toCosmic(spec.hotkey)}: Spawn("${ronString(shellQuote(spec.argv))}"),`
-    ),
+      const chord = toCosmic(spec.hotkey)
+      return chord === null ? [] : [`    ${chord}: Spawn("${ronString(shellQuote(spec.argv))}"),`]
+    }),
     applicable: (p) => p.isCosmic
   }
 }
@@ -1070,7 +1080,9 @@ export function fixActions(options: FixOptions = { hotkey: DEFAULT_HOTKEY, expli
     hyprlandBind(options),
     swayRules(options),
     kwinRules,
-    ...specs.map(kdeDesktopEntry),
+    // KDE and COSMIC have no word for CapsLock; those chords get no entry
+    // rather than a different one, and the bind planner says so.
+    ...specs.filter((spec) => unsupportedModifiers(spec.hotkey).length === 0).map(kdeDesktopEntry),
     kdeShortcuts(specs, options.explicit),
     cosmicShortcuts(specs, options.explicit),
     ...(options.daemonCommand === undefined ? [] : [systemdUnit(options.daemonCommand)]),

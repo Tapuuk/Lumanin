@@ -8,7 +8,7 @@ import { mergeKwinRule, removeKwinRule } from '../src/platform/fix/kwin'
 import { parseStringList, planGnomeBinds, readGnomeBinds, type SettingReader } from '../src/platform/fix/gnome'
 import { bindSpecs, desktopExec, ronString, shellQuote } from '../src/platform/fix/actions'
 import { planKdeLiveBinds, qtCombined } from '../src/platform/fix/kde-dbus'
-import { toCosmic, toGnome, toKde, parseHotkey } from '../src/shared/hotkey'
+import { formatHotkey, parseHotkey, toCosmic, toGnome, toHyprland, toKde, toSway } from '../src/shared/hotkey'
 import { PROBED_BINARIES, type BinaryMap } from '../src/platform/probe/binaries'
 import type { DbusProbe } from '../src/platform/probe/dbus'
 import type { WaylandProtocols } from '../src/platform/probe/wayland'
@@ -129,6 +129,19 @@ describe('each desktop’s spelling of a chord', () => {
       '(modifiers: [Super], key: "Prior")'
     )
     expect(toCosmic(parseHotkey('Super+F2') as never)).toBe('(modifiers: [Super], key: "F2")')
+  })
+
+  it('spells CapsLock where the format has a word for it, and refuses where it does not', () => {
+    const chord = parseHotkey('CapsLock+Super+K')
+    expect(chord).toEqual({ mods: ['super', 'capslock'], key: 'k' })
+    expect(parseHotkey('super+caps+k')).toEqual(chord)
+    expect(parseHotkey('SUPER CAPS, K')).toEqual(chord)
+    expect(formatHotkey(chord as never)).toBe('Super+CapsLock+K')
+    expect(toHyprland(chord as never)).toEqual({ mods: 'SUPER CAPS', key: 'K' })
+    expect(toSway(chord as never)).toBe('Mod4+Lock+k')
+    expect(toGnome(chord as never)).toBe('<Super><Lock>k')
+    expect(toKde(chord as never)).toBeNull()
+    expect(toCosmic(chord as never)).toBeNull()
   })
 })
 

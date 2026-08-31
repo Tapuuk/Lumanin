@@ -337,8 +337,6 @@ export interface ListSpec<T> {
    * nothing left to abandon and Esc means what it has always meant.
    */
   readonly escape?: 'abandon' | 'close'
-  /** Typing letters narrows the list. Off by default; on for long pickers. */
-  readonly filterable?: boolean
   /**
    * Keys the caller wants to handle itself — deleting a row, reordering. Return
    * `'handled'` to redraw, `'close'` to leave the list with that result.
@@ -379,7 +377,7 @@ export interface ListResult<T> {
   readonly index: number
 }
 
-/** The visible rows of a list, once the viewport and any filter are applied. */
+/** The rows a list draws at once; the highlight scrolls the viewport. */
 const MAX_ROWS = 14
 
 export class Menu {
@@ -408,7 +406,6 @@ export class Menu {
   /** A list of choices. Resolves with the chosen value, or `null` on Esc. */
   async list<T>(spec: ListSpec<T>): Promise<ListResult<T>> {
     const s = this.style
-    let filter = ''
     let cursor = spec.initialIndex ?? 0
     let viaKey = false
     let abandon = false
@@ -420,14 +417,7 @@ export class Menu {
     const all = (): readonly Choice<T>[] =>
       typeof spec.choices === 'function' ? spec.choices() : spec.choices
 
-    const visible = (): readonly Choice<T>[] =>
-      filter.length === 0
-        ? all()
-        : all().filter(
-            (choice) =>
-              choice.separator !== true &&
-              `${choice.label} ${choice.detail ?? ''}`.toLowerCase().includes(filter.toLowerCase())
-          )
+    const visible = (): readonly Choice<T>[] => all()
 
     const clamp = (): void => {
       const rows = selectable(visible())
@@ -452,9 +442,6 @@ export class Menu {
 
       const lines: string[] = ['', `  ${s.bold(spec.title)}`]
       if (spec.subtitle !== undefined) lines.push(`  ${s.dim(spec.subtitle)}`)
-      if (spec.filterable === true) {
-        lines.push(`  ${s.dim('filter:')} ${filter.length === 0 ? s.dim('(type to narrow)') : filter}`)
-      }
       lines.push('')
 
       // A viewport, so a 500-application picker does not redraw the world.
@@ -493,7 +480,7 @@ export class Menu {
       lines.push('')
       const hints = [
         '↑↓ move',
-        '→/enter select',
+        'space select',
         ...(spec.hints ?? []),
         spec.escHint ?? (spec.escape === 'close' ? 'esc back' : '← back · esc menu')
       ]
@@ -535,16 +522,15 @@ export class Menu {
         switch (key.name) {
           case 'up':
           case 'k':
-            if (key.name === 'k' && spec.filterable === true) break
             move(-1)
             render()
             return 'continue'
           case 'down':
           case 'j':
-            if (key.name === 'j' && spec.filterable === true) break
             move(1)
             render()
             return 'continue'
+          case 'space':
           case 'return':
           // → is Enter. The pair reads as a direction rather than as two
           // unrelated keys: ← leaves the screen you are on, → goes into the row
@@ -564,23 +550,8 @@ export class Menu {
             closed = null
             abandon = spec.escape !== 'close'
             return 'done'
-          case 'backspace':
-            if (spec.filterable !== true) break
-            filter = filter.slice(0, -1)
-            render()
-            return 'continue'
           default:
             break
-        }
-
-        if (
-          spec.filterable === true &&
-          key.sequence.length === 1 &&
-          !key.ctrl &&
-          key.sequence >= ' '
-        ) {
-          filter += key.sequence
-          render()
         }
         return 'continue'
     })

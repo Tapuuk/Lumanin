@@ -38,7 +38,7 @@ Then run `lumanin` once. The first-run screen lets you pick a hotkey and sets up
 
 Update: `lumanin update`, or Settings > General > Check for updates. It pulls the checkout, rebuilds in place and restarts the launcher; nothing runs until you say yes.
 
-Uninstall: `lumanin doctor --unfix`, then delete `~/.local/share/lumanin` and the `~/.local/bin/lumanin` symlink. That's everything.
+Uninstall: `~/.local/share/lumanin/src/scripts/uninstall.sh`. It runs `lumanin doctor --unfix` (unwriting the keybind and autostart entry, asking first), stops the daemon and removes the symlink, icon, settings entry and checkout. Your config and plugins stay unless you add `--purge`.
 
 ## Using it
 
@@ -80,6 +80,8 @@ lumanin plugin-install https://github.com/someone/their-plugin
 ```
 
 Before anything is installed you're shown who wrote it, what it declares, and what it depends on, and told plainly that a plugin is a program running as you.
+
+Find plugins: the [Lumanin-Plugins](https://github.com/Tapuuk/Lumanin-Plugins) repository is a list anyone can add theirs to by pull request. Settings > Plugins > Browse official plugins reads the same list; installing from it goes through the same consent screen as a pasted URL.
 
 > **Careful who you install from.** A plugin runs with your full user rights: your files, your network, your session. Lumanin shows you the facts before installing, but it does not scan code and cannot catch malice. Treat a plugin URL like a `curl | bash` from the same stranger: install from authors you trust, and read the source first when you don't (the consent screen tells you exactly where it is on disk).
 

@@ -1034,7 +1034,7 @@ export function HotkeyCapture({
       return
     }
 
-    if (['Control', 'Alt', 'Shift', 'Meta', 'Super', 'Hyper'].includes(event.key)) return // keep waiting
+    if (['Control', 'Alt', 'Shift', 'Meta', 'Super', 'Hyper', 'CapsLock'].includes(event.key)) return // keep waiting
     const chord = chordFrom(event)
     if (chord === null) {
       setNote(`Cannot bind ${event.key}.`)
@@ -1113,11 +1113,14 @@ export function HotkeyCapture({
 export function rawChordFrom(
   event: React.KeyboardEvent
 ): { mods: readonly Modifier[]; key: string } | null {
-  if (['Control', 'Alt', 'Shift', 'Meta', 'Super', 'Hyper'].includes(event.key)) return null
+  if (['Control', 'Alt', 'Shift', 'Meta', 'Super', 'Hyper', 'CapsLock'].includes(event.key)) return null
   const mods = MODIFIERS.filter((modifier: Modifier) => {
     if (modifier === 'ctrl') return event.ctrlKey
     if (modifier === 'alt') return event.altKey
     if (modifier === 'shift') return event.shiftKey
+    // `getModifierState('CapsLock')` is the lock, not the key held, so a
+    // capture never reports it; it can still be typed as `CapsLock+K`.
+    if (modifier === 'capslock') return false
     return event.metaKey // 'super'
   })
   const key = normalizeKey(event.key, event.code)
@@ -1127,12 +1130,15 @@ export function rawChordFrom(
 
 /** A DOM key event as a Hotkey, or `null` while only modifiers are down. */
 function chordFrom(event: React.KeyboardEvent): Hotkey | null {
-  if (['Control', 'Alt', 'Shift', 'Meta', 'Super', 'Hyper'].includes(event.key)) return null
+  if (['Control', 'Alt', 'Shift', 'Meta', 'Super', 'Hyper', 'CapsLock'].includes(event.key)) return null
 
   const mods = MODIFIERS.filter((modifier: Modifier) => {
     if (modifier === 'ctrl') return event.ctrlKey
     if (modifier === 'alt') return event.altKey
     if (modifier === 'shift') return event.shiftKey
+    // `getModifierState('CapsLock')` is the lock, not the key held, so a
+    // capture never reports it; it can still be typed as `CapsLock+K`.
+    if (modifier === 'capslock') return false
     return event.metaKey // 'super'
   })
 

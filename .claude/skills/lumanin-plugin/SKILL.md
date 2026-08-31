@@ -70,6 +70,14 @@ you do not re-invent them unless the user explicitly asks for different behaviou
   `system:image-x-generic`). A row that is an application gets that app's theme icon
   (`system:firefox`). Fall back to one `Icon.*` glyph only where the data genuinely has no face
   of its own - and let a failed favicon degrade to that glyph rather than a broken image.
+- **An icon is data: read it every time, never remember it.** When the thing a row stands for
+  changes its image (a Godot project gets a new `icon.png`, a bookmark a new favicon), the row
+  shows the new one on its next load, with no cache to clear and no cap that quietly turns a big
+  image into a glyph. An image file goes into the plugin's own `environment.assetsPath` under a
+  cache directory, named by its content hash, and the row's `icon` is that relative path - the
+  launcher serves it from disk, a changed image is a new name, and a pin of the row keeps
+  working. Inline a `data:` URI only for something small (a few KB of SVG); never push a large
+  image through the render tree, and never drop to an `Icon.*` glyph for an image that exists.
 - **No em dashes, anywhere a person reads.** Titles, subtitles, toasts, empty states, README
   text, code comments - a plain `-` with spaces around it does the job. This applies to the
   plugin you generate and to everything you write while generating it.
@@ -93,7 +101,9 @@ These six are must-haves, not suggestions:**
 4. **Give every `List.Item` a stable `id`.** It is what lets the user pin a single thing -
    one login, one friend - from `lumanin config`; a row without an id cannot be pinned, bound
    to a key, or aliased. Stable means stable *across runs*: derive it from the thing's own
-   identity (a path, a uuid, a slug), never from the row's position.
+   identity (a path, a uuid, a slug), never from the row's position. The row's `icon` travels
+   with the pin: a theme name, an asset, a URL or an inline image all draw at the root as they do
+   in the list, while an `Icon.*` glyph does not, so a row someone might pin wants a real image.
 
 5. **Keep action titles stable too, and free of `!`.** A key can be bound straight to one action
    on one row - "Dawnline → Open project" - and an action's *title* is the only name it has to
@@ -205,12 +215,13 @@ lumanin plugin-install <directory>      # builds it; build errors surface here
 lumanin ext dev <directory>             # rebuild + reload on every save, for iterating
 ```
 
-Then actually open the launcher, run the command, and confirm the first view renders **real
-data** and the main action works. A plugin is not done because it compiles, and it is not done
+Then actually open the launcher (`lumanin toggle`, or its hotkey), run the command, and confirm
+the first view renders **real data** and the main action works. A plugin is not done because it compiles, and it is not done
 because its error state renders nicely - handing the user an error card that says "go configure
-X first" is a failing verify, not a finished plugin. If the repository's window-driving harness
-is available (`scripts/verify-plugins.mjs`), it answers "did it render" mechanically - but it
-cannot tell real rows from an error card, so look at what rendered.
+X first" is a failing verify, not a finished plugin. Nothing beyond the installed `lumanin` is
+needed for this. Only if you happen to be inside a source checkout of the launcher is there an
+optional harness (`scripts/verify-plugins.mjs`) that answers "did it render" mechanically - and
+even then it cannot tell real rows from an error card, so look at what rendered.
 
 **If the underlying tool needs setup** - not installed, an integration not enabled, nobody
 signed in - doing that setup is part of this step, not homework for the user:
@@ -224,7 +235,8 @@ signed in - doing that setup is part of this step, not homework for the user:
   view shows real data.
 
 Do not add `@types/*` or TypeScript tooling to the plugin - the build path compiles TypeScript
-directly and type errors surface at install time.
+directly. It strips types rather than checking them, so a type error does not stop the build:
+check what you emit against `reference.md`, and treat a runtime error card as the type check.
 
 ## 5. Offer publishing
 

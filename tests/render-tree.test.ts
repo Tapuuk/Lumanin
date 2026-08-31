@@ -171,8 +171,8 @@ describe('listItemsOf (the enumerate verb reading a tree)', () => {
       ])
     )
     expect(listItemsOf(settled)).toEqual([
-      { id: 'one', title: 'One', subtitle: 'first', actions: [] },
-      { id: null, title: 'Two', subtitle: null, actions: [] }
+      { id: 'one', title: 'One', subtitle: 'first', actions: [], icon: null },
+      { id: null, title: 'Two', subtitle: null, actions: [], icon: null }
     ])
   })
 
@@ -221,9 +221,10 @@ describe('listItemsOf (the enumerate verb reading a tree)', () => {
           subtitle: null,
           // The submenu itself is not in the list — it opens a menu rather
           // than doing anything — but what is inside it is.
-          actions: ['Open project', 'Run project', 'Copy path']
+          actions: ['Open project', 'Run project', 'Copy path'],
+          icon: null
         },
-        { id: 'fog', title: 'Fog Descend', subtitle: null, actions: [] }
+        { id: 'fog', title: 'Fog Descend', subtitle: null, actions: [], icon: null }
       ])
     })
 

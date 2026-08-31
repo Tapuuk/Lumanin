@@ -12,7 +12,7 @@
  * sequences, no chords-of-chords, no key-up bindings.
  */
 
-export const MODIFIERS = ['super', 'ctrl', 'alt', 'shift'] as const
+export const MODIFIERS = ['super', 'ctrl', 'alt', 'shift', 'capslock'] as const
 export type Modifier = (typeof MODIFIERS)[number]
 
 export interface Hotkey {
@@ -38,7 +38,11 @@ const MODIFIER_ALIASES: Readonly<Record<string, Modifier>> = {
   alt: 'alt',
   mod1: 'alt',
   option: 'alt',
-  shift: 'shift'
+  shift: 'shift',
+  capslock: 'capslock',
+  caps_lock: 'capslock',
+  caps: 'capslock',
+  lock: 'capslock'
 }
 
 /** Key spellings people type, mapped to the xkb keysym name compositors want. */
@@ -96,7 +100,8 @@ const MODIFIER_LABELS: Readonly<Record<Modifier, string>> = {
   super: 'Super',
   ctrl: 'Ctrl',
   alt: 'Alt',
-  shift: 'Shift'
+  shift: 'Shift',
+  capslock: 'CapsLock'
 }
 
 /**
@@ -154,9 +159,17 @@ function capitalize(text: string): string {
  * Uppercase throughout to match what Omarchy and Hyprland's own docs write, and
  * because Hyprland's keysym lookup is case-insensitive either way.
  */
+const HYPRLAND_MODIFIERS: Readonly<Record<Modifier, string>> = {
+  super: 'SUPER',
+  ctrl: 'CTRL',
+  alt: 'ALT',
+  shift: 'SHIFT',
+  capslock: 'CAPS'
+}
+
 export function toHyprland(hotkey: Hotkey): { mods: string; key: string } {
   return {
-    mods: hotkey.mods.map((modifier) => modifier.toUpperCase()).join(' '),
+    mods: hotkey.mods.map((modifier) => HYPRLAND_MODIFIERS[modifier]).join(' '),
     key: hotkey.key.toUpperCase()
   }
 }
@@ -170,7 +183,7 @@ export function toHyprland(hotkey: Hotkey): { mods: string; key: string } {
  * spelling, which is why the encoder is shared by both lines we emit.
  */
 export function toHyprlandLua(hotkey: Hotkey): string {
-  return [...hotkey.mods.map((modifier) => modifier.toUpperCase()), hotkey.key.toUpperCase()].join(
+  return [...hotkey.mods.map((modifier) => HYPRLAND_MODIFIERS[modifier]), hotkey.key.toUpperCase()].join(
     ' + '
   )
 }
@@ -187,7 +200,8 @@ export function toSway(hotkey: Hotkey): string {
     super: 'Mod4',
     ctrl: 'Control',
     alt: 'Mod1',
-    shift: 'Shift'
+    shift: 'Shift',
+    capslock: 'Lock'
   }
   return [...hotkey.mods.map((modifier) => names[modifier]), hotkey.key].join('+')
 }
@@ -208,7 +222,8 @@ export function toGnome(hotkey: Hotkey): string {
     super: '<Super>',
     ctrl: '<Control>',
     alt: '<Alt>',
-    shift: '<Shift>'
+    shift: '<Shift>',
+    capslock: '<Lock>'
   }
   return `${hotkey.mods.map((modifier) => names[modifier]).join('')}${hotkey.key}`
 }
@@ -247,12 +262,26 @@ const QT_KEYS: Readonly<Record<string, string>> = {
   end: 'End'
 }
 
-export function toKde(hotkey: Hotkey): string {
+/**
+ * A modifier the format has no word for. Qt's key sequences and COSMIC's
+ * `Modifier` enum both know exactly Super, Ctrl, Alt and Shift; CapsLock is a
+ * lock state to them, not a key one holds. Reported rather than dropped from
+ * the chord, because writing `Meta+K` for `CapsLock+Meta+K` binds a different
+ * key.
+ */
+export function unsupportedModifiers(hotkey: Hotkey): readonly Modifier[] {
+  return hotkey.mods.filter((modifier) => modifier === 'capslock')
+}
+
+/** `null` when the chord holds a modifier Qt cannot spell. */
+export function toKde(hotkey: Hotkey): string | null {
+  if (unsupportedModifiers(hotkey).length > 0) return null
   const names: Readonly<Record<Modifier, string>> = {
     super: 'Meta',
     ctrl: 'Ctrl',
     alt: 'Alt',
-    shift: 'Shift'
+    shift: 'Shift',
+    capslock: ''
   }
   const key = QT_KEYS[hotkey.key] ?? (hotkey.key.length === 1 ? hotkey.key.toUpperCase() : capitalize(hotkey.key))
   return [...hotkey.mods.map((modifier) => names[modifier]), key].join('+')
@@ -284,12 +313,15 @@ const COSMIC_KEYS: Readonly<Record<string, string>> = {
   backspace: 'BackSpace'
 }
 
-export function toCosmic(hotkey: Hotkey): string {
+/** `null` when the chord holds a modifier COSMIC's enum cannot spell. */
+export function toCosmic(hotkey: Hotkey): string | null {
+  if (unsupportedModifiers(hotkey).length > 0) return null
   const names: Readonly<Record<Modifier, string>> = {
     super: 'Super',
     ctrl: 'Ctrl',
     alt: 'Alt',
-    shift: 'Shift'
+    shift: 'Shift',
+    capslock: ''
   }
   const mods = hotkey.mods.map((modifier) => names[modifier]).join(', ')
   const key =

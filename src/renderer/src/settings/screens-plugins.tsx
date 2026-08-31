@@ -343,7 +343,11 @@ export function PreferenceRow({
       })
   }
 
-  const help = [preference.description, preference.required ? 'required' : null]
+  const help = [
+    preference.description,
+    preference.required ? 'required' : null,
+    preference.type === 'password' ? 'stored unencrypted on this machine, readable only by your user' : null
+  ]
     .filter((part): part is string => part !== null && part.length > 0)
     .join(' · ')
 

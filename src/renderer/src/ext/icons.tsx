@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ICON_SCHEME } from '@shared/identity'
+import { themeIconUrl, assetUrl } from '@shared/pin-icon'
 import { Icon } from '@shared/icon'
 import { objectProp, str, type RenderValue } from './tree'
 
@@ -207,20 +207,7 @@ function normalizeDataUri(value: string): string {
   return `${match[1] ?? ''}${parameters},${encodeURIComponent(payload)}`
 }
 
-/**
- * A themed-icon URL. Main resolves the name against the icon theme and serves
- * the file; the renderer never learns where it was.
- */
-export function themeIconUrl(names: string): string {
-  return `${ICON_SCHEME}://theme/${encodeURIComponent(names)}`
-}
-
-export function assetUrl(extension: string, path: string): string {
-  return `${ICON_SCHEME}://ext/${encodeURIComponent(extension)}/${path
-    .split('/')
-    .map((segment) => encodeURIComponent(segment))
-    .join('/')}`
-}
+export { themeIconUrl, assetUrl }
 
 /**
  * Map a `Color.*` value onto a theme token.

@@ -1,8 +1,8 @@
 import type { PlatformProfile } from '../detect'
-import { DEFAULT_HOTKEY, type HotkeyChoice } from './actions'
+import { DEFAULT_HOTKEY, bindSpecs, type HotkeyChoice } from './actions'
 import { planFixes, type BindPlan, type FixDirs, type FixPlan } from './index'
 import type { Hotkey } from '../../shared/hotkey'
-import { parseHotkey } from '../../shared/hotkey'
+import { formatHotkey, parseHotkey, unsupportedModifiers } from '../../shared/hotkey'
 import { panelTopFraction } from '../../shared/placement'
 import type { ResolvedConfig } from '../../shared/config'
 
@@ -57,8 +57,20 @@ export function planBind(profile: PlatformProfile, dirs: FixDirs, choice: Hotkey
   return {
     edits,
     commands: plan.commands,
-    notes: reloadNotes(profile, { edits, commands: plan.commands })
+    notes: [...reloadNotes(profile, { edits, commands: plan.commands }), ...unwritableNotes(profile, choice)]
   }
+}
+
+/** The chords this desktop's format cannot spell, which therefore were not written. */
+function unwritableNotes(profile: PlatformProfile, choice: HotkeyChoice): readonly string[] {
+  if (!profile.isKde && !profile.isCosmic) return []
+  const dropped = bindSpecs(choice).filter((spec) => unsupportedModifiers(spec.hotkey).length > 0)
+  if (dropped.length === 0) return []
+  return [
+    `${dropped.map((spec) => formatHotkey(spec.hotkey)).join(', ')}: ${
+      profile.isKde ? 'KDE' : 'COSMIC'
+    } cannot bind CapsLock as a modifier, so this key was not written. Pick another modifier.`
+  ]
 }
 
 const BIND_ACTIONS = new Set([

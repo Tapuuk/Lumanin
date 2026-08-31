@@ -257,7 +257,11 @@ export function composeRoot(input: RootSearchInput): readonly ResultItem[] {
    * command) resolves to nothing, which is how a stale pin disappears instead
    * of becoming a dead row.
    */
-  const resolveExtensionPin = (payload: string, storedTitle: string | null): ResultItem | null => {
+  const resolveExtensionPin = (
+    payload: string,
+    storedTitle: string | null,
+    storedIcon: string | null
+  ): ResultItem | null => {
     const parts = parseExtensionPin(payload)
     if (parts === null) return null
     const command = commands.find(
@@ -296,7 +300,9 @@ export function composeRoot(input: RootSearchInput): readonly ResultItem[] {
       title: storedTitle ?? (parts.action === null ? parts.item : `${parts.item} - ${parts.action}`),
       subtitle: category === undefined ? `${owner} · ${command.title}` : `${owner} · ${category.title}`,
       kind: 'extension',
-      ...icon
+      // A row that brought its own face wears it, and not the search mark: a
+      // pinned project is that project, not a search for it.
+      ...(storedIcon === null ? icon : { icon: storedIcon })
     }
   }
 
@@ -305,7 +311,17 @@ export function composeRoot(input: RootSearchInput): readonly ResultItem[] {
    * reorder. A web pin needs a term, so at the root it resolves to nothing —
    * there is no such thing as searching for the empty string.
    */
-  const resolvePin = (key: string, storedTitle: string | null = null): ResultItem | null => {
+  const isItemPin = (key: string): boolean => {
+    if (!key.startsWith('extension:')) return false
+    const parts = parseExtensionPin(key.slice('extension:'.length))
+    return parts !== null && parts.item !== null
+  }
+
+  const resolvePin = (
+    key: string,
+    storedTitle: string | null = null,
+    storedIcon: string | null = null
+  ): ResultItem | null => {
     const separator = key.indexOf(':')
     if (separator === -1) return null
     const kind = key.slice(0, separator)
@@ -316,7 +332,7 @@ export function composeRoot(input: RootSearchInput): readonly ResultItem[] {
     // missing since it was written.
     if (kind === 'shell') return shellRow(payload)
     if (kind === 'extension' && payload.includes('#')) {
-      return resolveExtensionPin(payload, storedTitle)
+      return resolveExtensionPin(payload, storedTitle, storedIcon)
     }
     if (kind !== 'web') return input.resolveAlias(payload)
     if (needle.length === 0) return null
@@ -327,9 +343,14 @@ export function composeRoot(input: RootSearchInput): readonly ResultItem[] {
   // Nothing typed: the pins, and only the pins. With none configured this is the
   // empty list the panel's layout is built around — a bare search bar — and the
   // moment someone pins something it becomes the short list they pinned.
+  //
+  // A pinned item or action is the one kind that stays off the empty root: it is
+  // a row inside a plugin's search, hoisted while what is typed names it, and
+  // with nothing typed there is nothing for it to answer.
   if (needle.length === 0) {
     for (const entry of pins) {
-      const row = resolvePin(entry.key, entry.title)
+      if (isItemPin(entry.key)) continue
+      const row = resolvePin(entry.key, entry.title, entry.icon)
       if (row !== null) push(row)
     }
     return rows
@@ -452,7 +473,7 @@ export function composeRoot(input: RootSearchInput): readonly ResultItem[] {
     } else if (key.startsWith('shell:')) {
       row = matchesShellPin(needle, key.slice('shell:'.length)) ? resolvePin(key) : null
     } else if (key.startsWith('extension:') && key.includes('#')) {
-      const resolved = resolvePin(key, entry.title)
+      const resolved = resolvePin(key, entry.title, entry.icon)
       row = resolved !== null && matchesPinTitle(needle, resolved.title) ? resolved : null
     } else {
       row = matched.get(key) ?? null

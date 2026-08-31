@@ -7,6 +7,7 @@ import { createRuntime, type PlatformRuntime } from '../platform/runtime'
 import type { BinaryMap } from '../platform/probe/binaries'
 import { openPath } from '../platform/apps/launch'
 import { FrecencyStore } from '../node/frecency-store'
+import { pinIconPath, storePinIcon } from '../node/pin-icons'
 import { SearchService } from './search'
 import { isExtensionCommandEnabled, loadConfig, type ResolvedConfig } from '../shared/config'
 import { escapeAction } from '../shared/escape'
@@ -622,11 +623,14 @@ async function withHeadlessList<T>(
  * on one row, which is why each row reports its actions too.
  */
 async function enumerateItems(commandId: string, category: string | null): Promise<EnumerateData> {
-  return await withHeadlessList(
-    commandId,
-    category === null ? {} : { category },
-    (tree) => ({ items: [...(listItemsOf(tree) ?? [])] })
-  )
+  const extension = extensionCommand((candidate) => candidate.id === commandId)?.extension.manifest.name ?? ''
+  return await withHeadlessList(commandId, category === null ? {} : { category }, (tree) => ({
+    items: (listItemsOf(tree, extension) ?? []).map((item) => ({
+      ...item,
+      // An inline image is written to disk once and the pin keeps a short URL.
+      icon: item.icon !== null && item.icon.startsWith('data:') ? storePinIcon(paths.data, item.icon) : item.icon
+    }))
+  }))
 }
 
 /**
@@ -836,7 +840,8 @@ function sessionIdOf(params: unknown): string {
 function registerIconProtocol(): void {
   protocol.handle(ICON_SCHEME, (request) => {
     const url = new URL(request.url)
-    // `lumanin-icon://app/<id>` and `lumanin-icon://ext/<extension>/<path>`.
+    // `lumanin-icon://app/<id>`, `lumanin-icon://ext/<extension>/<path>`,
+    // `lumanin-icon://theme/<names>` and `lumanin-icon://pin/<hash>.<ext>`.
     // The host is the namespace rather than a path segment, because Chromium
     // normalises the host and leaves the path alone — putting the namespace in
     // the path would let `..` in a crafted URL escape it.
@@ -845,7 +850,9 @@ function registerIconProtocol(): void {
         ? extensionAsset(url.pathname)
         : url.host === 'theme'
           ? themeIcon(url.pathname)
-          : appIcon(url.pathname)
+          : url.host === 'pin'
+            ? pinIconPath(paths.data, url.pathname)
+            : appIcon(url.pathname)
 
     if (file === null) return new Response(null, { status: 404 })
     return net.fetch(pathToFileURL(file).toString())

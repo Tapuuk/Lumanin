@@ -101,9 +101,9 @@ function reorder<T>(items: readonly T[], value: T, delta: number): T[] | null {
  *  - it never writes a key that equals the built-in default, so defaults stay
  *    free to improve underneath a config that never disagreed with them.
  *
- * Nothing is written until Save. The document is parsed, edited in memory, and
- * re-rendered, which is how keys for features not built yet
- * survive a round trip.
+ * Every finished edit is written at once and the running daemon told to reload;
+ * there is no Save. The document is parsed, edited in memory, and re-rendered,
+ * which is how keys for features not built yet survive a round trip.
  */
 
 export interface ConfigUiDeps {
@@ -168,6 +168,8 @@ interface PinDraftEntry {
   readonly key: string
   /** Stored only for plugin items, which cannot be resolved without running the plugin. */
   readonly title: string | null
+  /** The row's own icon, likewise: a URL the root draws without the plugin. */
+  readonly icon?: string | null
 }
 
 // The settings themselves — labels, editors, resolved-value readers — live in
@@ -182,7 +184,7 @@ const COMMANDS = BUILTIN_COMMANDS
 /** What the plugin browser needs to pin things in place with Space. */
 interface PinControl {
   readonly isPinned: (key: string) => boolean
-  readonly toggle: (key: string, title: string | null) => void
+  readonly toggle: (key: string, title: string | null, icon: string | null) => void
 }
 
 type Draft = Record<string, unknown>
@@ -215,6 +217,25 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
   const resolved = (): ResolvedConfig =>
     loadConfig({ fileContents: render(draft), env: deps.env })
   const dirty = (): boolean => render(draft) !== (document.original ?? '')
+
+  // What a reload could not apply live - the panel's width and height - is kept
+  // for the way out, where a restart can be offered once rather than per edit.
+  let restartDetail: string | null = null
+  let commentBackup: string | null = null
+  let applying: Promise<void> = Promise.resolve()
+  const set = (path: readonly string[], value: unknown): void => {
+    setValue(draft, path, value)
+    if (!dirty()) return
+    const hadComments = document.commentLines
+    const written = writeConfigDocument(document, draft, stamp())
+    if (hadComments > 0 && written.backup !== null) commentBackup = written.backup
+    const apply = deps.applyChanges
+    if (apply === null) return
+    applying = applying.then(async () => {
+      const applied = await apply()
+      if (!applied.ok) restartDetail = applied.detail ?? 'the daemon could not apply this live'
+    })
+  }
 
   // The application index, built once and only if a picker asks for it: it is
   // 10–30 ms of disk work that most visits to this menu never need.
@@ -381,7 +402,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
       if (chosen.value === null) return
 
       if (chosen.value === NONE) {
-        setValue(draft, path, '')
+        set(path, '')
         // Removing a key is a change to the compositor's file exactly as adding
         // one is, so it goes through the same write rather than quietly leaving
         // the old bind behind — see the Hotkeys screen's note on reporting
@@ -399,7 +420,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         if (hotkey === null) return
       }
 
-      setValue(draft, path, formatHotkey(hotkey))
+      set(path, formatHotkey(hotkey))
       await offerBind(hotkey, isFileSearch ? 'block' : 'main')
       return
     }
@@ -451,8 +472,6 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
       async () => {
         const chosen = await menu.list<string>({
           title: 'And which key?',
-          subtitle: 'Type to narrow.',
-          filterable: true,
           choices: HOTKEY_KEYS.map((candidate) => ({
             value: candidate,
             label: keyLabel(candidate),
@@ -579,11 +598,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
       [
         ...results.map((result) => `${result.ok ? s.good('✔') : s.bad('✘')} ${result.path} - ${result.detail}`),
         '',
-        ...plan.notes.flatMap((note) => [...note.split('\n'), '']),
-        // The compositor now knows; `config.toml` does not until Save. Without
-        // this the two can disagree silently, and the setting that reads as the
-        // source of truth would be the one that is wrong.
-        `${s.warn('!')} The setting itself is still unsaved - Save from the main menu.`
+        ...plan.notes.flatMap((note) => [...note.split('\n'), ''])
       ]
     )
   }
@@ -611,7 +626,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     if (setting.editor.kind === 'boolean') {
       // Toggled from the list, not through a screen: a yes/no that costs a
       // submenu is a yes/no nobody changes.
-      setValue(draft, setting.path, !(state.value === true))
+      set(setting.path, !(state.value === true))
       return
     }
 
@@ -651,7 +666,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
 
         if (choice.value === null) return
         if (choice.value === USE_DEFAULT) {
-          setValue(draft, setting.path, undefined)
+          set(setting.path, undefined)
           return
         }
         if (choice.value === TYPE_ONE) {
@@ -663,10 +678,10 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
             validate: (value) => (value.trim().length === 0 ? 'needs a value' : null)
           })
           if (typed === null) continue
-          setValue(draft, setting.path, typed.trim())
+          set(setting.path, typed.trim())
           return
         }
-        setValue(draft, setting.path, choice.value)
+        set(setting.path, choice.value)
         return
       }
     }
@@ -701,12 +716,12 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         })
         if (chosen.value === null) return
         if (chosen.value === USE_DEFAULT) {
-          setValue(draft, setting.path, undefined)
+          set(setting.path, undefined)
           await afterNumber(setting)
           return
         }
         if (chosen.value !== TYPE_ONE) {
-          setValue(draft, setting.path, Number(chosen.value))
+          set(setting.path, Number(chosen.value))
           await afterNumber(setting)
           return
         }
@@ -727,7 +742,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         }
       })
       if (typed === null) return
-      setValue(draft, setting.path, typed.trim().length === 0 ? undefined : Number(typed))
+      set(setting.path, typed.trim().length === 0 ? undefined : Number(typed))
       await afterNumber(setting)
       return
     }
@@ -739,7 +754,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
       validate: () => null
     })
     if (typed === null) return
-    setValue(draft, setting.path, typed.trim().length === 0 ? undefined : typed.trim())
+    set(setting.path, typed.trim().length === 0 ? undefined : typed.trim())
   }
 
   const settingsScreen = async (title: string, settings: readonly Setting[]): Promise<void> => {
@@ -765,7 +780,15 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
                 : setting.help
             }
           }),
-        hints: ['enter edit']
+        hints: ['enter edit', 'space toggle'],
+        onKey: (key, value) => {
+          const setting = value as Setting | null
+          if (setting === null || key.name !== 'space' || setting.editor.kind !== 'boolean') {
+            return 'ignored'
+          }
+          set(setting.path, !(setting.read(resolved()).value === true))
+          return 'handled'
+        }
       })
       at = choice.index
       if (choice.value === null) return
@@ -785,14 +808,13 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     }
 
     const write = (ids: readonly string[]): void => {
-      setValue(draft, ['search', 'engines'], [...ids])
+      set(['search', 'engines'], [...ids])
     }
 
     await menu.list<string>({
       title: 'Web search engines',
       subtitle: 'Every one enabled here is offered under every query, in this order.',
       hints: ['space toggle', 'ctrl+↑↓ reorder'],
-      filterable: true,
       choices: () => {
         const on = enabled()
         const rest = BUILTIN_ENGINES.filter((engine) => !on.includes(engine.id))
@@ -848,7 +870,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     }
 
     const write = (groups: readonly ResultGroup[]): void => {
-      setValue(draft, path, [...groups])
+      set(path, [...groups])
     }
 
     const describe: Readonly<Record<ResultGroup, string>> = {
@@ -976,7 +998,6 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
           }
           const chosen = await menu.list<string>({
             title: 'Which web search?',
-            filterable: true,
             choices: engines.map((engine) => ({
               value: engine.id,
               label: engine.name,
@@ -990,8 +1011,6 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
 
         const chosen = await menu.list<string>({
           title: 'Which application?',
-          subtitle: 'Type to narrow.',
-          filterable: true,
           choices: [...applications()]
             .sort((a, b) => a.name.localeCompare(b.name))
             .map((app) => ({ value: app.id, label: app.name, detail: app.id }))
@@ -1037,21 +1056,34 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
    * toggles too and stays put; Space keeps working because that is what the tab
    * has always advertised.
    */
+  /**
+   * Enter goes forward and Space pins. Picking a hotkey or alias target has no
+   * deeper step than the thing picked, so there Enter is the choice; while
+   * pinning, Enter opens the row and only the last screen - the actions - has
+   * nothing further to open, so there it pins.
+   */
   const pinRowKeys = (
     control: PinControl | undefined,
-    keyOf: (value: unknown) => { key: string; title: string | null } | null
+    keyOf: (value: unknown) => PinDraftEntry | null,
+    last = false
   ) => ({
-    hints: control === undefined ? ['enter select', '→ open'] : ['space pin', '→ open'],
+    hints:
+      control === undefined
+        ? ['space select', '→ open']
+        : last
+          ? ['space pin', 'enter pin']
+          : ['space pin', 'enter open'],
     onKey: (key: { name: string }, value: unknown): 'ignored' | 'handled' | 'close' => {
       if (value === null) return 'ignored'
       // `close` with `viaKey`, which is how the caller tells "go deeper" from
       // "this is the one" without a second menu.
       if (key.name === 'right') return 'close'
       if (control === undefined) return 'ignored'
+      if (key.name === 'return' && !last) return 'close'
       if (key.name !== 'space' && key.name !== 'return') return 'ignored'
       const target = keyOf(value)
       if (target === null) return 'ignored'
-      control.toggle(target.key, target.title)
+      control.toggle(target.key, target.title, target.icon ?? null)
       return 'handled'
     }
   })
@@ -1071,7 +1103,6 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         // Plain words on purpose: this is the one screen that explains the deal
         // the root list makes with plugins.
         subtitle: 'Only pinned things show up in the main search.',
-        filterable: extensions.length > 8,
         choices:
           extensions.length === 0
             ? [
@@ -1244,20 +1275,21 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     // you opened as one of its own contents is the shape this browser used to
     // have, and it read as a duplicate every time.
     type Row = { readonly item: EnumeratedItem }
-    const keyOf = (row: Row): { key: string; title: string | null } | null =>
-      row.item.id === null ? null : { key: itemKey(row.item.id), title: row.item.title }
+    const keyOf = (row: Row): PinDraftEntry | null =>
+      row.item.id === null
+        ? null
+        : { key: itemKey(row.item.id), title: row.item.title, icon: row.item.icon }
     void categoryKey
 
     for (;;) {
       const chosen = await menu.list<Row>({
         title: categoryTitle,
         subtitle: 'One row of this category. → shows what that row can do.',
-        filterable: true,
         choices: () =>
           items.length === 0
             ? [
                 {
-                  value: { item: { id: null, title: '', subtitle: null, actions: [] } } as Row,
+                  value: { item: { id: null, title: '', subtitle: null, actions: [], icon: null } } as Row,
                   label: 'Nothing in this category',
                   separator: true
                 }
@@ -1312,9 +1344,9 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     // No "Open <row>" entry, for the same reason the two screens above no longer
     // have one: the row itself is pinnable where you pressed → on it.
     type Row = { readonly kind: 'action'; readonly action: string }
-    const keyOf = (row: Row): { key: string; title: string | null } | null => {
+    const keyOf = (row: Row): PinDraftEntry | null => {
       if (row.action.length === 0 || row.action.includes('!')) return null
-      return { key: actionKey(row.action), title: actionTitle(row.action) }
+      return { key: actionKey(row.action), title: actionTitle(row.action), icon: item.icon }
     }
     void itemKey
 
@@ -1341,7 +1373,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
                   : {})
               })))
         ],
-        ...pinRowKeys(control, (value) => keyOf(value as Row))
+        ...pinRowKeys(control, (value) => keyOf(value as Row), true)
       })
 
       if (chosen.value === null) return null
@@ -1356,7 +1388,11 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         ])
         continue
       }
-      return { key: actionKey(chosen.value.action), title: actionTitle(chosen.value.action) }
+      return {
+        key: actionKey(chosen.value.action),
+        title: actionTitle(chosen.value.action),
+        icon: item.icon
+      }
     }
   }
 
@@ -1379,7 +1415,6 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     for (;;) {
       const chosen = await menu.list<string>({
         title: 'Which command?',
-        filterable: true,
         choices: [
           {
             value: TYPE_ONE,
@@ -1434,11 +1469,17 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     const entriesOf = (raw: unknown): PinDraftEntry[] => {
       if (!Array.isArray(raw)) return []
       return raw.flatMap((value) => {
-        if (typeof value === 'string') return [{ key: value, title: null }]
+        if (typeof value === 'string') return [{ key: value, title: null, icon: null }]
         if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-          const { id, title: stored } = value as Record<string, unknown>
+          const { id, title: stored, icon } = value as Record<string, unknown>
           if (typeof id === 'string') {
-            return [{ key: id, title: typeof stored === 'string' ? stored : null }]
+            return [
+              {
+                key: id,
+                title: typeof stored === 'string' ? stored : null,
+                icon: typeof icon === 'string' ? icon : null
+              }
+            ]
           }
         }
         return []
@@ -1446,21 +1487,28 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     }
     const current = (): PinDraftEntry[] => entriesOf(getValue(draft, path))
     const write = (entries: readonly PinDraftEntry[]): void => {
-      setValue(
-        draft,
+      set(
         path,
-        entries.map((entry) => (entry.title === null ? entry.key : { id: entry.key, title: entry.title }))
+        entries.map((entry) => {
+          const icon = entry.icon ?? null
+          if (entry.title === null && icon === null) return entry.key
+          return {
+            id: entry.key,
+            ...(entry.title === null ? {} : { title: entry.title }),
+            ...(icon === null ? {} : { icon })
+          }
+        })
       )
     }
 
     const control: PinControl = {
       isPinned: (key) => current().some((entry) => entry.key === key),
-      toggle: (key, storedTitle) => {
+      toggle: (key, storedTitle, storedIcon) => {
         const now = current()
         write(
           now.some((entry) => entry.key === key)
             ? now.filter((entry) => entry.key !== key)
-            : [...now, { key, title: storedTitle }]
+            : [...now, { key, title: storedTitle, icon: storedIcon }]
         )
       }
     }
@@ -1526,7 +1574,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         : []
     }
     const write = (entries: readonly Record<string, unknown>[]): void => {
-      setValue(draft, ['search', 'web_searches'], entries.length === 0 ? undefined : [...entries])
+      set(['search', 'web_searches'], entries.length === 0 ? undefined : [...entries])
     }
 
     let at = 0
@@ -1658,8 +1706,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
       // list first makes the action purely additive, and leaves a config that
       // says out loud what is enabled.
       if (getValue(draft, ['search', 'engines']) === undefined) {
-        setValue(
-          draft,
+        set(
           ['search', 'engines'],
           resolved().search.webSearches.value.map((engine) => engine.id)
         )
@@ -1703,7 +1750,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
       const result = await menu.list<KeyAction | null>({
         title: 'Action keys',
         initialIndex: at,
-        subtitle: 'What the panel answers to while it is open. Applies as soon as you save.',
+        subtitle: 'What the panel answers to while it is open. Applies as soon as you change it.',
         hints: ['enter change', 'd default'],
         choices: () =>
           KEY_ACTIONS.map((action) => {
@@ -1718,7 +1765,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         onKey: (key, value) => {
           if (value === null) return 'ignored'
           if (key.name !== 'd' && key.name !== 'delete') return 'ignored'
-          setValue(draft, ['keys', KEY_ACTION_INFO[value].setting], undefined)
+          set(['keys', KEY_ACTION_INFO[value].setting], undefined)
           return 'handled'
         }
       })
@@ -1732,7 +1779,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
       // Written as a list only when there is more than one, because
       // `open = "Enter"` is what a person writes and what they expect to read
       // back. Both forms parse.
-      setValue(draft, ['keys', KEY_ACTION_INFO[action].setting], chord.length === 1 ? chord[0] : chord)
+      set(['keys', KEY_ACTION_INFO[action].setting], chord.length === 1 ? chord[0] : chord)
     }
   }
 
@@ -1755,8 +1802,10 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
           title: `${KEY_ACTION_INFO[action].title}: which modifiers?`,
           subtitle: 'Space toggles. Enter for none, which is fine here - this key is ours.',
           hints: ['space toggle'],
+          // The panel's keys are read from DOM events, where CapsLock is a lock
+          // state rather than a key held, so it is a global-hotkey modifier only.
           choices: () =>
-            MODIFIERS.map((modifier) => ({
+            MODIFIERS.filter((modifier) => modifier !== 'capslock').map((modifier) => ({
               value: modifier,
               prefix: mods.includes(modifier) ? `${s.good('[x]')} ` : '[ ] ',
               label: modifierLabel(modifier)
@@ -1772,8 +1821,6 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
       async () => {
         const chosen = await menu.list<string>({
           title: 'And which key?',
-          subtitle: 'Type to narrow.',
-          filterable: true,
           choices: PANEL_KEYS.map((candidate) => ({
             value: candidate,
             label: panelKeyLabel(candidate),
@@ -1860,7 +1907,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
           if (key.name === 'a') return 'close'
           if (value === null || value === '') return 'ignored'
           if (key.name === 'd' || key.name === 'delete') {
-            setValue(draft, ['aliases', value], undefined)
+            set(['aliases', value], undefined)
             return 'handled'
           }
           return 'ignored'
@@ -1912,7 +1959,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
       ])
 
       if (!complete || entry === null) continue
-      setValue(draft, ['aliases', alias.trim().toLowerCase()], aliasValue(entry))
+      set(['aliases', alias.trim().toLowerCase()], aliasValue(entry))
     }
 
     /**
@@ -2048,8 +2095,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
    */
   const hotkeysScreen = async (): Promise<void> => {
     const write = (list: readonly HotkeyDraftEntry[]): void => {
-      setValue(
-        draft,
+      set(
         ['hotkeys'],
         list.length === 0
           ? undefined
@@ -2246,7 +2292,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         if (value === null) return 'ignored'
         if (!key.ctrl || (key.name !== 'up' && key.name !== 'down')) return 'ignored'
         const moved = reorder(current(), value, key.name === 'up' ? -1 : 1)
-        if (moved !== null) setValue(draft, ['file_search', 'order'], moved)
+        if (moved !== null) set(['file_search', 'order'], moved)
         list.follow(value)
         return 'handled'
       }
@@ -2377,50 +2423,29 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
 
   // ─── main menu ─────────────────────────────────────────────────────────────
 
-  const save = async (): Promise<boolean> => {
-    if (!dirty()) {
-      await menu.show('Nothing to save', ['The file already says exactly this.'])
-      return false
+  const leave = async (): Promise<void> => {
+    await applying
+    if (commentBackup !== null) {
+      await menu.show('Comments were not preserved', [
+        'TOML parsers drop comments, and this rewrite was no exception.',
+        `They are in ${commentBackup}`
+      ])
     }
-
-    const written = writeConfigDocument(document, draft, stamp())
-    const lines = [`${s.good('✔')} ${written.path}`]
-    if (written.backup !== null) lines.push(`  previous version kept at ${written.backup}`)
-    if (document.commentLines > 0) {
-      lines.push(
-        `  ${s.warn('!')} ${String(document.commentLines)} comment line(s) were not preserved - TOML`,
-        `    parsers drop comments. They are in the backup above.`
-      )
+    if (restartDetail === null) return
+    const lines = [`${s.warn('!')} ${restartDetail}`]
+    if (deps.restartDaemon === null) {
+      await menu.show('Not applied yet', lines)
+      return
     }
-
-    // Applied, not merely written. A settings menu whose changes take effect on
-    // next login is a settings menu you distrust.
-    if (deps.applyChanges !== null) {
-      const applied = await deps.applyChanges()
-      if (applied.ok) {
-        lines.push('', `${s.good('✔')} ${APP_DISPLAY_NAME} reloaded - the new settings are live.`)
-        await menu.show('Saved', lines, 'any key to continue')
-        return true
-      }
-
-      lines.push('', `${s.warn('!')} ${applied.detail ?? 'the daemon could not apply this live'}`)
-      await menu.show('Saved', lines, 'any key to continue')
-
-      if (deps.restartDaemon !== null && (await menu.confirm('Restart it now?'))) {
-        const ok = await deps.restartDaemon()
-        await menu.show(
-          ok ? 'Restarted' : 'Could not restart',
-          ok
-            ? ['Every setting is now in effect.']
-            : ['Start it yourself with `lumanin start`, or press your hotkey.']
-        )
-      }
-      return true
-    }
-
-    lines.push('', `${APP_DISPLAY_NAME} is not running; it will read this the next time it starts.`)
-    await menu.show('Saved', lines, 'any key to continue')
-    return true
+    await menu.show('Not applied yet', lines, 'any key to continue')
+    if (!(await menu.confirm('Restart it now?'))) return
+    const ok = await deps.restartDaemon()
+    await menu.show(
+      ok ? 'Restarted' : 'Could not restart',
+      ok
+        ? ['Every setting is now in effect.']
+        : ['Start it yourself with `lumanin start`, or press your hotkey.']
+    )
   }
 
   let at = 0
@@ -2467,12 +2492,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
             : { help: 'Your config and your desktop disagree - open this and press w' })
         },
         { value: '', label: '', separator: true },
-        {
-          value: 'review',
-          label: 'Review changes',
-          detail: dirty() ? 'Unsaved' : 'No changes'
-        },
-        { value: 'save', label: 'Save', detail: dirty() ? '' : 'Nothing to save' },
+        { value: 'review', label: 'Show config.toml', detail: 'What is on disk now' },
         { value: 'quit', label: 'Quit' }
         ]
       }
@@ -2497,26 +2517,14 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     else if (picked === 'review') {
       const text = render(draft)
       await menu.show(
-        dirty() ? 'config.toml, as it would be saved' : 'config.toml (unchanged)',
+        'config.toml',
         text.length === 0 ? [s.dim('(empty - every setting is at its default)')] : text.split('\n')
       )
-    } else if (picked === 'save') await save()
-    else {
-      if (dirty()) {
-        const answer = await menu.list<'save' | 'discard' | 'back'>({
-          title: 'You have unsaved changes',
-          choices: [
-            { value: 'save', label: 'Save and quit' },
-            { value: 'discard', label: 'Quit without saving' },
-            { value: 'back', label: 'Go back' }
-          ]
-        })
-        if (answer.value === null || answer.value === 'back') continue
-        if (answer.value === 'save') await save()
-      }
+    } else {
+      await leave()
       menu.say('')
       return finish(0)
-      }
+    }
     } catch (error) {
       if (!isAbandoned(error)) throw error
     }

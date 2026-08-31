@@ -292,30 +292,6 @@ describe('the menu', () => {
     menu.close()
   })
 
-  it('narrows a filterable list as you type', async () => {
-    const { term, input } = fakeTerm()
-    const menu = new Menu(term, new Screen(term), {})
-
-    const pending = menu.list<string>({
-      title: 'Which application?',
-      filterable: true,
-      choices: [
-        { value: 'firefox', label: 'Firefox' },
-        { value: 'files', label: 'Files' },
-        { value: 'gimp', label: 'GIMP' }
-      ]
-    })
-    await settle()
-    for (const character of 'gim') {
-      input.write(character)
-      await settle()
-    }
-    input.write('\r')
-
-    expect((await pending).value).toBe('gimp')
-    menu.close()
-  })
-
   it('carries the highlight with a row that is being reordered', async () => {
     // The defect this exists for, reported from a real session: the reorder key
     // moved the row but left the highlight behind, so the row that took its
@@ -535,23 +511,13 @@ describe('the config menu, end to end', () => {
     throw new Error(`never got back to ${JSON.stringify(expected)}`)
   }
 
-  /** Leave the menu, answering the unsaved-changes question with "discard". */
-  async function leave(
-    input: PassThrough,
-    frames: () => string,
-    pending: Promise<number>
-  ): Promise<void> {
+  /** Leave the menu: Escape unwinds every screen, and at the root it quits. */
+  async function leave(input: PassThrough, pending: Promise<number>): Promise<void> {
     let done = false
     void pending.then(() => {
       done = true
     })
     for (let attempt = 0; attempt < 20 && !done; attempt += 1) {
-      // Escape is not an answer to this one - it means "go back" - so a loop
-      // that only pressed Escape would never get out of a dirty session.
-      if (frames().slice(-1500).includes('You have unsaved changes')) {
-        await type(input, [DOWN, ENTER])
-        continue
-      }
       input.write(ESC)
       await beat()
     }
@@ -632,7 +598,7 @@ describe('the config menu, end to end', () => {
     expect(frames().slice(-2000)).toContain('Lumanin - configuration')
     expect(readFileSync(configFile, 'utf8')).not.toContain('zz')
 
-    await leave(input, frames, pending)
+    await leave(input, pending)
   })
 
   it('pins a plugin category, one menu per level, with Space', async () => {
@@ -658,14 +624,14 @@ describe('the config menu, end to end', () => {
     expect(frames()).toContain('Demo: Logins')
     expect(frames()).toContain('extension:demo/search#logins')
 
-    await leave(input, frames, pending)
+    await leave(input, pending)
   })
 
   it('pins the command itself from the same screen its categories are on', async () => {
     // The complaint this fixes: opening "Search Godot" listed "Open Search
     // Godot" above its categories, so the command appeared as one of the things
     // inside itself. It is pinned where you can see it beside the other
-    // commands instead - Enter and Space both mean "this one" here.
+    // commands instead - Space pins it; Enter goes into it.
     const { term, input, frames, configFile } = driver()
     const pending = openWith(term, configFile, pluginProfile(), null)
     await beat()
@@ -674,11 +640,11 @@ describe('the config menu, end to end', () => {
     expect(frames()).toContain('Search Demo')
     expect(frames()).not.toContain('Open Search Demo')
 
-    await type(input, [ENTER])
+    await type(input, [' '])
     await escapeUntil(input, frames, 'Pinned rows')
     expect(frames()).toContain('extension:demo/search')
 
-    await leave(input, frames, pending)
+    await leave(input, pending)
   })
 
   it('pins a single item, running the plugin through enumerate, and saves it as a table', async () => {
@@ -687,7 +653,7 @@ describe('the config menu, end to end', () => {
     const pending = openWith(term, configFile, pluginProfile(), (command, category) => {
       asked.push([command, category])
       return Promise.resolve([
-        { id: 'a1', title: 'GitHub', subtitle: 'login', actions: ['Copy Password'] }
+        { id: 'a1', title: 'GitHub', subtitle: 'login', actions: ['Copy Password'], icon: 'https://example.test/gh.png' }
       ])
     })
     await beat()
@@ -707,25 +673,15 @@ describe('the config menu, end to end', () => {
     await escapeUntil(input, frames, 'Pinned rows')
     expect(frames()).toContain('GitHub')
 
-    // Save and quit: the item pin lands in the file as an { id, title } table,
+    // Already written: the item pin lands in the file as an { id, title } table,
     // because the root list has to draw it without running the plugin.
-    let done = false
-    void pending.then(() => {
-      done = true
-    })
-    for (let attempt = 0; attempt < 20 && !done; attempt += 1) {
-      if (frames().slice(-1500).includes('You have unsaved changes')) {
-        await type(input, [ENTER, ENTER])
-        continue
-      }
-      input.write(ESC)
-      await beat()
-    }
-    await pending
+    await leave(input, pending)
 
     const written = readFileSync(configFile, 'utf8')
     expect(written).toContain('extension:demo/search#logins:a1')
     expect(written).toContain('GitHub')
+    // The row's own face travels with the pin, so the root can draw it.
+    expect(written).toContain('icon = "https://example.test/gh.png"')
   })
 
   /**
@@ -748,7 +704,7 @@ describe('the config menu, end to end', () => {
     // Opening a file is the end of a file search; the panel gets out of the way.
     expect(frames()).toContain('Close after opening')
 
-    await leave(input, frames, pending)
+    await leave(input, pending)
   })
 
   it('reorders the file categories with ctrl+↓ and writes the whole list', async () => {
@@ -764,7 +720,7 @@ describe('the config menu, end to end', () => {
     // there is no "off" here, because every file is in exactly one of them.
     await type(input, ['\u001b[1;5B'])
     // Back to the menu, where the cursor is still on File Search, then down to
-    // Review changes - which renders the file as it would be written.
+    // the config.toml view - which renders what the edit already wrote.
     await type(input, [LEFT, LEFT])
     await type(input, [DOWN, DOWN, DOWN, DOWN, ENTER])
 
@@ -774,7 +730,24 @@ describe('the config menu, end to end', () => {
     expect(frames()).toContain('order = [')
     expect(frames()).toContain('"images", "folders"')
 
-    await leave(input, frames, pending)
+    await leave(input, pending)
+  })
+
+  it('writes every finished edit at once, without a Save step', async () => {
+    const { term, input, frames, configFile } = driver()
+    const pending = open(term, configFile)
+    await beat()
+
+    await type(input, [RIGHT])
+    expect(frames()).toContain('Hide when focus is lost')
+    await type(input, [ENTER])
+
+    // On disk before the menu is left, and the daemon would have been told.
+    expect(readFileSync(configFile, 'utf8')).toContain('hide_on_blur = false')
+    expect(frames()).not.toContain('Save')
+
+    await leave(input, pending)
+    expect(readFileSync(configFile, 'utf8')).toContain('hide_on_blur = false')
   })
 
   /** → is Enter: into the row you are on, as ← is out of the screen you are on. */
@@ -787,9 +760,9 @@ describe('the config menu, end to end', () => {
     expect(frames()).toContain('Hide when focus is lost')
 
     await type(input, [LEFT])
-    expect(frames()).toContain('Review changes')
+    expect(frames()).toContain('Show config.toml')
 
-    await leave(input, frames, pending)
+    await leave(input, pending)
   })
 
   it('has a Hotkeys section of its own', async () => {
@@ -802,7 +775,7 @@ describe('the config menu, end to end', () => {
     expect(frames()).toContain('A key straight into one of your plugins')
     expect(frames()).toContain('None yet')
 
-    await leave(input, frames, pending)
+    await leave(input, pending)
   })
 
   /**
@@ -855,7 +828,7 @@ describe('the config menu, end to end', () => {
     expect(frames()).toContain('still bound')
     expect(frames()).toContain('hyprland.conf')
 
-    await leave(input, frames, pending)
+    await leave(input, pending)
   })
 
   /**
@@ -926,7 +899,7 @@ describe('the config menu, end to end', () => {
     expect(frames()).toContain('monitor_h*0.45')
     expect(planned).toEqual([0.45])
 
-    await leave(input, frames, pending)
+    await leave(input, pending)
   })
 
   it('takes remove on an already-removed row as "clear the bind too"', async () => {
@@ -998,7 +971,7 @@ describe('the config menu, end to end', () => {
     // Planned from the draft, which no longer names Super+P.
     expect(planned).toEqual([[]])
 
-    await leave(input, frames, pending)
+    await leave(input, pending)
   })
 
   it('offers "type your own command" first, and writes it as a shell pin', async () => {
@@ -1015,7 +988,7 @@ describe('the config menu, end to end', () => {
     // it, and a friendly name over a shell command is how you run the wrong one.
     expect(frames()).toContain('shell:systemctl suspend')
 
-    await leave(input, frames, pending)
+    await leave(input, pending)
   })
 
   it('takes Escape as one step back, not as cancelling the whole flow', async () => {
@@ -1034,6 +1007,6 @@ describe('the config menu, end to end', () => {
 
     await escapeUntil(input, frames, 'What do you want to add?')
 
-    await leave(input, frames, pending)
+    await leave(input, pending)
   })
 })

@@ -127,7 +127,7 @@ of its own.
 
 Search Files is the worked example. A folder's first section is *Enter Folder* then *Open in File
 Manager*, so Enter goes in and Space opens it. A file's first section is *Open* **alone**, so both
-keys launch the file - and *Open Containing Folder* sits in the next section on `Ctrl+Shift+O`,
+keys launch the file - and *Open Containing Folder* sits in the next section on `Ctrl+O`,
 because "open this file" and "show me its folder" are not two ways of doing one thing, and a user
 who presses open on a `.blend` wants Blender, not a file manager.
 
@@ -139,7 +139,7 @@ do, not for the key you expect.
 used one-handed while something else has your attention, and a three-key chord is not that. Reach
 for Ctrl+Alt only when a plugin genuinely has more actions than there are free letters, and use
 Shift only if the user asks for it by name. `Keyboard.Shortcut.Common.*` is the spec's own table and
-still contains Shift where Raycast put it - prefer writing the chord out to importing one of those.
+still contains Shift in places - prefer writing the chord out to importing one of those.
 
 **Functions and objects**
 - `showToast` / `Toast` - three styles, mutable after creation, primary/secondary actions.
@@ -154,6 +154,9 @@ still contains Shift where Raycast put it - prefer writing the chord out to impo
   detection, `supportPath` for a writable per-plugin directory), `LaunchProps`.
 - `Clipboard.copy` / `.paste` / `.read` / `.readText` / `.clear`.
 - `open(target)`, `trash(path)`, `getApplications()`, `getDefaultApplication()`.
+- `getFrontmostApplication()` - the focused window's application. Answered on Hyprland, Sway and
+  X11; rejects on desktops that do not expose the window list, so catch it and degrade.
+- `updateCommandMetadata({ subtitle })` - sets the subtitle of the command's own root-list row.
 - `closeMainWindow()`, `popToRoot()`, `clearSearchBar()`, `getSelectedText()` (from the desktop's
   primary selection, where the platform supports it), `captureException` (local log only).
 
@@ -180,7 +183,7 @@ still contains Shift where Raycast put it - prefer writing the chord out to impo
 **Forms**
 - **`Form`** with `Form.TextField`, `TextArea`, `PasswordField`, `Checkbox`, `Dropdown` (+`.Item`,
   `.Section`), `TagPicker` (+`.Item`), `DatePicker`, `FilePicker`, `Description`, `Separator`.
-  `error`, `info`, `autoFocus`, `onBlur`/`onFocus`, and refs with `.focus()` / `.reset()`.
+  `LinkAccessory`. `error`, `info`, `autoFocus`, `onBlur`/`onFocus`, and refs with `.focus()` / `.reset()`.
 - `Action.SubmitForm` receives every field's value keyed by its `id`, in the type its control
   holds: string, boolean, `string[]` for a tag picker or file picker, `Date` for a date picker.
   **Give every field an `id`** - a field without one submits nothing and cannot be focused.
@@ -203,6 +206,8 @@ still contains Shift where Raycast put it - prefer writing the chord out to impo
   set each field's `error` prop yourself.
 - `useSQL`, `executeSQL`, `useStreamJSON`, `useFrecencySorting`, `withCache`.
 - `Action.PickDate` - use a `Form.DatePicker` on a form instead.
+- `Action.CreateQuicklink`, `Action.CreateSnippet` - render, then throw when pressed: the launcher
+  has no quicklink or snippet store.
 - `createDeeplink` and friends - there is no `lumanin://` URL to build. To let something outside
   the launcher trigger a command, the user pins it or binds it and runs
   `lumanin open '<key>'`.
@@ -220,10 +225,12 @@ still contains Shift where Raycast put it - prefer writing the chord out to impo
   Say in the `description` exactly where the user gets one. If the service issues *only* OAuth
   credentials and has no personal access tokens at all, say so plainly and stop - that plugin
   cannot be built here, and a half-working one is worse than none.
-- AI: `AI.ask`, `useAI` (off by default, by design).
+- AI: `AI.ask`, `useAI` - throw. No AI provider ships with Lumanin and there is no setting for one.
 - Background refresh: `commands[].interval` is parsed but nothing schedules it yet.
 - macOS-only, will never work here: `runAppleScript`, `runPowerShellScript`, `showInFinder`,
-  `getSelectedFinderItems`, `Action.ShowInFinder`, `Action.ToggleQuickLook`. Never write
+  `getSelectedFinderItems`, `Action.ShowInFinder`, `Action.ToggleQuickLook`. Also never here:
+  `BrowserExtension` (needs a companion browser extension Lumanin does not ship),
+  `Action.InstallMCPServer`, `WindowManagement.*` (your window manager's job). Never write
   macOS-specific paths (`/Applications`, `~/Library`) or shell out to `osascript`/`pbcopy` -
   this is Linux; use the APIs above or standard Linux tools.
 

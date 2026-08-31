@@ -455,7 +455,7 @@ export interface SettingsInvokeMap {
    * tables — a plugin row's name exists only while its plugin runs.
    */
   'settings.setPins': {
-    params: { entries: readonly { key: string; title: string | null }[] }
+    params: { entries: readonly { key: string; title: string | null; icon?: string | null }[] }
     result: { ok: boolean; detail?: string }
   }
   /** Set or (with `key: null`) delete one `[aliases]` entry. */

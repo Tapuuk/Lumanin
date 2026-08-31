@@ -45,6 +45,16 @@ Every desktop backend is written against primary documentation (the compositor's
 
 If what you want to build is a feature *for* the launcher rather than a change *to* it, it is probably a plugin. Anyone can publish one as a public git repository; `lumanin plugin-install <url>` installs it. The generator skill in `.claude/skills/lumanin-plugin/` writes one interactively if you use Claude Code, and its `reference.md` documents the whole API surface.
 
+## What stays stable
+
+Three things outlive any one release, and each has a rule.
+
+**The plugin API** (`import ... from 'lumanin'`). Its shape is the pinned type definitions in `spec/`, and `.claude/skills/lumanin-plugin/reference.md` documents what is built. From 1.0: an exported name that is built keeps its signature and behaviour within a major version. New exports and new optional props may land in a minor version. Removing or changing a built export is a major version, announced in `CHANGELOG.md` one minor version ahead with the replacement named. Exports that throw a "not supported" sentence are not part of the promise; they may start working in any release. Manifest fields under `lumanin` follow the same rule as exports.
+
+**`config.toml`.** Keys a release does not recognise are preserved on write, never dropped. When a key moves, the new code reads both spellings and `lumanin doctor` reports the old one. A key is removed from the reader no sooner than one major version after it moved. `lumanin config` and the settings window keep a backup before every write.
+
+**The SQLite files** under `~/.local/share/lumanin/`. Each schema is created with `CREATE TABLE IF NOT EXISTS` and grows by adding columns or tables, never by renaming or dropping in place. A change that cannot be additive is a new file with a one-time copy from the old one, and the old file is left where it was.
+
 ## License
 
 MIT. The pinned `@raycast/api` type definitions in `spec/` keep their own attribution; it stays.

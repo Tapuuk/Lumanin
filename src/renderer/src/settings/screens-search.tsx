@@ -47,8 +47,8 @@ const ENGINE_KEYWORDS = ['engine', ...BUILTIN_ENGINES.map((engine) => engine.nam
 const RESULT_KEYWORDS = ['ranking', ...OFFERED_RESULT_GROUPS.map((group) => RESULT_GROUP_LABELS[group])].join(' ')
 
 function samePins(
-  a: readonly { key: string; title: string | null }[],
-  b: readonly { key: string; title: string | null }[]
+  a: readonly { key: string; title: string | null; icon?: string | null }[],
+  b: readonly { key: string; title: string | null; icon?: string | null }[]
 ): boolean {
   return a.length === b.length && a.every((pin, index) => pin.key === b[index]?.key)
 }
@@ -70,7 +70,7 @@ export function SearchScreen(): React.JSX.Element | null {
     resolved?.search.fallbackOrder.value.filter((group) => OFFERED_RESULT_GROUPS.includes(group)) ?? NONE,
     sameList
   )
-  const [pins, commitPins] = useOptimistic<readonly { key: string; title: string | null }[]>(
+  const [pins, commitPins] = useOptimistic<readonly { key: string; title: string | null; icon?: string | null }[]>(
     resolved?.search.pins.value ?? NONE,
     samePins
   )
@@ -104,7 +104,7 @@ export function SearchScreen(): React.JSX.Element | null {
   }
 
   // --- pins ------------------------------------------------------------------
-  const writePins = (entries: readonly { key: string; title: string | null }[]): void => {
+  const writePins = (entries: readonly { key: string; title: string | null; icon?: string | null }[]): void => {
     const work = invokeChecked(
       () => window.lumanin.invoke('settings.setPins', { entries }),
       'the pins could not be saved'
@@ -271,7 +271,7 @@ export function SearchScreen(): React.JSX.Element | null {
                 setPinNote('Already pinned.')
               } else {
                 setPinNote(null)
-                writePins([...pins, { key: picked.key, title: picked.title }])
+                writePins([...pins, { key: picked.key, title: picked.title, icon: picked.icon ?? null }])
               }
             } else {
               guarded(

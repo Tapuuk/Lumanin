@@ -628,7 +628,6 @@ export async function runPluginsUi(deps: PluginsUiDeps): Promise<number> {
         title: 'Plugin Store',
         subtitle: 'The official collection. Enter installs, after showing you the facts.',
         initialIndex: storeAt,
-        filterable: true,
         choices: () =>
           official.plugins.map((entry) => ({
             value: entry,
@@ -663,12 +662,6 @@ export async function runPluginsUi(deps: PluginsUiDeps): Promise<number> {
       // Nothing behind this screen: Esc leaves rather than unwinding to a menu
       // it is already on. Every screen below it abandons back to here.
       escape: 'close',
-      // Typing narrows the list, which is why there are no single-letter
-      // shortcuts here: `d` for remove would take a letter away from the
-      // filter, and a screen you cannot type "dictionary" into is worse than
-      // one where removing costs a keypress more. Enter opens a row, and
-      // everything lives there.
-      filterable: true,
       choices: () => [
         ...rows().map((row) => ({
           value: row as Row | typeof STORE,

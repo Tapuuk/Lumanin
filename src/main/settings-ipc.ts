@@ -125,6 +125,17 @@ const isPinEntry = (value: unknown): value is { key: string; title: string | nul
 const isPreferenceValue = (value: unknown): value is string | number | boolean =>
   isString(value) || isBoolean(value) || (typeof value === 'number' && Number.isFinite(value))
 
+/** A pin as `config.toml` holds it: a bare key, or an `{ id, title, icon }` table where the row brought its own. */
+function pinTable(entry: { key: string; title: string | null; icon?: string | null }): unknown {
+  const icon = entry.icon ?? null
+  if (entry.title === null && icon === null) return entry.key
+  return {
+    id: entry.key,
+    ...(entry.title === null ? {} : { title: entry.title }),
+    ...(icon === null ? {} : { icon })
+  }
+}
+
 export class SettingsIpc {
   private readonly methods = new Set<string>(SETTINGS_INVOKE_METHODS)
   /** Opened on first use; the daemon shares it through SQLite's WAL. */
@@ -472,7 +483,9 @@ export class SettingsIpc {
     })
   }
 
-  private setPins(params: { entries: readonly { key: string; title: string | null }[] }): {
+  private setPins(params: {
+    entries: readonly { key: string; title: string | null; icon?: string | null }[]
+  }): {
     ok: boolean
     detail?: string
   } {
@@ -491,9 +504,7 @@ export class SettingsIpc {
         ['search', 'pins'],
         entries.length === 0
           ? undefined
-          : entries.map((entry) =>
-              entry.title === null ? entry.key : { id: entry.key, title: entry.title }
-            )
+          : entries.map((entry) => pinTable(entry))
       )
     })
   }
