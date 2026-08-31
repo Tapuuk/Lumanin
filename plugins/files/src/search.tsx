@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join, sep } from 'node:path'
 import {
@@ -16,6 +16,7 @@ import {
   useNavigation
 } from 'lumanin'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { fdPattern, locatePattern, parseSearchOutput } from './query'
 
 /**
  * Search Files — a search of its own, not a row in the root list.
@@ -120,23 +121,6 @@ function pickTool(preferred: Preferences['tool']): Tool | null {
   return fd() ?? locate() ?? find()
 }
 
-/** Every character that means something to a regex, quoted. */
-function quoteRegex(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-/**
- * The query as a pattern.
- *
- * Words are joined with `.*` so "src index" finds `src/index.ts` — typing two
- * halves of a name in order is how people actually search — and each word is
- * quoted first, so a query containing `(` or `+` is a search for those
- * characters rather than a regex error.
- */
-function pattern(query: string): string {
-  return query.trim().split(/\s+/).filter(Boolean).map(quoteRegex).join('.*')
-}
-
 /** The argv for one search. Never a shell string. */
 function argsFor(tool: Tool, query: string, root: string, hidden: boolean): readonly string[] {
   switch (tool.name) {
@@ -150,25 +134,28 @@ function argsFor(tool: Tool, query: string, root: string, hidden: boolean): read
         // Ours, not the user's project layout: `.git` is never the answer to a
         // file search, and its object files are half the entries under any repo.
         '--exclude', '.git',
-        '--', pattern(query), root
+        '--', fdPattern(query), root
       ]
     case 'locate':
-      // `--basename` matches the name rather than the whole path, which is what
-      // the other two do; without it, searching "src" returns every file in
-      // every directory called src. The root is applied after the fact — locate
-      // has no way to be told one.
-      return ['--ignore-case', '--basename', '--limit', String(LIMIT * 4), '--regexp', pattern(query)]
-    case 'find':
+      // The pattern is anchored under `root` (see `locatePattern`), which is
+      // also what keeps `--limit` counting rows we will actually show — an
+      // unanchored pattern lets out-of-scope `/usr` matches consume the cap
+      // before the post-filter below ever runs.
+      return ['--ignore-case', '--limit', String(LIMIT * 4), '--regexp', locatePattern(query, root)]
+    case 'find': {
       // No regex, but `-iname` globs: words joined with `*` still match a name
       // in order, so "quarterly report" finds `quarterly-report.md` here too.
       // Depth-bounded because an unbounded `find ~` on a cold cache is minutes.
+      const glob = `*${query.trim().split(/\s+/).map((word) => word.replace(/[*?[\]]/g, '')).join('*')}*`
       return [
         root,
         '-maxdepth', '6',
-        ...(hidden ? [] : ['-not', '-path', '*/.*']),
-        '-iname', `*${query.trim().split(/\s+/).map((word) => word.replace(/[*?[\]]/g, '')).join('*')}*`,
-        '-print'
+        // `-prune`s a dotdir rather than merely excluding its contents from the
+        // results: `-not -path '*/.*'` still *descends* into every dotdir, and
+        // `.cache` alone is enough to burn the whole timeout.
+        ...(hidden ? ['-iname', glob, '-print'] : ['-name', '.*', '-prune', '-o', '-iname', glob, '-print'])
       ]
+    }
   }
 }
 
@@ -400,11 +387,15 @@ const EXECUTABLE_BIT = 0o111
  * not a different kind of file, and it belongs with the programs either way.
  * Answered with the stat that was taken anyway; never for a directory, where the
  * bit means "may be entered" and would put every folder in the wrong category.
+ *
+ * `statSync`, not `lstatSync`: a symlink's own mode is always `0777` on Linux,
+ * so lstat-ing one would call every symlink executable regardless of what it
+ * points at. Following it reads the target's real bit.
  */
 function isExecutable(path: string, directory: boolean): boolean {
   if (directory) return false
   try {
-    return (lstatSync(path).mode & EXECUTABLE_BIT) !== 0
+    return (statSync(path).mode & EXECUTABLE_BIT) !== 0
   } catch {
     return false
   }
@@ -627,11 +618,22 @@ const TERMINALS = [
  */
 async function openTerminal(directory: string): Promise<void> {
   const { spawn } = await import('node:child_process')
-  const preferred = process.env['TERMINAL']
-  const command =
-    preferred !== undefined && preferred.length > 0
-      ? (onPath([preferred]) ?? (preferred.includes('/') ? preferred : null))
-      : onPath([...TERMINALS])
+  const preferred = process.env['TERMINAL']?.trim()
+  let command: string | null
+  let args: string[]
+  if (preferred !== undefined && preferred.length > 0) {
+    // `$TERMINAL` may carry its own arguments — "kitty -1" for single-instance
+    // mode — the same shape the ssh plugin's terminal helper splits; without
+    // this a preference like that fails to resolve, because there is no binary
+    // literally named "kitty -1".
+    const parts = preferred.split(/\s+/)
+    const program = parts[0]
+    args = parts.slice(1)
+    command = onPath([program]) ?? (program.includes('/') ? program : null)
+  } else {
+    command = onPath([...TERMINALS])
+    args = []
+  }
 
   if (command === null) {
     await showToast({
@@ -642,7 +644,7 @@ async function openTerminal(directory: string): Promise<void> {
     return
   }
 
-  const child = spawn(command, [], { cwd: directory, detached: true, stdio: 'ignore' })
+  const child = spawn(command, args, { cwd: directory, detached: true, stdio: 'ignore' })
   child.on('error', (error: Error) => {
     void showToast({ style: Toast.Style.Failure, title: 'Could not open a terminal', message: error.message })
   })
@@ -769,7 +771,10 @@ function listDirectory(path: string, hidden: boolean): { hits: Hit[]; problem: s
         let directory = entry.isDirectory()
         if (!directory && entry.isSymbolicLink()) {
           try {
-            directory = existsSync(full) && lstatSync(full).isDirectory()
+            // `statSync` follows the link; `lstatSync` here would report the
+            // symlink itself, which is never a directory, and every symlinked
+            // folder would offer "Open" instead of "Enter Folder".
+            directory = existsSync(full) && statSync(full).isDirectory()
           } catch {
             directory = false
           }
@@ -883,13 +888,12 @@ export default function SearchFiles(): React.JSX.Element {
       keepPreviousData: true,
       timeout: TIMEOUT_MS,
       // A tool with no matches exits non-zero, and that is not an error — it is
-      // the answer. Only a real failure should reach the error branch.
-      parseOutput: ({ stdout, stderr, exitCode }) => {
-        if (exitCode !== 0 && String(stdout).length === 0 && String(stderr).trim().length > 0) {
-          throw new Error(String(stderr).trim().split('\n')[0])
-        }
-        return String(stdout)
-      }
+      // the answer. Nor is exit 1 with stderr: `fd` and `find` both use it for
+      // "some directory was unreadable, here is everything else I found", so
+      // that shape is a partial result, not a failure. Only a failed spawn or
+      // an exit past 1 should reach the error branch.
+      parseOutput: ({ stdout, stderr, exitCode, error }) =>
+        parseSearchOutput({ stdout: String(stdout), stderr: String(stderr), exitCode, error })
     }
   )
 
@@ -909,7 +913,9 @@ export default function SearchFiles(): React.JSX.Element {
       let directory = false
       let executable = false
       try {
-        const stats = lstatSync(path)
+        // Follows symlinks, same reasoning as `listDirectory` and `isExecutable`
+        // above: a symlinked folder hit here should offer "Enter Folder" too.
+        const stats = statSync(path)
         directory = stats.isDirectory()
         executable = !directory && (stats.mode & EXECUTABLE_BIT) !== 0
       } catch {
