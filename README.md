@@ -16,7 +16,7 @@ It runs everywhere (Hyprland, KDE, GNOME, COSMIC, Sway, X11 desktops) and looks 
 
 ## Install
 
-One command. No sudo, nothing outside your home directory:
+One command. No sudo required, in your home directory:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Tapuuk/Lumanin/main/scripts/install.sh | bash
