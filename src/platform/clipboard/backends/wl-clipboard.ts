@@ -31,8 +31,16 @@ export function createWlClipboard(exec: Exec): ClipboardBackend {
       return result.ok ? result.stdout : ''
     },
 
-    async writeText(text) {
-      const result = await exec.run('wl-copy', ['--type', 'text/plain;charset=utf-8'], {
+    async writeText(text, options) {
+      // `--sensitive` (wl-clipboard ≥ 2.2) adds `x-kde-passwordManagerHint`
+      // with value `secret` to the same offer as the text — verified on 2.3.0
+      // with `wl-paste --list-types`. cliphist, Klipper and CopyQ all honour
+      // that target and skip recording the copy. An older wl-copy rejects the
+      // flag, which surfaces as the throw below and the caller's plain-copy
+      // fallback.
+      const args = ['--type', 'text/plain;charset=utf-8']
+      if (options?.sensitive === true) args.push('--sensitive')
+      const result = await exec.run('wl-copy', args, {
         stdin: text
       })
       if (!result.ok) {

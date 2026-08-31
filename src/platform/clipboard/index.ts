@@ -15,7 +15,12 @@ export interface ClipboardBackend {
   readonly id: string
   /** The empty string for an empty or non-text clipboard — never a rejection. */
   readText(): Promise<string>
-  writeText(text: string): Promise<void>
+  /**
+   * `sensitive` asks the backend to mark the offer so clipboard managers skip
+   * recording it. Only `wl-clipboard` can honour it; the Electron backend
+   * copies plainly, which is the documented degradation, not an error.
+   */
+  writeText(text: string, options?: { sensitive?: boolean }): Promise<void>
 }
 
 export interface ClipboardDeps {

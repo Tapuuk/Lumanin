@@ -139,6 +139,27 @@ describe('clipboard', () => {
     expect(calls[0]?.options?.stdin).toBe('hunter2')
   })
 
+  it('marks a sensitive copy with --sensitive, secret still on stdin', async () => {
+    // wl-clipboard ≥ 2.2: --sensitive adds x-kde-passwordManagerHint to the
+    // offer, which is what tells cliphist/Klipper/CopyQ not to record it.
+    const { exec, calls } = recorder()
+    await createClipboard('wl-clipboard', { exec, systemClipboard: noopClipboard }).writeText(
+      'hunter2',
+      { sensitive: true }
+    )
+
+    expect(calls[0]?.args).toContain('--sensitive')
+    expect(calls[0]?.args.join(' ')).not.toContain('hunter2')
+    expect(calls[0]?.options?.stdin).toBe('hunter2')
+  })
+
+  it('offers a plain copy without the sensitive flag', async () => {
+    const { exec, calls } = recorder()
+    await createClipboard('wl-clipboard', { exec, systemClipboard: noopClipboard }).writeText('x')
+
+    expect(calls[0]?.args).not.toContain('--sensitive')
+  })
+
   it('reads without the newline wl-paste would otherwise append', async () => {
     const { exec, calls } = recorder({ 'wl-paste': { stdout: 'copied text' } })
     const text = await createClipboard('wl-clipboard', { exec, systemClipboard: noopClipboard }).readText()

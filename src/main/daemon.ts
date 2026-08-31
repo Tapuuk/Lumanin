@@ -31,6 +31,7 @@ import { firstRunPending, markFirstRunOffered } from '../node/first-run'
 import { bundledPluginsDir, resolvePaths } from '../node/paths'
 import { parseArgs, type DaemonStatus, type EnumerateData, type Request, type Response } from '../shared/protocol'
 import { actionHandlerOf, listItemsOf, type RenderNode } from '../shared/render-tree'
+import { createCopy } from './clipboard-copy'
 import { rootCommands, type RegisteredCommand } from './commands'
 import { launchSettings } from '../cli/client'
 import { applyCsp } from './csp'
@@ -1025,15 +1026,12 @@ app.whenReady().then(async () => {
         }
       },
       clipboard: {
-        copy: async ({ text, html, file, concealed }) => {
-          // `concealed` is part of the protocol but nothing reads it since
-          // clipboard history was cut; accepted so the api-shim need not care.
-          void concealed
-          if (file !== undefined) clipboard.writeText(file)
-          else if (html !== undefined) clipboard.write({ text: text ?? '', html })
-          else clipboard.writeText(text ?? '')
-          await Promise.resolve()
-        },
+        // A concealed copy goes through `wl-copy --sensitive` so clipboard
+        // managers skip recording it; routing and probe notes in clipboard-copy.ts.
+        copy: createCopy({
+          electron: clipboard,
+          backend: async () => (await platformReady)?.clipboard
+        }),
         paste: async ({ text, html, file }) => {
           const payload = file ?? text ?? html ?? ''
           const backend = (await platformReady)?.paste
