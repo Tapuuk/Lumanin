@@ -6,7 +6,7 @@
 
 <p align="center">A fast keyboard launcher for Linux. Press a key, type, hit Enter.</p>
 
-![The Lumanin panel](resources/readme/hero.png)
+![Calculator, a plugin with details, file search, and launching Steam through a typo](resources/readme/demo.gif)
 
 Lumanin is a command palette for your desktop, built for Linux from the ground up. One hotkey opens the global search, which finds and launches your apps, does math and unit conversions, and runs your plugins. A second hotkey opens file search, a separate surface that browses and opens anything in your home folder, grouped by type. It stays out of the way: no dock, no tray clutter, no window until you ask.
 

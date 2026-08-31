@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs'
 
 const PATTERN = new RegExp(
   [
-    '\\b(?!(?:README|CONTRIBUTING|CREDITS|SKILL)\\.md)[A-Z][A-Z_-]{2,}\\.md\\b',
+    '\\b(?!(?:README|CONTRIBUTING|CHANGELOG|CREDITS|SKILL)\\.md)[A-Z][A-Z_-]{2,}\\.md\\b',
     '\\b[A-Z]{4,}-[A-Z]{4,}\\b',
     '\\u00a7',
     '\\bM[0-9](\\.[0-9a-z]+)?\\b',
