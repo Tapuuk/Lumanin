@@ -124,7 +124,9 @@ These six are must-haves, not suggestions:**
 Also worth knowing while you design the actions: **an action bound to a key runs with no window**.
 The plugin renders headless, the action's handler is dispatched, and nothing is shown - so the
 first action of a row should be the one that *does the obvious thing*, and anything destructive
-still belongs behind `confirmAlert`, which is honoured in that headless run exactly as on screen.
+still belongs behind `confirmAlert` - but in that headless run the alert is auto-dismissed
+(`confirmAlert` resolves `false`, the destructive branch is skipped) and the launcher shows a
+notice telling the user to run the action from the launcher window instead.
 
 `example/` does all of this. Users reach every level from one browser in `lumanin config` -
 Plugins → plugin → command → category → row → action - to pin it, bind a key to it, or alias it,

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, watch, type FSWatcher } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { app, clipboard, ipcMain, net, protocol, shell, type IpcMainInvokeEvent } from 'electron'
+import { app, clipboard, ipcMain, net, Notification, protocol, shell, type IpcMainInvokeEvent } from 'electron'
 import { detectPlatform, describePlatform, probePlatform } from '../platform/detect'
 import { createRuntime, type PlatformRuntime } from '../platform/runtime'
 import type { BinaryMap } from '../platform/probe/binaries'
@@ -36,6 +36,8 @@ import { rootCommands, type RegisteredCommand } from './commands'
 import { launchSettings } from '../cli/client'
 import { applyCsp } from './csp'
 import { ExtensionHost } from './extensions/host'
+import { answerHeadlessAlert } from './extensions/headless-alert'
+import type { AlertPayload } from '../shared/ext-protocol'
 import {
   emptyIndex,
   extensionRootCommands,
@@ -424,7 +426,34 @@ async function statusWhenProbed(): Promise<DaemonStatus> {
 }
 
 function emit<E extends EventName>(event: E, payload: EventMap[E]): void {
+  // A headless session's `confirmAlert` never reaches the renderer: nothing
+  // there would answer it, and the blocked worker would be killed after the
+  // grace window with its action silently untaken. Main answers instead —
+  // always dismissed, never confirmed — and tells the user where to run it.
+  if (event === 'ext.alert') {
+    const consumed = answerHeadlessAlert(
+      payload as AlertPayload,
+      (sessionId) => headlessSessions.get(sessionId),
+      (token, confirmed) => extensionHost?.answerAlert(token, confirmed),
+      (text) => headlessNotice(text)
+    )
+    if (consumed) return
+  }
   panel?.webContents?.send(EVENT_CHANNEL, { event, payload })
+}
+
+/**
+ * A user-visible notice from a session that has no window.
+ *
+ * The HUD event alone would land in a hidden panel, which is nothing on
+ * screen, so a desktop notification carries the same text where one exists.
+ */
+function headlessNotice(text: string): void {
+  logger.info('headless notice', { text })
+  emit('ext.hud', { title: text })
+  if (Notification.isSupported()) {
+    new Notification({ title: APP_DISPLAY_NAME, body: text }).show()
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -569,6 +598,14 @@ const ENUMERATE_TIMEOUT_MS = 8000
 const ACTION_GRACE_MS = 5000
 
 /**
+ * Sessions running with no window, by id — the value is what a notice about
+ * the session calls it: the action title for a bound action, else the command
+ * title. `emit` consults this to answer a `confirmAlert` that would otherwise
+ * wait forever on a renderer that does not exist.
+ */
+const headlessSessions = new Map<string, string>()
+
+/**
  * Run a plugin's command with no window and hand its settled tree to `read`.
  *
  * The `enumerate` verb's mechanism, and the one a bound action uses too: launch
@@ -585,7 +622,8 @@ async function withHeadlessList<T>(
   commandId: string,
   context: Readonly<Record<string, unknown>>,
   read: (tree: RenderNode, sessionId: string) => T | Promise<T>,
-  retain = false
+  retain = false,
+  label?: string
 ): Promise<T> {
   const command = extensionCommand((candidate) => candidate.id === commandId)
   if (command === null || extensionHost === null) {
@@ -594,6 +632,7 @@ async function withHeadlessList<T>(
 
   const host = extensionHost
   const session = await host.launch(command, { ...context, enumerate: true })
+  headlessSessions.set(session.sessionId, label ?? command.spec.title)
   let keep = false
   try {
     const deadline = Date.now() + ENUMERATE_TIMEOUT_MS
@@ -613,7 +652,10 @@ async function withHeadlessList<T>(
   } finally {
     // A failed read closes the session whatever `retain` says: there is nothing
     // left running that anyone is waiting on.
-    if (!keep) host.close(session.sessionId)
+    if (!keep) {
+      headlessSessions.delete(session.sessionId)
+      host.close(session.sessionId)
+    }
   }
 }
 
@@ -671,7 +713,8 @@ async function runItemAction(
       // will eventually wonder about.
       return { ok: true, detail: `ran ${action}` }
     },
-    true
+    true,
+    action
   )
 }
 
@@ -684,12 +727,16 @@ async function runItemAction(
  * is what `popToRoot` and a finished command already do.
  */
 async function releaseAfterAction(sessionId: string): Promise<void> {
-  const deadline = Date.now() + ACTION_GRACE_MS
-  while (Date.now() < deadline) {
-    if (extensionHost?.snapshot(sessionId) == null) return
-    await new Promise((resolve) => setTimeout(resolve, 100))
+  try {
+    const deadline = Date.now() + ACTION_GRACE_MS
+    while (Date.now() < deadline) {
+      if (extensionHost?.snapshot(sessionId) == null) return
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    extensionHost?.close(sessionId)
+  } finally {
+    headlessSessions.delete(sessionId)
   }
-  extensionHost?.close(sessionId)
 }
 
 function quit(): void {
