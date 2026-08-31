@@ -53,8 +53,17 @@ jobs:
   # script, then the daemon actually starting. Nothing else in this file runs
   # install.sh, which is how a launcher that built fine and started nothing
   # (Electron 43 stopped fetching its binary in `npm ci`) shipped for a day.
+  #
+  # Also the one arm64 run: nothing in the tree keys on the architecture, and
+  # the two native pieces (the Electron binary, better-sqlite3's Node-API
+  # prebuild) are fetched per arch by the same script - so the install path on
+  # an arm64 runner is the whole proof that ARM works, unit suite included.
   install:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -74,7 +83,11 @@ jobs:
           test -x clone/node_modules/electron/dist/electron
           test -f ~/.local/share/applications/lumanin-settings.desktop
           test -f ~/.local/share/icons/hicolor/scalable/apps/lumanin.svg
+          test -f "clone/node_modules/better-sqlite3/prebuilds/linux-$(node -p process.arch).node"
           ~/.local/bin/lumanin --version
+
+      - name: Unit suite on this architecture (Vitest)
+        run: npm test --prefix clone
 
       # The daemon has to come up from the CLI, the way a hotkey or the settings
       # entry starts it - not just build. Then a plugin's own path: what the
