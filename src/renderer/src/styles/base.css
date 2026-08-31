@@ -1037,10 +1037,23 @@ body {
 }
 
 /* Anchored top-right rather than bottom-right: this menu belongs to the control
-   that opened it, and the control is beside the search field. */
+   that opened it, and the control is beside the search field.
+
+   `position: fixed`, not the .overlay default of absolute-in-panel: the panel
+   hugs its content, so over a short list an in-panel overlay left the menu a
+   few rows of space. The window box is fixed-height, so the menu escapes to it
+   and uses the room below the panel. The backdrop goes transparent for the
+   same reason - the region below the panel is desktop showing through, and a
+   45% tint there reads as a slab that is not the panel. */
 .overlay:has(> .dropdown__menu) {
+  position: fixed;
+  background: transparent;
   align-items: flex-start;
   padding-top: 52px;
+}
+
+.dropdown__menu {
+  max-height: min(340px, calc(var(--lumanin-surface-height, 100vh) - 64px));
 }
 
 /* An accessory may carry an icon, a text, or both. The icon is small and sits
