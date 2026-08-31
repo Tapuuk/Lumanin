@@ -240,8 +240,8 @@ check what you emit against `reference.md`, and treat a runtime error card as th
 
 ## 5. Offer publishing
 
-When it works, offer this (do not push anything yourself unless asked): put the plugin directory
-in a **public https git repository**, and anyone installs it with
+When it works, offer to publish (do not push anything yourself unless asked). A published plugin
+is a **public https git repository** holding the plugin directory; anyone installs it with
 
 ```sh
 lumanin plugin-install <repository-url>
@@ -250,6 +250,32 @@ lumanin plugin-install <repository-url>
 A repository can hold several plugins in subdirectories; the URL of the subdirectory installs
 just that plugin. Lumanin records where every install came from.
 
-`lumanin plugin-export <name>` packages the installed plugin into the user's Downloads folder
-ready to push, and prints the exact git commands - offer it when the user wants to publish but
-the working directory is somewhere awkward (a scratchpad, a temp dir).
+Walk the user through these steps, in order, and run the ones they say yes to:
+
+1. **Get a publishable directory.** If the plugin was written in an awkward place (a scratchpad,
+   a temp dir), `lumanin plugin-export <name>` copies the installed plugin into the user's
+   Downloads folder with a README (name, description, install command) and a `.gitignore`, and
+   prints the git commands. Otherwise make sure the directory has both files; write the README
+   yourself if it is missing.
+2. **Check what is in it.** No `node_modules/`, no build output, no token or password pasted into
+   the source, no personal paths in the manifest. A `password` preference is how a plugin takes a
+   token; the token itself never ships.
+3. **Create the repository and push.** With the GitHub CLI, from the plugin directory:
+
+   ```sh
+   git init && git add -A && git commit -m "<plugin name>"
+   gh repo create <name> --public --source . --push
+   ```
+
+   Without `gh`, create an empty public repository in the browser and follow the push commands
+   GitHub shows. The repository must be public and https; `plugin-install` refuses anything else.
+4. **Add the `lumanin-plugins` topic.** `gh repo edit --add-topic lumanin-plugins`, or Topics in
+   the repository's About box on GitHub. github.com/topics/lumanin-plugins is where people browse
+   user-made plugins, so a plugin without the topic is findable only by URL.
+5. **Prove the install path.** `lumanin plugin-install <repository-url>` from the fresh
+   repository. It warns that this replaces the local install of the same name, which is the
+   point; confirm the consent screen names the right repository, author and commands. This is
+   the install every other user will run.
+6. **Tell them how it reaches users.** Hand back the one line to share:
+   `lumanin plugin-install <repository-url>`. Updates are a push to the repository; users
+   reinstall to pick them up, nothing updates itself.

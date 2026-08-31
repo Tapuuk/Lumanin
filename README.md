@@ -81,7 +81,7 @@ lumanin plugin-install https://github.com/someone/their-plugin
 
 Before anything is installed you're shown who wrote it, what it declares, and what it depends on, and told plainly that a plugin is a program running as you.
 
-Find plugins: the [Lumanin-Plugins](https://github.com/Tapuuk/Lumanin-Plugins) repository is a list anyone can add theirs to by pull request. Settings > Plugins > Browse official plugins reads the same list; installing from it goes through the same consent screen as a pasted URL.
+Find plugins in two places. Official ones, written and checked by us, are in Settings > Plugins > Browse official plugins. User-made ones are under the GitHub topic [`lumanin-plugins`](https://github.com/topics/lumanin-plugins): anyone can tag their repository with it, nobody reviews them, and you install them at your own risk with the command above.
 
 > **Careful who you install from.** A plugin runs with your full user rights: your files, your network, your session. Lumanin shows you the facts before installing, but it does not scan code and cannot catch malice. Treat a plugin URL like a `curl | bash` from the same stranger: install from authors you trust, and read the source first when you don't (the consent screen tells you exactly where it is on disk).
 
