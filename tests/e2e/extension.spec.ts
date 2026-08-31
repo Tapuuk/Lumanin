@@ -386,10 +386,11 @@ test('Esc at the extension’s root returns to the launcher', async () => {
 })
 
 test('a pinned category launches straight into that category', async () => {
-  // The empty root is the pins, and only the pins.
+  // The empty root is the pins, and only the pins - minus item pins, which
+  // are rows inside a plugin's search and only answer to typing.
   await page.locator('.search__input').fill('')
   await expect(page.locator('.result__title').first()).toHaveText('Fruit: Berries')
-  expect(await rowTitles()).toEqual(['Fruit: Berries', 'Cranberry (pinned)'])
+  expect(await rowTitles()).toEqual(['Fruit: Berries'])
 
   await page.locator('.result', { hasText: 'Fruit: Berries' }).click()
   // Only the berries render: launchContext.category crossed main → host →
@@ -403,6 +404,9 @@ test('a pinned category launches straight into that category', async () => {
 
 test('a pinned item lands with its row selected', async () => {
   await expect(page.locator('.result__title').first()).toHaveText('Fruit: Berries')
+  // An item pin surfaces only when what is typed names it.
+  await page.locator('.search__input').fill('cranberry')
+  await expect(page.locator('.result__title').first()).toHaveText('Cranberry (pinned)')
   await page.locator('.result', { hasText: 'Cranberry (pinned)' }).click()
 
   await expect(page.locator('.result__title').first()).toHaveText('Blueberry', { timeout: 10_000 })
@@ -425,12 +429,14 @@ test('the daemon answers enumerate with the rows of one category', async () => {
         id: 'Blueberry',
         title: 'Blueberry',
         subtitle: '9 letters',
+        icon: null,
         actions: ['Announce', 'Show Details', 'Write Marker']
       },
       {
         id: 'Cranberry',
         title: 'Cranberry',
         subtitle: '9 letters',
+        icon: null,
         actions: ['Announce', 'Show Details', 'Write Marker']
       }
     ]
@@ -442,6 +448,7 @@ test('an action target runs the action and never opens a window', async () => {
   // exactly there. Nothing about this launch is visible — that is the point of
   // binding an action rather than a category.
   await page.locator('.search__input').fill('')
+  await expect(page.locator('.result__title').first()).toHaveText('Fruit: Berries')
   const before = await rowTitles()
 
   const reply = await askDaemon({
