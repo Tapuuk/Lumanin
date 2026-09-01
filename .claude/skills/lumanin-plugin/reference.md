@@ -70,9 +70,11 @@ The manifest (`package.json`):
 - `commands[].lumanin.categories`: the command's categories, `{ id, title }` with ids matching
   `[a-z0-9-]+`. Declared statically so `lumanin config` can offer them for pinning and hotkeys
   without running the plugin. Wire them to a `List.Dropdown`, start it on
-  `launchContext.category`, and give every `List.Item` a stable `id` - that id is what a pinned
-  item names, and the launcher preselects the matching row on such a launch. SKILL.md step 2 has
-  the worked pattern; `example/` implements it.
+  `launchContext.category` when that value is one of the declared ids and on the first id
+  otherwise, and give every `List.Item` a stable `id` - that id is what a pinned item names, and
+  the launcher preselects the matching row on such a launch. Without that check an unknown value
+  shows the first category's title over an empty list. SKILL.md step 2 has the worked pattern;
+  `example/` implements it.
 - `commands[].lumanin.root`: leave it alone. `false` means "this command is not on the root list at
   all" - no row, no pin, no alias - and exists for the launcher's *own* surfaces, which have a
   hotkey of their own instead (file search is the only one). A plugin someone installs exists to be

@@ -94,10 +94,22 @@ These six are must-haves, not suggestions:**
    Channels. One category is fine; invented filler is not.
 3. **Wire a `List.Dropdown`** (`searchBarAccessory`) to those categories, and start it on
    `launchContext.category` - that is how a pinned category or a hotkey opens the plugin
-   already inside the right one:
+   already inside the right one. Take that value only when it is one of the ids you declared:
+   a pin written before a category was renamed has to open the plugin, not leave an empty list
+   under the wrong title.
    ```tsx
+   const CATEGORIES = [
+     { id: 'logins', title: 'Logins' },
+     { id: 'credit-cards', title: 'Credit Cards' },
+     { id: 'identities', title: 'Identities' }
+   ] as const
+
+   // inside the command component
+   const requested = props.launchContext?.category
    const [category, setCategory] = useState(
-     typeof props.launchContext?.category === 'string' ? props.launchContext.category : 'logins'
+     typeof requested === 'string' && CATEGORIES.some((entry) => entry.id === requested)
+       ? requested
+       : 'logins'
    )
    ```
 4. **Give every `List.Item` a stable `id`.** It is what lets the user pin a single thing -
