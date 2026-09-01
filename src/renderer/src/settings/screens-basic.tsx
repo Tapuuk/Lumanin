@@ -237,7 +237,14 @@ function FileSearchKeyRow(): React.JSX.Element | null {
   )
 }
 
-const FILE_SEARCH_KEYWORDS = ['files', 'hidden', 'category order', ...Object.values(FILE_CATEGORY_TITLES)].join(' ')
+const FILE_SEARCH_KEYWORDS = [
+  'files',
+  'hidden',
+  'ignored',
+  'gitignore',
+  'category order',
+  ...Object.values(FILE_CATEGORY_TITLES)
+].join(' ')
 
 /** File search behaviour: opening, the files plugin's own preferences, category order. */
 export function FileSearchGroup(): React.JSX.Element | null {
