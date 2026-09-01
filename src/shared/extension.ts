@@ -54,7 +54,8 @@ export interface CommandArgumentSpec {
  * so `ray` tooling ignores it. Declared statically so the config can list a
  * plugin's categories without running its code; at launch the chosen category
  * arrives in `LaunchProps.launchContext.category` and the command's dropdown is
- * expected to start there.
+ * expected to start there when the id is one the command declares, and on its
+ * first category otherwise.
  */
 export interface CommandCategorySpec {
   /** `^[a-z0-9-]+$` — the charset is what keeps pin keys parseable. */
