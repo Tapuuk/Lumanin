@@ -21,6 +21,12 @@ export interface RunOptions {
   /** Written to the child's stdin and then closed. */
   readonly stdin?: string
   readonly timeoutMs?: number
+  /**
+   * Do not read the child's stdout or stderr, and resolve as soon as it exits.
+   * For a helper that forks a background process: the fork inherits our pipes,
+   * so waiting for them to close means waiting for the whole timeout.
+   */
+  readonly detachOutput?: boolean
 }
 
 export interface RunResult {
@@ -39,6 +45,7 @@ const DEFAULT_TIMEOUT_MS = 2000
 
 export const systemExec: Exec = {
   run(command, args, options = {}) {
+    if (options.detachOutput === true) return runDetached(command, args, options)
     return new Promise<RunResult>((resolve) => {
       const child = execFile(
         command,
@@ -67,6 +74,31 @@ export const systemExec: Exec = {
       child.stdin?.end(options.stdin)
     })
   }
+}
+
+function runDetached(command: string, args: readonly string[], options: RunOptions): Promise<RunResult> {
+  return new Promise<RunResult>((resolve) => {
+    let child: ReturnType<typeof spawn>
+    try {
+      child = spawn(command, [...args], { stdio: [options.stdin === undefined ? 'ignore' : 'pipe', 'ignore', 'ignore'] })
+    } catch (error) {
+      resolve({ ok: false, stdout: '', stderr: '', error: String(error) })
+      return
+    }
+    const timer = setTimeout(() => child.kill(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
+    child.on('error', (error) => {
+      clearTimeout(timer)
+      resolve({ ok: false, stdout: '', stderr: '', error: error.message })
+    })
+    child.on('exit', (code, signal) => {
+      clearTimeout(timer)
+      const ok = code === 0
+      resolve({ ok, stdout: '', stderr: '', ...(ok ? {} : { error: `exited with ${String(signal ?? code)}` }) })
+    })
+    if (options.stdin === undefined) return
+    child.stdin?.on('error', () => undefined)
+    child.stdin?.end(options.stdin)
+  })
 }
 
 export interface LineStream {

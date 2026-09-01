@@ -153,6 +153,15 @@ describe('clipboard', () => {
     expect(calls[0]?.options?.stdin).toBe('hunter2')
   })
 
+  it('does not wait on the pipes wl-copy hands to its persister', async () => {
+    // wl-copy forks the process that serves the offer and that fork inherits
+    // stdout and stderr; waiting for them to close is waiting for the timeout.
+    const { exec, calls } = recorder()
+    await createClipboard('wl-clipboard', { exec, systemClipboard: noopClipboard }).writeText('x')
+
+    expect(calls[0]?.options?.detachOutput).toBe(true)
+  })
+
   it('offers a plain copy without the sensitive flag', async () => {
     const { exec, calls } = recorder()
     await createClipboard('wl-clipboard', { exec, systemClipboard: noopClipboard }).writeText('x')

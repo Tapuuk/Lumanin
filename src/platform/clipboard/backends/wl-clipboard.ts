@@ -40,8 +40,11 @@ export function createWlClipboard(exec: Exec): ClipboardBackend {
       // fallback.
       const args = ['--type', 'text/plain;charset=utf-8']
       if (options?.sensitive === true) args.push('--sensitive')
+      // The persister inherits our pipes, so reading them would wait out the
+      // whole timeout on every copy; exit is the signal that the offer is up.
       const result = await exec.run('wl-copy', args, {
-        stdin: text
+        stdin: text,
+        detachOutput: true
       })
       if (!result.ok) {
         throw new Error(`wl-copy failed: ${result.stderr.trim() || result.error || 'unknown error'}`)

@@ -145,15 +145,20 @@ export function ExtensionView({ state, focusToken, keys, onExit }: ExtensionView
   /**
    * Which actions are live.
    *
-   * The selected item's, if it has any; otherwise the view's own. That
-   * precedence is the spec's and it is what makes a list with one shared action
-   * panel work alongside a list where every row has its own.
+   * The selected item's, if it has any; the empty view's while it is what is on
+   * screen; otherwise the view's own. That precedence is the spec's and it is
+   * what makes a list with one shared action panel work alongside a list where
+   * every row has its own.
    */
   const actions: ActionSet = useMemo(() => {
     if (selected?.actions != null) return readActionPanel(selected.actions)
+    if (list !== null && list.rows.length === 0 && list.emptyView !== null) {
+      const own = slot(list.emptyView, 'actions')
+      if (own !== null) return readActionPanel(own)
+    }
     if (view !== null) return readActionPanel(slot(view, 'actions'))
     return readActionPanel(null)
-  }, [selected, view])
+  }, [list, selected, view])
 
   const run = useCallback(
     (action: ActionEntry) => {
