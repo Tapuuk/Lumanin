@@ -100,6 +100,14 @@ describe('argsFor', () => {
     ])
   })
 
+  it('adds --no-ignore to fd without --hidden when only ignored files are wanted', () => {
+    expect(argsFor('fd', 'report', '/home/alice', { hidden: false, noIgnore: true })).toEqual([
+      '--absolute-path', '--color', 'never', '--ignore-case', '--print0',
+      '--max-results', '200', '--no-ignore',
+      '--exclude', '.git', '--', 'report', '/home/alice'
+    ])
+  })
+
   it('encodes the hidden rule in the locate pattern, not in a flag', () => {
     expect(argsFor('locate', 'report', '/home/alice', { hidden: false, noIgnore: false })).toEqual([
       '--null', '--ignore-case', '--limit', '800', '--regexp',
