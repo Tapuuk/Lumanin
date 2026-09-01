@@ -9,8 +9,9 @@
  * It is also the worked example of the **category contract**: the manifest
  * declares `services` and `timers` under `lumanin.categories`, the dropdown in
  * the search bar switches between them, a launch from a pinned category
- * arrives in `launchContext.category` and starts the dropdown there, and every
- * item has a stable `id` so single units can be pinned from `lumanin config`.
+ * arrives in `launchContext.category` and starts the dropdown there when it
+ * names a declared category, and every item has a stable `id` so single units
+ * can be pinned from `lumanin config`.
  */
 import {
   Action,
@@ -101,8 +102,11 @@ function Logs({ unit }: { unit: string }) {
 export default function Command(props: { launchContext?: { category?: string } }) {
   // A launch from a pinned category (or a hotkey) says where to start; the
   // dropdown owns it from there.
+  const requested = props.launchContext?.category
   const [category, setCategory] = useState(
-    typeof props.launchContext?.category === 'string' ? props.launchContext.category : 'services'
+    typeof requested === 'string' && CATEGORIES.some((entry) => entry.id === requested)
+      ? requested
+      : 'services'
   )
   const { data, error, isLoading, revalidate } = usePromise(listUnits, [category])
   const { push } = useNavigation()
