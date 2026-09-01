@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join, sep } from 'node:path'
 import {
@@ -16,7 +16,7 @@ import {
   useNavigation
 } from 'lumanin'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { fdPattern, locatePattern, parseSearchOutput } from './query'
+import { argsFor, parseSearchOutput, splitOutput, type ToolName } from './query'
 
 /**
  * Search Files — a search of its own, not a row in the root list.
@@ -45,18 +45,14 @@ import { fdPattern, locatePattern, parseSearchOutput } from './query'
 
 interface Preferences {
   readonly showHidden?: boolean
+  readonly noIgnore?: boolean
   readonly tool?: 'auto' | 'fd' | 'locate' | 'find'
 }
-
-/** How many rows are worth showing. Past this nobody scrolls; they retype. */
-const LIMIT = 200
 
 /** A slow filesystem must not hang the view — `find` on a cold cache can. */
 const TIMEOUT_MS = 6000
 
 // ─── what to search with ────────────────────────────────────────────────────
-
-type ToolName = 'fd' | 'locate' | 'find'
 
 interface Tool {
   readonly name: ToolName
@@ -91,11 +87,26 @@ function onPath(names: readonly string[]): string | null {
 }
 
 /**
+ * The home directory as the filesystem knows it.
+ *
+ * plocate's database stores canonical paths, so a symlinked `$HOME` matches
+ * nothing until the symlink is resolved away.
+ */
+function realHome(): string {
+  try {
+    return realpathSync(homedir())
+  } catch {
+    return homedir()
+  }
+}
+
+/**
  * Which tool answers this search.
  *
  * Order is by how good the answer is, not by how common the tool is. `fd`
- * respects `.gitignore`, which is the difference between finding your source
- * file and finding forty copies of it under `node_modules`. `plocate` is
+ * respects `.gitignore` unless Ignored Files is on, which is the difference
+ * between finding your source file and finding forty copies of it under
+ * `node_modules`. `plocate` is
  * instant but answers from a database that is as old as the last `updatedb`, so
  * a file saved a minute ago is not in it. `find` is always there and is always
  * the slowest; it exists so that this feature never simply does not work.
@@ -119,44 +130,6 @@ function pickTool(preferred: Preferences['tool']): Tool | null {
   if (preferred === 'locate') return locate()
   if (preferred === 'find') return find()
   return fd() ?? locate() ?? find()
-}
-
-/** The argv for one search. Never a shell string. */
-function argsFor(tool: Tool, query: string, root: string, hidden: boolean): readonly string[] {
-  switch (tool.name) {
-    case 'fd':
-      return [
-        '--absolute-path',
-        '--color', 'never',
-        '--ignore-case',
-        '--max-results', String(LIMIT),
-        ...(hidden ? ['--hidden'] : []),
-        // Ours, not the user's project layout: `.git` is never the answer to a
-        // file search, and its object files are half the entries under any repo.
-        '--exclude', '.git',
-        '--', fdPattern(query), root
-      ]
-    case 'locate':
-      // The pattern is anchored under `root` (see `locatePattern`), which is
-      // also what keeps `--limit` counting rows we will actually show — an
-      // unanchored pattern lets out-of-scope `/usr` matches consume the cap
-      // before the post-filter below ever runs.
-      return ['--ignore-case', '--limit', String(LIMIT * 4), '--regexp', locatePattern(query, root)]
-    case 'find': {
-      // No regex, but `-iname` globs: words joined with `*` still match a name
-      // in order, so "quarterly report" finds `quarterly-report.md` here too.
-      // Depth-bounded because an unbounded `find ~` on a cold cache is minutes.
-      const glob = `*${query.trim().split(/\s+/).map((word) => word.replace(/[*?[\]]/g, '')).join('*')}*`
-      return [
-        root,
-        '-maxdepth', '6',
-        // `-prune`s a dotdir rather than merely excluding its contents from the
-        // results: `-not -path '*/.*'` still *descends* into every dotdir, and
-        // `.cache` alone is enough to burn the whole timeout.
-        ...(hidden ? ['-iname', glob, '-print'] : ['-name', '.*', '-prune', '-o', '-iname', glob, '-print'])
-      ]
-    }
-  }
 }
 
 // ─── icons ──────────────────────────────────────────────────────────────────
@@ -322,7 +295,7 @@ const CATEGORY_EXTENSIONS: Readonly<Record<Exclude<Category, 'folders' | 'rest'>
   ],
   videos: [
     'mp4', 'm4v', 'mkv', 'webm', 'mov', 'avi', 'wmv', 'flv', 'f4v', 'mpg', 'mpeg', 'mpe', 'm2v',
-    'ts', 'mts', 'm2ts', 'vob', 'ogv', '3gp', '3g2', 'rm', 'rmvb', 'asf', 'divx', 'mxf', 'y4m',
+    'm2ts', 'vob', 'ogv', '3gp', '3g2', 'rm', 'rmvb', 'asf', 'divx', 'mxf', 'y4m',
     // Project files of the programs that make them.
     'prproj', 'kdenlive', 'veg', 'fcpxml'
   ],
@@ -851,7 +824,7 @@ function Browse({
 
 export default function SearchFiles(): React.JSX.Element {
   const preferences = getPreferenceValues<Preferences>()
-  const home = homedir()
+  const home = useMemo(() => realHome(), [])
   const { push } = useNavigation()
   const hidden = preferences.showHidden === true
 
@@ -873,14 +846,16 @@ export default function SearchFiles(): React.JSX.Element {
 
   const [query, setQuery] = useState('')
 
-  // Home and everything under it, always. There is no scope to choose and no
-  // launch context to honour — see the note at the top.
-  const root = home
   const trimmed = useDebounced(query.trim(), DEBOUNCE_MS)
 
   const { data, isLoading, error } = useExec(
     tool?.path ?? 'true',
-    tool === null ? [] : argsFor(tool, trimmed, root, preferences.showHidden === true),
+    tool === null
+      ? []
+      : argsFor(tool.name, trimmed, home, {
+          hidden,
+          noIgnore: preferences.noIgnore === true
+        }),
     {
       // Nothing typed is not a search: an empty pattern matches every file on
       // the machine, and the view would open by walking your home directory.
@@ -888,25 +863,21 @@ export default function SearchFiles(): React.JSX.Element {
       keepPreviousData: true,
       timeout: TIMEOUT_MS,
       // A tool with no matches exits non-zero, and that is not an error — it is
-      // the answer. Nor is exit 1 with stderr: `fd` and `find` both use it for
-      // "some directory was unreadable, here is everything else I found", so
-      // that shape is a partial result, not a failure. Only a failed spawn or
-      // an exit past 1 should reach the error branch.
+      // the answer. `fd` and `find` exit 1 for "some directory was unreadable,
+      // here is everything else I found", which is a partial result; `plocate`
+      // exits 1 for both an empty answer and an unreadable database, so it is
+      // the one tool whose exit 1 can reach the error branch below.
       parseOutput: ({ stdout, stderr, exitCode, error }) =>
-        parseSearchOutput({ stdout: String(stdout), stderr: String(stderr), exitCode, error })
+        parseSearchOutput(
+          { stdout: String(stdout), stderr: String(stderr), exitCode, error },
+          tool?.name ?? null
+        )
     }
   )
 
   const hits = useMemo(() => {
     if (data === undefined || trimmed.length === 0) return []
-    const paths = String(data)
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0)
-      // `locate` cannot be scoped, so the scope is applied here. It is also what
-      // drops entries for files that have been deleted since the last updatedb.
-      .filter((line) => line === root || line.startsWith(`${root}${sep}`))
-      .slice(0, LIMIT)
+    const paths = splitOutput(String(data), home, hidden)
 
     const found: Hit[] = []
     for (const path of paths) {
@@ -926,7 +897,7 @@ export default function SearchFiles(): React.JSX.Element {
       found.push({ path, name: basename(path), directory, executable })
     }
     return rank(found, trimmed, order, home)
-  }, [data, trimmed, root, order, home])
+  }, [data, trimmed, hidden, order, home])
 
   if (tool === null) {
     return (
