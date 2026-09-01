@@ -244,7 +244,8 @@ still contains Shift in places - prefer writing the chord out to importing one o
   true through the gap or the list reads as a search that found nothing.
 - `pagination` is parsed but `onLoadMore` never fires - show your first page.
 - `List.Dropdown`'s `storeValue` does not persist across launches yet; `defaultValue` does fire
-  `onChange` on mount, so gate initial loads on that.
+  `onChange` on mount, so gate initial loads on that. The launcher's Tab key cycles the dropdown
+  to its next entry (rebindable under `[keys] category`), so never bind Tab yourself.
 - Spawning processes: always `execFile(cmd, [args])` / `spawn(cmd, [args])` with argv arrays -
   never `exec("cmd " + userInput)`. User-controlled text goes in an argv element or stdin, never
   interpolated into a shell line.

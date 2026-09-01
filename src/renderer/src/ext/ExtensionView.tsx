@@ -218,6 +218,15 @@ export function ExtensionView({ state, focusToken, keys, onExit }: ExtensionView
         return
       }
 
+      if (bound === 'category') {
+        // Tab by default. The dropdown owns its choices, so this only
+        // broadcasts; a view without a dropdown swallows the key rather than
+        // letting focus wander out of the search field.
+        event.preventDefault()
+        window.dispatchEvent(new Event('lumanin:cycle-category'))
+        return
+      }
+
       if (bound === 'open') {
         event.preventDefault()
         if (actions.primary !== null) run(actions.primary)

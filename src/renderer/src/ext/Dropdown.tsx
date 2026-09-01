@@ -47,6 +47,27 @@ export function Dropdown({ node, onEvent }: DropdownProps): React.JSX.Element | 
     onEvent(onChange, value)
   }, [value, onChange, onEvent])
 
+  // The panel's `category` key ([keys], default Tab). The dropdown is the only
+  // thing that knows its choices, so the key handler broadcasts and whichever
+  // dropdown is mounted answers by stepping to the next entry, wrapping.
+  const cycle = useRef<() => void>(() => undefined)
+  cycle.current = () => {
+    if (choices.length < 2) return
+    const index = choices.findIndex((choice) => choice.value === value)
+    const next = choices[(index + 1) % choices.length]
+    if (next === undefined) return
+    setSelected(next.value)
+    announced.current = next.value
+    onEvent(onChange, next.value)
+  }
+  useEffect(() => {
+    const onCycle = (): void => cycle.current()
+    window.addEventListener('lumanin:cycle-category', onCycle)
+    return () => {
+      window.removeEventListener('lumanin:cycle-category', onCycle)
+    }
+  }, [])
+
   if (choices.length === 0) return null
 
   const current = choices.find((choice) => choice.value === value) ?? choices[0]

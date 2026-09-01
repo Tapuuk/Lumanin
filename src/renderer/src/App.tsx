@@ -216,6 +216,13 @@ export function App(): React.JSX.Element {
         return
       }
 
+      // The root list has no category dropdown; swallowing the key keeps focus
+      // in the search field instead of letting Tab walk the browser's order.
+      if (action === 'category') {
+        event.preventDefault()
+        return
+      }
+
       if (action !== 'back') return
 
       event.preventDefault()

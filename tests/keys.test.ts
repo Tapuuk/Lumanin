@@ -77,6 +77,8 @@ describe('matching', () => {
     expect(keyActionFor(DEFAULT_KEYS, event('Enter'))).toBe('open')
     expect(keyActionFor(DEFAULT_KEYS, event('ArrowDown'))).toBe('next')
     expect(keyActionFor(DEFAULT_KEYS, event('Escape'))).toBe('back')
+    expect(keyActionFor(DEFAULT_KEYS, event('Tab'))).toBe('category')
+    expect(keyActionFor(DEFAULT_KEYS, event('Tab', { shift: true }))).toBeNull()
     expect(keyActionFor(DEFAULT_KEYS, event('q'))).toBeNull()
   })
 

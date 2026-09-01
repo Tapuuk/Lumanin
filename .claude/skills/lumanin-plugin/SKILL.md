@@ -53,9 +53,11 @@ you do not re-invent them unless the user explicitly asks for different behaviou
   calculation), or when the user has asked for different search rules.
 - **Keys are the launcher's keys.** Enter runs the first action in the panel's first section,
   Space (or Ctrl+Enter while typing) runs the second one in that same section, `Ctrl+K` opens the
-  action panel, Esc backs out one level. Order your actions accordingly - that order *is* what the
+  action panel, Esc backs out one level, and Tab switches the category dropdown to its next
+  entry - which is why must-have 3 wires one up: the categories are on a key, not just a mouse
+  target. Order your actions accordingly - that order *is* what the
   two keys do - and put anything that is not an alternative to the first action in a later
-  `ActionPanel.Section`. Do not assign custom shortcuts that shadow these, and do not add a
+  `ActionPanel.Section`. Do not assign custom shortcuts that shadow these (Tab included), and do not add a
   shortcut for something that is already the primary action.
 - **Shortcuts are Ctrl + one key. No Shift.** `{ modifiers: ['cmd'], key: 'o' }` → Ctrl+O. A
   launcher is used one-handed while your attention is on something else, and a three-key chord is

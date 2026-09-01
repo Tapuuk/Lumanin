@@ -29,6 +29,7 @@ export const KEY_ACTIONS = [
   'secondary',
   'next',
   'previous',
+  'category',
   'back'
 ] as const
 
@@ -62,6 +63,11 @@ export const KEY_ACTION_INFO: Readonly<Record<KeyAction, KeyActionInfo>> = {
   },
   next: { setting: 'next', title: 'Next result', help: 'Move down the list.' },
   previous: { setting: 'previous', title: 'Previous result', help: 'Move up the list.' },
+  category: {
+    setting: 'category',
+    title: 'Next category',
+    help: 'Switch the category dropdown to its next entry, in views that have one.'
+  },
   back: {
     setting: 'back',
     title: 'Back',
@@ -91,6 +97,7 @@ export const DEFAULT_KEYS: KeyMap = {
   ],
   next: [{ modifiers: [], key: 'arrowdown' }],
   previous: [{ modifiers: [], key: 'arrowup' }],
+  category: [{ modifiers: [], key: 'tab' }],
   back: [{ modifiers: [], key: 'escape' }]
 }
 
