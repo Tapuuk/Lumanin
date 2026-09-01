@@ -8,8 +8,8 @@ import type { ClipboardBackend } from '../platform/clipboard/index'
  * Klipper, CopyQ) record every plain offer permanently, so a vault plugin's
  * 30-second clear wipes the live selection while the manager's database keeps
  * the secret. All three skip an offer carrying the `x-kde-passwordManagerHint`
- * target, which `wl-copy --sensitive` provides (probed 2026-08-31 on
- * wl-clipboard 2.3.0: one process offers the hint alongside `text/plain`).
+ * target, which `wl-copy --sensitive` provides (probed on wl-clipboard
+ * 2.3.0: one process offers the hint alongside `text/plain`).
  * Electron's clipboard cannot add MIME targets, so a concealed copy routes
  * through the platform backend; when that is unavailable or fails, the copy
  * still happens — plainly, which is what the plugin's own clear timer already
