@@ -48,7 +48,7 @@ The main panel (the hotkey is yours to change). Everything lives here:
 
 - Type an app's name, or part of it, and Enter launches it. What you use often floats to the top, and one typo is forgiven.
 - Type math right into it: `128*1.21`, `40 mm to inches`, `20% of 350`. Enter copies the result.
-- Your plugins' commands appear here too, ranked with everything else, and you can pin any of them (or any app) so it is already there before you type.
+- Your plugins' commands appear here too, ranked with everything else, and you can pin any of them (or any app) so it outranks everything the moment you start typing its name.
 - Web search rows sit at the bottom for anything the panel can't answer itself, on every engine you enable.
 - **Ctrl+K** on any result shows every action it has, with its shortcuts.
 

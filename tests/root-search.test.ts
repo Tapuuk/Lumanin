@@ -296,13 +296,12 @@ describe('the plugins group', () => {
       resolveAlias: () => null
     })
 
-  it('keeps a pinned item off the empty root, and hoists it while it is typed', () => {
-    // A category pin is a favourite and belongs on the empty root. An item pin
-    // is a row inside the plugin's search: it answers to its title and to
-    // nothing else, so with nothing typed it is not there.
+  it('keeps every pin off the empty root, and hoists an item pin while it is typed', () => {
+    // The empty root is a bare search bar (user decision 2026-09-02). A pin is
+    // a ranking boost for what is typed, not a start page.
     const file =
       '[search]\npins = ["extension:godot/search#project", { id = "extension:godot/search#project:dawn!Run", title = "Dawnline - Run" }]\n'
-    expect(composeWith('', file).map((row) => row.id)).toEqual(['extension:godot/search#project'])
+    expect(composeWith('', file)).toEqual([])
     expect(composeWith('dawn', file).map((row) => row.id)).toContain(
       'extension:godot/search#project:dawn!Run'
     )
@@ -430,14 +429,10 @@ describe('pins', () => {
     )).toBe(false)
   })
 
-  it('shows the pins, and nothing else, before anything is typed', () => {
-    const rows = compose('', { file: PINNED })
-    expect(rows.map((row) => row.id)).toEqual(['command:builtin/quit'])
-  })
-
-  it('leaves the root empty when nothing is pinned', () => {
-    // The panel's layout is built around opening as a bare search bar. That
-    // promise still holds for everyone who has not asked otherwise.
+  it('shows nothing before anything is typed, pins or not', () => {
+    // Opening and erasing both land on a bare search bar; a pinned row that
+    // appeared only after erasing a query read as a glitch.
+    expect(compose('', { file: PINNED })).toEqual([])
     expect(compose('')).toEqual([])
   })
 

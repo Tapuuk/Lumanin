@@ -2390,7 +2390,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
                 pinListScreen(
                   ['search', 'pins'],
                   'Pinned rows',
-                  'Hoisted above the ranking when they match, and the whole list before you type.'
+                  'Hoisted above the ranking the moment what you type matches them.'
                 ),
               label: 'Pinned rows',
               detail:

@@ -57,11 +57,9 @@ describe('shell: targets', () => {
     expect(config.search.pins.value).toEqual([{ key: 'extension:hacker-news/frontpage', title: null, icon: null }])
   })
 
-  it('shows a pinned command line on the empty root', () => {
-    const rows = compose('', '[search]\npins = ["shell:systemctl suspend"]\n')
-    expect(rows).toEqual([
-      { id: 'shell:systemctl suspend', title: 'systemctl suspend', subtitle: 'Run in your shell', kind: 'shell' }
-    ])
+  it('keeps a pinned command line off the empty root', () => {
+    // The empty root is a bare search bar (user decision 2026-09-02).
+    expect(compose('', '[search]\npins = ["shell:systemctl suspend"]\n')).toEqual([])
   })
 
   it('keeps a pinned command line visible under a query that matches it', () => {
@@ -308,16 +306,9 @@ describe('category and item pins', () => {
       resolveAlias: () => null
     })
 
-  it('shows a pinned category at the empty root, titled after the plugin', () => {
-    const rows = composeExt('', '[search]\npins = ["extension:1password/search#logins"]\n')
-    expect(rows).toEqual([
-      {
-        id: 'extension:1password/search#logins',
-        title: '1Password: Logins',
-        subtitle: 'Search 1Password',
-        kind: 'extension'
-      }
-    ])
+  it('keeps a pinned category off the empty root', () => {
+    // The empty root is a bare search bar (user decision 2026-09-02).
+    expect(composeExt('', '[search]\npins = ["extension:1password/search#logins"]\n')).toEqual([])
   })
 
   it('keeps it visible under a query matching its title, typo included', () => {

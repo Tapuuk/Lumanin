@@ -311,12 +311,6 @@ export function composeRoot(input: RootSearchInput): readonly ResultItem[] {
    * reorder. A web pin needs a term, so at the root it resolves to nothing —
    * there is no such thing as searching for the empty string.
    */
-  const isItemPin = (key: string): boolean => {
-    if (!key.startsWith('extension:')) return false
-    const parts = parseExtensionPin(key.slice('extension:'.length))
-    return parts !== null && parts.item !== null
-  }
-
   const resolvePin = (
     key: string,
     storedTitle: string | null = null,
@@ -340,21 +334,12 @@ export function composeRoot(input: RootSearchInput): readonly ResultItem[] {
     return search === undefined ? null : webRow(search, needle)
   }
 
-  // Nothing typed: the pins, and only the pins. With none configured this is the
-  // empty list the panel's layout is built around — a bare search bar — and the
-  // moment someone pins something it becomes the short list they pinned.
-  //
-  // A pinned item or action is the one kind that stays off the empty root: it is
-  // a row inside a plugin's search, hoisted while what is typed names it, and
-  // with nothing typed there is nothing for it to answer.
-  if (needle.length === 0) {
-    for (const entry of pins) {
-      if (isItemPin(entry.key)) continue
-      const row = resolvePin(entry.key, entry.title, entry.icon)
-      if (row !== null) push(row)
-    }
-    return rows
-  }
+  // Nothing typed: a bare search bar, always (user decision 2026-09-02). Pins
+  // used to be listed here, but the renderer opens the panel bare, so they only
+  // ever surfaced when a query was erased mid-session - a row materialising out
+  // of nowhere. A pin's job is ranking: it outranks everything the moment what
+  // is typed names it.
+  if (needle.length === 0) return rows
 
   // The calculator, above everything, always. Not a group in `[search].order`
   // any more and not a setting at all: a query that *is* a calculation — and
