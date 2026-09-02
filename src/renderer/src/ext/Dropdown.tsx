@@ -40,12 +40,18 @@ export function Dropdown({ node, onEvent }: DropdownProps): React.JSX.Element | 
   // The initial `onChange`. Guarded by a ref rather than by an empty dependency
   // list: the choices arrive in a later patch than the dropdown itself, so the
   // value worth announcing is often not known on the first render.
+  //
+  // A value the worker sent down (`value` prop) is never echoed back: the
+  // extension already holds it, and echoing races a concurrent user change -
+  // each side keeps re-announcing the other's last value, an infinite
+  // renderer/worker ping-pong that pegs the worker until React aborts it.
   const value = controlled ?? selected ?? fallback
   useEffect(() => {
     if (value === null || announced.current === value) return
     announced.current = value
+    if (controlled !== null && value === controlled) return
     onEvent(onChange, value)
-  }, [value, onChange, onEvent])
+  }, [value, controlled, onChange, onEvent])
 
   // The panel's `category` key ([keys], default Tab). The dropdown is the only
   // thing that knows its choices, so the key handler broadcasts and whichever
@@ -53,7 +59,10 @@ export function Dropdown({ node, onEvent }: DropdownProps): React.JSX.Element | 
   const cycle = useRef<() => void>(() => undefined)
   cycle.current = () => {
     if (choices.length < 2) return
-    const index = choices.findIndex((choice) => choice.value === value)
+    // Step from the last value this side announced, not from the tree's: a
+    // second press before the worker's patch lands must advance again rather
+    // than recompute the same step from the stale prop.
+    const index = choices.findIndex((choice) => choice.value === (announced.current ?? value))
     const next = choices[(index + 1) % choices.length]
     if (next === undefined) return
     setSelected(next.value)

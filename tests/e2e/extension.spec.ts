@@ -173,12 +173,26 @@ export default function Compose() {
  */
 const CROWD_SOURCE = `
 import { List } from "lumanin";
+import { useState } from "react";
 
 export default function Crowd() {
+  // Controlled on purpose - the shape every category dropdown has, and the
+  // shape that once ping-ponged onChange between renderer and worker forever
+  // when Tab was pressed faster than patches came back.
+  const [flavour, setFlavour] = useState("plain");
   return (
-    <List searchBarPlaceholder="Filter crowd">
+    <List
+      searchBarPlaceholder="Filter crowd"
+      searchBarAccessory={
+        <List.Dropdown tooltip="Flavour" value={flavour} onChange={setFlavour}>
+          <List.Dropdown.Item value="plain" title="Plain" />
+          <List.Dropdown.Item value="salted" title="Salted" />
+          <List.Dropdown.Item value="sweet" title="Sweet" />
+        </List.Dropdown>
+      }
+    >
       {Array.from({ length: 2000 }, (_, i) => (
-        <List.Item key={i} id={String(i + 1)} title={"Row " + (i + 1)} />
+        <List.Item key={i} id={String(i + 1)} title={flavour + " Row " + (i + 1)} />
       ))}
     </List>
   );
@@ -534,19 +548,37 @@ test('a huge list draws a bounded window of rows, and search reaches past it', a
   const reply = await askDaemon({ kind: 'open', target: 'extension:fruit/crowd' })
   expect(reply.ok).toBe(true)
 
-  await expect(page.locator('.result__title').first()).toHaveText('Row 1', { timeout: 10_000 })
+  await expect(page.locator('.result__title').first()).toHaveText('plain Row 1', { timeout: 10_000 })
   // 2000 rows in the tree, a window of them in the DOM.
   await expect(page.locator('.result')).toHaveCount(150)
 
   // A row far beyond the window is still reachable through the filter.
   await page.locator('.search__input').fill('Row 1999')
-  await expect(page.locator('.result__title').first()).toHaveText('Row 1999')
+  await expect(page.locator('.result__title').first()).toHaveText('plain Row 1999')
 
   // The window follows the keyboard: walking below its edge slides it.
   await page.locator('.search__input').fill('')
-  await expect(page.locator('.result__title').first()).toHaveText('Row 1')
+  await expect(page.locator('.result__title').first()).toHaveText('plain Row 1')
   for (let i = 0; i < 160; i++) await page.keyboard.press('ArrowDown')
-  await expect(page.locator('.result[aria-selected="true"] .result__title')).toHaveText('Row 161')
+  await expect(page.locator('.result[aria-selected="true"] .result__title')).toHaveText('plain Row 161')
+
+  await page.locator('.search__input').press('Escape')
+  await expect(page.locator('.actionbar')).toHaveCount(0)
+})
+
+test('cycling the category faster than patches come back settles, never loops', async () => {
+  const reply = await askDaemon({ kind: 'open', target: 'extension:fruit/crowd' })
+  expect(reply.ok).toBe(true)
+  await expect(page.locator('.result__title').first()).toHaveText('plain Row 1', { timeout: 10_000 })
+
+  await page.keyboard.press('Tab')
+  await page.keyboard.press('Tab')
+  await expect(page.locator('.result__title').first()).toHaveText('sweet Row 1', { timeout: 10_000 })
+
+  // A renderer/worker onChange ping-pong keeps flipping the value after the
+  // presses stop; a settled dropdown stays put.
+  await page.waitForTimeout(1000)
+  await expect(page.locator('.result__title').first()).toHaveText('sweet Row 1')
 
   await page.locator('.search__input').press('Escape')
   await expect(page.locator('.actionbar')).toHaveCount(0)
