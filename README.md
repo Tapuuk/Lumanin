@@ -65,7 +65,11 @@ Its own surface with its own key, so filenames never clutter the app search. It 
 
 ![File search](resources/readme/files.png)
 
-Settings live in a real app. Run `lumanin settings` or find "Lumanin Settings" in your app grid. Hotkeys, pins, aliases, search engines, themes, plugins: all there. Prefer the terminal? `lumanin config` is the same settings as a menu.
+### Settings: a real app, and the same thing in the terminal
+
+Settings live in an app of their own. Run `lumanin settings`, or find "Lumanin Settings" in your app grid: panel size and placement, hotkeys, pins, aliases, search engines, action keys, themes, and every installed plugin's preferences, all searchable and applied live.
+
+Prefer the terminal? `lumanin config` is the exact same settings as a keyboard menu. Both are editors for one honest file, `~/.config/lumanin/config.toml`, and the running panel picks up a change the moment it is saved, whichever of the three ways you made it.
 
 ![The settings app and the same settings in a terminal](resources/readme/settings.png)
 
@@ -131,6 +135,10 @@ Lumanin runs no online services, has no accounts, and sends no telemetry. Nothin
 ## Something broke?
 
 `lumanin doctor` prints what your desktop supports and which backend Lumanin chose for each capability. Include its output in a bug report and you've answered most of our questions already. Logs live in `~/.local/state/lumanin/logs/`.
+
+## Feedback
+
+Lumanin is young and openly still improving. Any feedback is valued: a rough edge, a missing setting, a plugin idea, a sentence in this README that did not make sense. [Open a feedback issue](https://github.com/Tapuuk/Lumanin/issues/new?template=feedback.yml) - it is just a title and a text box.
 
 ## Contributing
 

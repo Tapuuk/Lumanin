@@ -1,0 +1,10 @@
+name: Feedback
+description: An idea, a wish, or anything you want to tell us
+body:
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Your feedback
+      description: Whatever is on your mind. No template, no required logs.
+    validations:
+      required: true
