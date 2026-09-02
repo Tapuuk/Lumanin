@@ -166,6 +166,25 @@ export default function Compose() {
 }
 `
 
+/**
+ * A list far bigger than the window the renderer draws. What it proves: the DOM
+ * holds a bounded number of rows, the window slides with the selection, and
+ * filtering still reaches every row the plugin returned.
+ */
+const CROWD_SOURCE = `
+import { List } from "lumanin";
+
+export default function Crowd() {
+  return (
+    <List searchBarPlaceholder="Filter crowd">
+      {Array.from({ length: 2000 }, (_, i) => (
+        <List.Item key={i} id={String(i + 1)} title={"Row " + (i + 1)} />
+      ))}
+    </List>
+  );
+}
+`
+
 const MANIFEST = {
   name: 'fruit',
   title: 'Fruit',
@@ -190,6 +209,12 @@ const MANIFEST = {
       name: 'compose',
       title: 'Compose Fruit',
       description: 'A form with every field kind',
+      mode: 'view'
+    },
+    {
+      name: 'crowd',
+      title: 'Crowd',
+      description: 'Two thousand rows',
       mode: 'view'
     }
   ]
@@ -232,6 +257,7 @@ test.beforeAll(async () => {
   writeFileSync(join(source, 'package.json'), JSON.stringify(MANIFEST, null, 2))
   writeFileSync(join(source, 'src', 'browse.tsx'), EXTENSION_SOURCE)
   writeFileSync(join(source, 'src', 'compose.tsx'), FORM_SOURCE)
+  writeFileSync(join(source, 'src', 'crowd.tsx'), CROWD_SOURCE)
 
   // Built with the same externals the product uses, because that list is the
   // single-React rule's build half and building it any other way would test a
@@ -239,7 +265,11 @@ test.beforeAll(async () => {
   const installed = join(root, 'data', 'lumanin', 'extensions', 'fruit')
   mkdirSync(join(installed, 'commands'), { recursive: true })
   await build({
-    entryPoints: [join(source, 'src', 'browse.tsx'), join(source, 'src', 'compose.tsx')],
+    entryPoints: [
+      join(source, 'src', 'browse.tsx'),
+      join(source, 'src', 'compose.tsx'),
+      join(source, 'src', 'crowd.tsx')
+    ],
     outdir: join(installed, 'commands'),
     bundle: true,
     platform: 'node',
@@ -495,6 +525,28 @@ test('the open verb — what a hotkey bind runs — lands inside the category', 
 
   await expect(page.locator('.result__title').first()).toHaveText('Blueberry', { timeout: 10_000 })
   expect(await rowTitles()).toEqual(['Blueberry', 'Cranberry'])
+
+  await page.locator('.search__input').press('Escape')
+  await expect(page.locator('.actionbar')).toHaveCount(0)
+})
+
+test('a huge list draws a bounded window of rows, and search reaches past it', async () => {
+  const reply = await askDaemon({ kind: 'open', target: 'extension:fruit/crowd' })
+  expect(reply.ok).toBe(true)
+
+  await expect(page.locator('.result__title').first()).toHaveText('Row 1', { timeout: 10_000 })
+  // 2000 rows in the tree, a window of them in the DOM.
+  await expect(page.locator('.result')).toHaveCount(150)
+
+  // A row far beyond the window is still reachable through the filter.
+  await page.locator('.search__input').fill('Row 1999')
+  await expect(page.locator('.result__title').first()).toHaveText('Row 1999')
+
+  // The window follows the keyboard: walking below its edge slides it.
+  await page.locator('.search__input').fill('')
+  await expect(page.locator('.result__title').first()).toHaveText('Row 1')
+  for (let i = 0; i < 160; i++) await page.keyboard.press('ArrowDown')
+  await expect(page.locator('.result[aria-selected="true"] .result__title')).toHaveText('Row 161')
 
   await page.locator('.search__input').press('Escape')
   await expect(page.locator('.actionbar')).toHaveCount(0)

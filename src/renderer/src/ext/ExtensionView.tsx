@@ -687,6 +687,14 @@ interface ListBodyProps {
   readonly send: (handlerId: string | null, payload?: unknown) => void
 }
 
+/**
+ * DOM rows drawn at once. A plugin may hand over thousands of rows and rely on
+ * filtering to narrow them; drawing them all makes every keystroke re-render
+ * the lot. The window slides with the selection, so the keyboard can still
+ * reach every row.
+ */
+const MAX_RENDERED_ROWS = 150
+
 function ListBody({ list, selected, extension, send }: ListBodyProps): React.JSX.Element | null {
   const selectedRef = useRef<HTMLDivElement>(null)
 
@@ -709,9 +717,24 @@ function ListBody({ list, selected, extension, send }: ListBodyProps): React.JSX
     )
   }
 
+  let start = 0
+  if (list.rows.length > MAX_RENDERED_ROWS) {
+    const selectedIndex = Math.max(
+      0,
+      list.rows.findIndex((row) => row.id === selected?.id)
+    )
+    start = Math.min(
+      Math.max(0, selectedIndex - Math.floor(MAX_RENDERED_ROWS / 2)),
+      list.rows.length - MAX_RENDERED_ROWS
+    )
+  }
+  const windowed =
+    list.rows.length > MAX_RENDERED_ROWS ? list.rows.slice(start, start + MAX_RENDERED_ROWS) : list.rows
+
   const items = (
     <div className="results" role="listbox" aria-label="Results">
-      {list.rows.map((row, index) => {
+      {windowed.map((row, offset) => {
+        const index = start + offset
         const isSelected = row.id === selected?.id
         const showSection =
           row.sectionTitle !== null && row.sectionTitle !== list.rows[index - 1]?.sectionTitle

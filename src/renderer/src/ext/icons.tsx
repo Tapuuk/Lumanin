@@ -282,7 +282,9 @@ export function IconImage({ src, tint, fallback }: IconImageProps): React.JSX.El
     )
   }
 
-  return <img src={src} alt="" draggable={false} onError={() => setFailedSrc(src)} />
+  return (
+    <img src={src} alt="" draggable={false} loading="lazy" decoding="async" onError={() => setFailedSrc(src)} />
+  )
 }
 
 interface IconProps {
