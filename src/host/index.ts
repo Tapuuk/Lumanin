@@ -88,7 +88,8 @@ const host = createPeer({
   methods: {
     [HOST_METHODS.PING]: (): HostPing => ({
       sessions: sessions.size,
-      spare: spare === null ? 'none' : spare.ready ? 'ready' : 'warming'
+      spare: spare === null ? 'none' : spare.ready ? 'ready' : 'warming',
+      workers: live.size
     }),
     [HOST_METHODS.CREATE]: (params) => create(params as SessionSpec),
     [HOST_METHODS.EVENT]: (params) => forward(params as EventParams, WORKER_METHODS.EVENT),
@@ -109,6 +110,16 @@ function report(level: 'debug' | 'info' | 'warn' | 'error', message: string): vo
 // ---------------------------------------------------------------------------
 
 /**
+ * Every thread started here that has not been seen to exit.
+ *
+ * The count is reported on the ping, and it is the only place a worker that
+ * outlived its session is visible: a session is dropped from {@link sessions}
+ * before its worker is asked to stop, so that map reads the same whether the
+ * thread went away or is still spinning.
+ */
+const live = new Set<Worker>()
+
+/**
  * Start a worker and wire it to main.
  *
  * The worker's outbound calls are relayed rather than answered: a worker asking
@@ -127,6 +138,13 @@ function spawn(): PooledWorker {
     // blocks the thread that wrote to it, which looks exactly like a hang.
     stdout: true,
     stderr: true
+  })
+
+  live.add(worker)
+  // Its own handler rather than a line in the one below, which returns early for
+  // any worker that is not the current spare; this deletion is unconditional.
+  worker.on('exit', () => {
+    live.delete(worker)
   })
 
   worker.stdout.on('data', (chunk: Buffer) => report('debug', chunk.toString().trimEnd()))

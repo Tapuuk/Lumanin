@@ -79,6 +79,10 @@ export interface DaemonStatus {
    * shim, `'warming'` while one is on its way, and `'none'` when there is no
    * worker waiting. `running: true` with `spare: 'unknown'` is a host that was
    * forked and did not answer the probe.
+   *
+   * `workers` counts the threads the host has started and not seen exit, so a
+   * command that stopped answering and was left running shows up as a count that
+   * never comes back down.
    */
   extensionHost: ExtensionHostStatus
 }
