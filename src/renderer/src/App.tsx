@@ -50,6 +50,11 @@ export function App(): React.JSX.Element {
    */
   const session = useSession()
 
+  // The hook returns a new object every render; only these two callbacks are
+  // stable. Anything a memoized child receives has to be keyed on them, never on
+  // `session`, or the memo can never hit.
+  const { begin: beginSession, end: endSession } = session
+
   /**
    * Whether this session has a root list behind it.
    *
@@ -67,6 +72,21 @@ export function App(): React.JSX.Element {
    */
   const [standalone, setStandalone] = useState(false)
 
+  /**
+   * The only writer of `query`.
+   *
+   * Editing the query builds a different list, so the old index now points at an
+   * unrelated row. Keeping it would mean the row under the cursor silently
+   * changed identity between the keystroke and Enter — the one mistake a
+   * launcher must never make. Top of the list is the only safe answer, and it
+   * lands in the same render as the text that caused it rather than a frame
+   * later.
+   */
+  const changeQuery = useCallback((next: string) => {
+    setQuery(next)
+    setSelectedIndex(0)
+    setError(null)
+  }, [])
 
   // Nothing to show means nothing below the search bar — not an empty-state row,
   // not a footer. A query that matches nothing leaves the panel exactly as tall
@@ -86,7 +106,12 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     const ours = ++generation.current
     void window.lumanin.invoke('search.query', { query }).then((results) => {
-      if (generation.current === ours) setItems(results)
+      if (generation.current === ours) {
+        setItems(results)
+        // Batched with the items above, which is what keeps a list that shrank
+        // from painting one frame with the selection off its end.
+        setSelectedIndex((index) => clampSelection(index, results.length))
+      }
     })
   }, [query])
 
@@ -100,15 +125,13 @@ export function App(): React.JSX.Element {
       //
       // Resetting while hidden costs nothing: nobody is looking, and the layout
       // is already settled by the time it is shown.
-      setQuery('')
+      changeQuery('')
       setItems([])
-      setSelectedIndex(0)
-      setError(null)
       // The daemon ends the session when the panel is dismissed; this drops the
       // renderer's half so the next open is the root list rather than the last
       // extension's final frame.
       if (!visible) {
-        session.end()
+        endSession()
         // The next session decides this for itself; leaving the last one's
         // answer behind would make a row-launched command close the window.
         //
@@ -122,9 +145,9 @@ export function App(): React.JSX.Element {
       // Focus still has to be taken on show — a hidden window cannot hold it.
       else setFocusToken((token) => token + 1)
     })
-    // `session.end` is stable; the empty deps keep this subscription for the
-    // panel's whole lifetime, which is the point — it must not resubscribe on
-    // every keystroke.
+    // `endSession` and `changeQuery` are stable; the empty deps keep this
+    // subscription for the panel's whole lifetime, which is the point — it must
+    // not resubscribe on every keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -136,25 +159,10 @@ export function App(): React.JSX.Element {
       // keeps the answer, because it replaces a session rather than starting
       // one. See `SessionInfo.standalone`.
       setStandalone((current) => info.standalone ?? current)
-      session.begin(info)
+      beginSession(info)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // Editing the query builds a different list, so the old index now points at an
-  // unrelated row. Keeping it would mean the row under the cursor silently
-  // changed identity between the keystroke and Enter — the one mistake a
-  // launcher must never make. Top of the list is the only safe answer.
-  useEffect(() => {
-    setSelectedIndex(0)
-    setError(null)
-  }, [query])
-
-  // The source can also shrink on its own — a background re-index, a result that
-  // disappeared — without the query changing.
-  useEffect(() => {
-    setSelectedIndex((index) => clampSelection(index, items.length))
-  }, [items.length])
 
   const activate = useCallback(
     (item: ResultItem) => {
@@ -171,11 +179,11 @@ export function App(): React.JSX.Element {
         // is what Escape comes back to.
         if (outcome.session !== undefined) {
           setStandalone(false)
-          session.begin(outcome.session)
+          beginSession(outcome.session)
         }
       })
     },
-    [session]
+    [beginSession]
   )
 
   /**
@@ -186,9 +194,9 @@ export function App(): React.JSX.Element {
    * frame for those few milliseconds is a panel that flickers on the way out.
    */
   const dismiss = useCallback(() => {
-    session.end()
+    endSession()
     void window.lumanin.invoke('window.hide')
-  }, [session])
+  }, [endSession])
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
@@ -231,10 +239,10 @@ export function App(): React.JSX.Element {
       // reports whether there is anything left to back out of.
       const atRoot = query.length === 0
       void window.lumanin.invoke('window.escape', { atRoot }).then(({ action }) => {
-        if (action === 'clear') setQuery('')
+        if (action === 'clear') changeQuery('')
       })
     },
-    [items, selectedIndex, query, activate, keys]
+    [items, selectedIndex, query, activate, changeQuery, keys]
   )
 
   /**
@@ -264,13 +272,13 @@ export function App(): React.JSX.Element {
             state={session}
             focusToken={focusToken}
             keys={keys}
-            onExit={standalone ? dismiss : session.end}
+            onExit={standalone ? dismiss : endSession}
           />
         ) : (
           <>
             <SearchBar
               value={query}
-              onChange={setQuery}
+              onChange={changeQuery}
               onKeyDown={onKeyDown}
               focusToken={focusToken}
             />
