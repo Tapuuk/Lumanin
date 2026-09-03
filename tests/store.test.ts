@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { isExtensionCommandEnabled, loadConfig, parseExtensionPin } from '../src/shared/config'
 import { composeRoot, shellRow, type RootCommand, type ScoredRow } from '../src/main/root-search'
-import { extensionRootCommands, type ExtensionIndex } from '../src/main/extensions/registry'
+import { cachedRootCommands, extensionRootCommands, type ExtensionIndex } from '../src/main/extensions/registry'
 import { runShellCommand } from '../src/platform/apps/launch'
 import { wizard } from '../src/cli/tui'
 import type { ResultItem } from '../src/shared/ipc'
@@ -150,6 +150,73 @@ describe('[extensions].disabled', () => {
     // The index itself still has all three: the store screen has to list a
     // disabled command in order to offer turning it back on.
     expect(index().commands).toHaveLength(3)
+  })
+})
+
+/**
+ * The root list, derived once per index-and-disabled pair.
+ *
+ * What matters is that an unchanged pair hands back the very same array — the
+ * root ranking asks for this list several times per keystroke — and that any
+ * new object rebuilds it, so nothing switched off can survive a config reload.
+ */
+describe('the cached root command list', () => {
+  const index = (): ExtensionIndex => ({
+    extensions: [],
+    problems: [],
+    commands: [
+      { id: 'hacker-news/frontpage', spec: spec('frontpage', 'Front Page'), entryPath: '', extension: extension('hacker-news') },
+      { id: 'hacker-news/newest', spec: spec('newest', 'Newest'), entryPath: '', extension: extension('hacker-news') },
+      { id: 'devdocs/search', spec: spec('search', 'Search'), entryPath: '', extension: extension('devdocs') }
+    ] as ExtensionIndex['commands']
+  })
+
+  it('hands back the same array while nothing has changed', () => {
+    const rows = cachedRootCommands(COMMANDS)
+    const first = index()
+    const disabled: readonly string[] = []
+
+    expect(rows(first, disabled)).toBe(rows(first, disabled))
+  })
+
+  it('puts the built-in rows first', () => {
+    const rows = cachedRootCommands(COMMANDS)(index(), [])
+    expect(rows[0]?.id).toBe('builtin/quit')
+    expect(rows.map((row) => row.id)).toContain('devdocs/search')
+  })
+
+  it('hides what a new disabled list names', () => {
+    const rows = cachedRootCommands(COMMANDS)
+    const first = index()
+    rows(first, [])
+
+    const after = rows(first, ['devdocs', 'hacker-news/newest'])
+    expect(after.map((row) => row.id)).toEqual(['builtin/quit', 'hacker-news/frontpage'])
+  })
+
+  it('reflects a rescan, which arrives as a new index', () => {
+    const rows = cachedRootCommands(COMMANDS)
+    const disabled: readonly string[] = []
+    rows(index(), disabled)
+
+    const rescanned: ExtensionIndex = {
+      extensions: [],
+      problems: [],
+      commands: [
+        { id: 'notes/list', spec: spec('list', 'List Notes'), entryPath: '', extension: extension('notes') }
+      ] as ExtensionIndex['commands']
+    }
+    expect(rows(rescanned, disabled).map((row) => row.id)).toEqual(['builtin/quit', 'notes/list'])
+  })
+
+  it('rebuilds for a fresh list of the same names, because identity is the whole key', () => {
+    const rows = cachedRootCommands(COMMANDS)
+    const first = index()
+
+    const before = rows(first, ['devdocs'])
+    const after = rows(first, ['devdocs'])
+    expect(after).not.toBe(before)
+    expect(after.map((row) => row.id)).toEqual(before.map((row) => row.id))
   })
 })
 
