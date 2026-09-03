@@ -40,8 +40,8 @@ import { ExtensionHost } from './extensions/host'
 import { answerHeadlessAlert } from './extensions/headless-alert'
 import type { AlertPayload } from '../shared/ext-protocol'
 import {
+  cachedRootCommands,
   emptyIndex,
-  extensionRootCommands,
   scanAllExtensions,
   type ExtensionIndex,
   type InstalledCommand
@@ -404,6 +404,8 @@ const commands: readonly RegisteredCommand[] = rootCommands({
   logFile: join(paths.logDir, 'lumanin.jsonl')
 })
 
+const rootCommandList = cachedRootCommands(commands)
+
 /**
  * Everything the root can run: ours, then whatever is installed.
  *
@@ -416,10 +418,7 @@ function allCommands(): readonly RootCommand[] {
   // every other setting, so switching an extension off in `lumanin plugins` takes
   // effect on the next keystroke rather than on the next restart.
   const disabled = current().extensions.disabled.value
-  return [
-    ...commands,
-    ...extensionRootCommands(extensions, (id) => isExtensionCommandEnabled(disabled, id))
-  ]
+  return rootCommandList(extensions, disabled)
 }
 
 function status(host: ExtensionHostStatus): DaemonStatus {

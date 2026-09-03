@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { ICON_SCHEME } from '../../shared/identity'
+import { isExtensionCommandEnabled } from '../../shared/config'
 import { parseManifest, type CommandSpec, type Manifest, type PreferenceSpec } from '../../shared/extension'
 import { readProvenance, type Provenance } from '../../store/plugin'
 import type { Logger } from '../../node/logger'
@@ -276,6 +277,35 @@ export function extensionRootCommands(
       categories: command.spec.categories,
       ...commandIcon(command)
     }))
+}
+
+/**
+ * The same root list as {@link extensionRootCommands}, prefixed with the
+ * launcher's own commands and rebuilt only when its inputs change.
+ *
+ * The whole key is object identity, and that is enough because both inputs are
+ * replaced wholesale by whoever produces them: a changed index or a changed
+ * disabled list is always a different object, and an unchanged one is always
+ * the same object. A miss only ever costs one rebuild, never a stale answer.
+ */
+export function cachedRootCommands(
+  builtins: readonly RootCommand[]
+): (index: ExtensionIndex, disabled: readonly string[]) => readonly RootCommand[] {
+  let lastIndex: ExtensionIndex | null = null
+  let lastDisabled: readonly string[] | null = null
+  let lastRows: readonly RootCommand[] = []
+
+  return (index, disabled) => {
+    if (index === lastIndex && disabled === lastDisabled) return lastRows
+
+    lastRows = [
+      ...builtins,
+      ...extensionRootCommands(index, (id) => isExtensionCommandEnabled(disabled, id))
+    ]
+    lastIndex = index
+    lastDisabled = disabled
+    return lastRows
+  }
 }
 
 /**
