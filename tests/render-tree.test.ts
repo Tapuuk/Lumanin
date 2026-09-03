@@ -287,6 +287,42 @@ describe('applyRenderPatches', () => {
     expect(patched.children[3]).toEqual(value)
   })
 
+  it('appends at the index one past the last element', () => {
+    const value = { id: 'd', type: 'List.Item', props: { title: 'D' }, children: [] }
+    const patched = alone({ op: 'add', path: '/children/3', value })
+    expect(patched.children).toHaveLength(4)
+    expect(patched.children[3]).toEqual(value)
+  })
+
+  /**
+   * An index no element occupies would stretch the array with holes, and a hole
+   * serializes as a child nothing ever rendered. Only an append may name the
+   * slot after the last one.
+   */
+  it('throws on a write past the end of an array', () => {
+    expect(() => alone({ op: 'add', path: '/children/4', value: null })).toThrow(
+      /"add" at "\/children\/4" writes past the end/
+    )
+    expect(() => alone({ op: 'replace', path: '/children/3', value: null })).toThrow(
+      /"replace" at "\/children\/3" writes past the end/
+    )
+    // The source is taken out first, so the destination is read against two
+    // remaining children rather than three.
+    expect(() => alone({ op: 'move', from: '/children/0', path: '/children/3' })).toThrow(
+      /"move" at "\/children\/3" writes past the end/
+    )
+  })
+
+  /** The end of an array is a place to append, not an element to take out. */
+  it('throws when a read addresses the end of an array', () => {
+    expect(() => alone({ op: 'remove', path: '/children/-' })).toThrow(
+      /"remove" at "\/children\/-" cannot address the end/
+    )
+    expect(() => alone({ op: 'move', from: '/children/-', path: '/children/0' })).toThrow(
+      /"move" at "\/children\/0" cannot address the end/
+    )
+  })
+
   /**
    * Refused rather than approximated: a wrongly applied batch does not fail
    * loudly, it produces a tree that never existed on either side.

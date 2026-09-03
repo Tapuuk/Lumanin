@@ -164,11 +164,28 @@ export function useSession(): SessionState {
       putTree(next)
     })
 
-    /** In flight, so a burst of gaps costs one fetch rather than one each. */
-    let resyncing: Promise<void> | null = null
+    /**
+     * In flight, so a burst of gaps costs one fetch rather than one each.
+     *
+     * Held together with the session it is fetching for. A fetch for a session
+     * that has since ended answers nothing about the one that replaced it, and
+     * handing its promise back would leave the new session waiting on a reply
+     * that its own continuation then throws away.
+     */
+    let resyncing: { sessionId: string; promise: Promise<void> } | null = null
+    /**
+     * A gap that showed up while a fetch was already out. That fetch was asked
+     * for before the gap existed, so the document it comes back with may be
+     * older than the batch that revealed it, and one more round follows.
+     */
+    let again = false
 
     const resync = (sessionId: string): Promise<void> => {
-      if (resyncing !== null) return resyncing
+      if (resyncing !== null && resyncing.sessionId === sessionId) {
+        again = true
+        return resyncing.promise
+      }
+      again = false
       const pending = (async () => {
         const snapshot = await window.lumanin.invoke('ext.attach', { sessionId })
         if (snapshot === null || sessionId !== active.current) return
@@ -178,9 +195,13 @@ export function useSession(): SessionState {
         revision.current = snapshot.revision
         putTree(snapshot.tree)
       })().finally(() => {
-        if (resyncing === pending) resyncing = null
+        if (resyncing?.promise !== pending) return
+        resyncing = null
+        if (!again) return
+        again = false
+        if (active.current === sessionId) void resync(sessionId)
       })
-      resyncing = pending
+      resyncing = { sessionId, promise: pending }
       return pending
     }
 

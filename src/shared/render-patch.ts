@@ -73,11 +73,12 @@ function put(
   if (op === 'add' && Array.isArray(container)) {
     const index = indexIn(container, key)
     if (index !== null) {
+      inside(container, index, op, patch)
       container.splice(index, 0, value)
       return document
     }
   }
-  set(container, key, value)
+  set(container, key, value, { op, patch })
   return document
 }
 
@@ -88,6 +89,9 @@ function take(document: unknown, path: string, patch: RenderPatch, created: Set<
 
   const container = descend(document, segments, patch, created)
   if (Array.isArray(container)) {
+    // The slot after the last one exists for an append and for nothing else:
+    // reading it takes no element out and hands back nothing.
+    if (key === '-') throw fail(patch, 'cannot address the end of an array')
     const index = indexIn(container, key)
     if (index !== null) return container.splice(index, 1)[0]
   }
@@ -126,10 +130,16 @@ function read(container: Container, key: string): unknown {
   return (container as Record<string, unknown>)[key]
 }
 
-function set(container: Container, key: string, value: unknown): void {
+function set(
+  container: Container,
+  key: string,
+  value: unknown,
+  write?: { op: 'add' | 'replace'; patch: RenderPatch }
+): void {
   if (Array.isArray(container)) {
     const index = indexIn(container, key)
     if (index !== null) {
+      if (write !== undefined) inside(container, index, write.op, write.patch)
       container[index] = value
       return
     }
@@ -141,6 +151,21 @@ function set(container: Container, key: string, value: unknown): void {
 function indexIn(array: readonly unknown[], key: string): number | null {
   if (key === '-') return array.length
   return /^\d+$/.test(key) ? Number(key) : null
+}
+
+/**
+ * An append may name the slot after the last one; every other write has to name
+ * a slot that is already there. Assigning past the end would stretch the array
+ * with holes, which serialize as children nothing ever rendered.
+ */
+function inside(
+  array: readonly unknown[],
+  index: number,
+  op: 'add' | 'replace',
+  patch: RenderPatch
+): void {
+  if (index <= (op === 'add' ? array.length : array.length - 1)) return
+  throw fail(patch, 'writes past the end of an array')
 }
 
 function split(path: string, patch: RenderPatch): string[] {
