@@ -485,9 +485,11 @@ describe('keeping the index fresh', () => {
    * The check that runs when the panel is shown.
    *
    * Fake timers throughout, so a case can wait out the deferral or age the
-   * index by a minute without the suite taking a minute. Nothing here calls
-   * `watch()`: with no watcher on an existing directory the age fallback is
-   * armed, which is what one case needs and the others stay well inside.
+   * index by a minute without the suite taking a minute. Most cases skip
+   * `watch()`, so with no watcher on an existing directory the age fallback
+   * stays armed, which is what one case needs and the others stay well
+   * inside; the two that do call `watch()` are the ones asserting what a
+   * live watcher and a dead one each do to that fallback.
    */
   describe('the show-path check', () => {
     beforeEach(() => {
