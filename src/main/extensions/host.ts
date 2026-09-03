@@ -233,13 +233,25 @@ export class ExtensionHost {
     const peer = this.peer
     if (peer === null) return HOST_NOT_RUNNING
 
-    const answer = await Promise.race([
-      peer.call<HostPing>(HOST_METHODS.PING).catch(() => null),
-      new Promise<null>((resolve) => {
-        setTimeout(() => resolve(null), PROBE_TIMEOUT_MS).unref?.()
-      })
-    ])
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    let answer: HostPing | null
+    try {
+      answer = await Promise.race([
+        peer.call<HostPing>(HOST_METHODS.PING).catch(() => null),
+        new Promise<null>((resolve) => {
+          deadline = setTimeout(() => resolve(null), PROBE_TIMEOUT_MS)
+          deadline.unref?.()
+        })
+      ])
+    } finally {
+      if (deadline !== undefined) clearTimeout(deadline)
+    }
 
+    // A host that exited mid-probe disposes the peer, which rejects the call,
+    // and that rejection looks exactly like the deadline from here. Re-reading
+    // the peer tells the two apart, so a process that is definitively gone is
+    // not reported as running but silent.
+    if (this.peer === null) return HOST_NOT_RUNNING
     if (answer === null) return { running: true, sessions: this.sessions.size, spare: 'unknown' }
     return { running: true, sessions: answer.sessions, spare: answer.spare }
   }

@@ -249,10 +249,10 @@ function takeWarm(): PooledWorker {
  * Put a spare in place, unless there is one already or there should not be.
  *
  * The one place that decides it, because four callers want the same three
- * conditions and a failure cap remembered in four places is a cap remembered in
- * three. Always deferred through a timer, which also keeps the spawn out of
- * whatever awaited handler asked for it: the reply goes out first and the
- * thread starts after.
+ * conditions, and a cap written out four times is a cap that ends up
+ * forgotten in one of them. Always deferred through a timer, which also keeps
+ * the spawn out of whatever awaited handler asked for it: the reply goes out
+ * first and the thread starts after.
  */
 function topUpSpare(delayMs = 0): void {
   if (spareFailures >= MAX_SPARE_FAILURES) return
