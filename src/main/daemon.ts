@@ -30,6 +30,7 @@ import { createFileSink, createStderrSink, Logger } from '../node/logger'
 import { firstRunPending, markFirstRunOffered } from '../node/first-run'
 import { bundledPluginsDir, resolvePaths } from '../node/paths'
 import { parseArgs, type DaemonStatus, type EnumerateData, type Request, type Response } from '../shared/protocol'
+import { HOST_NOT_RUNNING, type ExtensionHostStatus } from '../shared/ext-protocol'
 import { actionHandlerOf, listItemsOf, type RenderNode } from '../shared/render-tree'
 import { createCopy } from './clipboard-copy'
 import { rootCommands, type RegisteredCommand } from './commands'
@@ -242,13 +243,37 @@ const theme = new ThemeService({
 })
 
 // ---------------------------------------------------------------------------
-// Extensions. The store and the index are cheap and eager; the host process
-// is not, and starts on the first launch.
+// Extensions. The store and the index are cheap and eager; the host process is
+// not, and is started a moment after the daemon has settled.
 // ---------------------------------------------------------------------------
 
 let extensions: ExtensionIndex = emptyIndex()
 let extensionHost: ExtensionHost | null = null
 let extensionStore: ExtensionStore | null = null
+
+/**
+ * How long after start-up to fork the extension host.
+ *
+ * Late enough that it is not competing with the probes and the application
+ * index, which are what the very first keypress waits on, and early enough that
+ * it is up before a person has finished reading their screen.
+ */
+const PREWARM_DELAY_MS = 3000
+let prewarmTimer: NodeJS.Timeout | null = null
+
+/**
+ * Whether any plugin command is switched on.
+ *
+ * The guard on pre-starting the host: a plugin ships inside the application, so
+ * "nothing to run" is not a state a stock install can be in, and the process
+ * and its warm worker are worth paying for at rest instead of in front of
+ * whichever launch happened to ask first. Somebody who has switched every
+ * command off has nothing to run after all, and pays nothing.
+ */
+function anyExtensionEnabled(): boolean {
+  const disabled = current().extensions.disabled.value
+  return extensions.commands.some((command) => isExtensionCommandEnabled(disabled, command.id))
+}
 
 /**
  * Where the plugins that ship inside the application live. Written by
@@ -397,7 +422,7 @@ function allCommands(): readonly RootCommand[] {
   ]
 }
 
-function status(): DaemonStatus {
+function status(host: ExtensionHostStatus): DaemonStatus {
   return {
     version: app.getVersion(),
     pid: process.pid,
@@ -405,7 +430,8 @@ function status(): DaemonStatus {
     uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
     sessionType: profile.sessionType,
     desktop: describePlatform(profile),
-    backends: chosenBackends()
+    backends: chosenBackends(),
+    extensionHost: host
   }
 }
 
@@ -422,7 +448,7 @@ function chosenBackends(): Readonly<Record<string, string>> {
  */
 async function statusWhenProbed(): Promise<DaemonStatus> {
   await platformReady
-  return status()
+  return status((await extensionHost?.probe()) ?? HOST_NOT_RUNNING)
 }
 
 function emit<E extends EventName>(event: E, payload: EventMap[E]): void {
@@ -766,6 +792,7 @@ function quit(): void {
   logger.info('daemon shutting down')
   if (configReloadTimer !== null) clearTimeout(configReloadTimer)
   if (extensionsRescanTimer !== null) clearTimeout(extensionsRescanTimer)
+  if (prewarmTimer !== null) clearTimeout(prewarmTimer)
   configWatcher?.close()
   extensionsWatcher?.close()
   search?.dispose()
@@ -1198,6 +1225,14 @@ app.whenReady().then(async () => {
     // Ids only. `doctor` prints the full chain and the reasons; the log needs the
     // outcome, and a line per candidate would bury the startup record.
     logger.info('platform backends selected', { chosen: chosenBackends() })
+
+    prewarmTimer = setTimeout(() => {
+      prewarmTimer = null
+      if (!anyExtensionEnabled()) return
+      extensionHost?.prewarm()
+    }, PREWARM_DELAY_MS)
+    prewarmTimer.unref?.()
+
     return runtime
   })
 
