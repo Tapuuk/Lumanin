@@ -85,6 +85,49 @@ export const APP_METHODS = {
   LOG: 'log'
 } as const
 
+/**
+ * worker -> host, and no further.
+ *
+ * The host answers this one itself and never relays it. Main's notification
+ * switch warns on any method it does not recognise, so forwarding a signal that
+ * fires every time the pool is topped up would write a warning to the log on
+ * every worker start.
+ */
+export const WORKER_NOTIFICATIONS = {
+  /** React, the reconciler and the shim are loaded; the worker has no command yet. */
+  READY: 'worker.ready'
+} as const
+
+/**
+ * How far along the warm spare is.
+ *
+ * `'warming'` is a worker that has been started and has not announced itself
+ * yet, which is a real state rather than a rounding of `'ready'`: two launches
+ * inside that window would otherwise both be told they got a warm worker.
+ * `'unknown'` is what a caller reports when the host did not answer in time.
+ */
+export type SpareState = 'ready' | 'warming' | 'none' | 'unknown'
+
+/** The {@link HOST_METHODS.PING} reply. */
+export interface HostPing {
+  readonly sessions: number
+  readonly spare: SpareState
+}
+
+/** {@link HostPing} plus the one thing only main knows: whether it forked at all. */
+export interface ExtensionHostStatus {
+  readonly running: boolean
+  readonly sessions: number
+  readonly spare: SpareState
+}
+
+/** The answer when the host process has not been started. Written once. */
+export const HOST_NOT_RUNNING: ExtensionHostStatus = {
+  running: false,
+  sessions: 0,
+  spare: 'none'
+}
+
 /** Everything a worker needs to run one command. */
 export interface SessionSpec {
   readonly sessionId: string
