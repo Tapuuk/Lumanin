@@ -53,10 +53,25 @@ describe('Cache', () => {
     const byNamespace = new Cache({ directory, namespace: 'other' })
     const byDirectory = new Cache({ directory: other, namespace: 'shared' })
 
-    one.set('a', '1')
+    one.set('a', '1', 0)
 
     expect(byNamespace.get('a')).toBeUndefined()
     expect(byDirectory.get('a')).toBeUndefined()
+  })
+
+  it('gives two spellings of one directory the same store', () => {
+    const directory = freshDirectory()
+    const plain = new Cache({ directory, namespace: 'shared' })
+    const trailing = new Cache({ directory: `${directory}/`, namespace: 'shared' })
+    const roundabout = new Cache({ directory: `${directory}/inner/..`, namespace: 'shared' })
+
+    plain.set('a', '1', 0)
+
+    expect(trailing.get('a')).toBe('1')
+    expect(roundabout.get('a')).toBe('1')
+    expect(Object.keys(onDisk(directory))).toEqual(['a'])
+    // The reported directory is still whatever the caller passed in.
+    expect(trailing.storageDirectory).toBe(`${directory}/`)
   })
 
   it('leaves the file alone until the write is flushed', () => {
@@ -108,8 +123,8 @@ describe('Cache', () => {
     const directory = freshDirectory()
     const cache = new Cache({ directory, namespace: 'shared', capacity: 8 })
 
-    cache.set('a', 'aaaaa')
-    cache.set('b', 'bbbbb')
+    cache.set('a', 'aaaaa', 0)
+    cache.set('b', 'bbbbb', 0)
 
     expect(cache.get('a')).toBeUndefined()
     expect(cache.get('b')).toBe('bbbbb')
@@ -125,7 +140,7 @@ describe('Cache', () => {
     writer.subscribe((key) => heard.push(key ?? ''))
     sibling.subscribe((key) => siblingHeard.push(key ?? ''))
 
-    writer.set('a', '1')
+    writer.set('a', '1', 0)
 
     expect(heard).toEqual(['a'])
     expect(siblingHeard).toEqual([])

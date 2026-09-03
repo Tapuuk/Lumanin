@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import type {
   Application,
   Cache as SpecCache,
@@ -224,13 +224,21 @@ interface CacheStore {
 const stores = new Map<string, CacheStore>()
 
 function storeFor(directory: string, namespace: string): CacheStore {
-  const id = `${directory}\0${namespace}`
-  const existing = stores.get(id)
+  // Keyed by the file rather than by the directory as it was spelled: `/a/b`,
+  // `/a/b/` and `/a/./b` are one file, and keying on the spelling would hand
+  // them a store each - which is the divergence this map exists to prevent.
+  const file = resolve(join(directory, `${encodeURIComponent(namespace)}.json`))
+  const existing = stores.get(file)
   if (existing !== undefined) return existing
 
-  const file = join(directory, `${encodeURIComponent(namespace)}.json`)
-  const store: CacheStore = { file, directory, data: load(file), timer: null, dirty: false }
-  stores.set(id, store)
+  const store: CacheStore = {
+    file,
+    directory: dirname(file),
+    data: load(file),
+    timer: null,
+    dirty: false
+  }
+  stores.set(file, store)
   return store
 }
 
