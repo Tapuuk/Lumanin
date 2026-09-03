@@ -69,31 +69,36 @@ function put(
   // it becomes something later operations may write into.
   if (key === undefined) return adopt(value, created)
 
-  const container = descend(document, segments, patch, created)
+  const container = descend(document, segments, patch, created, path)
   if (op === 'add' && Array.isArray(container)) {
     const index = indexIn(container, key)
     if (index !== null) {
-      inside(container, index, op, patch)
+      inside(container, index, op, patch, path)
       container.splice(index, 0, value)
       return document
     }
   }
-  set(container, key, value, { op, patch })
+  set(container, key, value, { op, patch, path })
   return document
 }
 
 function take(document: unknown, path: string, patch: RenderPatch, created: Set<object>): unknown {
   const segments = split(path, patch)
   const key = segments.pop()
-  if (key === undefined) throw fail(patch, 'cannot address the whole document')
+  if (key === undefined) throw fail(patch, 'cannot address the whole document', path)
 
-  const container = descend(document, segments, patch, created)
+  const container = descend(document, segments, patch, created, path)
   if (Array.isArray(container)) {
     // The slot after the last one exists for an append and for nothing else:
     // reading it takes no element out and hands back nothing.
-    if (key === '-') throw fail(patch, 'cannot address the end of an array')
+    if (key === '-') throw fail(patch, 'cannot address the end of an array', path)
     const index = indexIn(container, key)
-    if (index !== null) return container.splice(index, 1)[0]
+    if (index !== null) {
+      // A slot no element occupies is nothing to take out: the remove would
+      // change nothing, and the move would carry a hole to its destination.
+      if (index >= container.length) throw fail(patch, 'reads past the end of an array', path)
+      return container.splice(index, 1)[0]
+    }
   }
   const record = container as Record<string, unknown>
   const removed = record[key]
@@ -105,11 +110,12 @@ function descend(
   document: unknown,
   segments: readonly string[],
   patch: RenderPatch,
-  created: Set<object>
+  created: Set<object>,
+  path: string
 ): Container {
-  let container = asContainer(document, patch)
+  let container = asContainer(document, patch, path)
   for (const segment of segments) {
-    const child = asContainer(read(container, segment), patch)
+    const child = asContainer(read(container, segment), patch, path)
     if (created.has(child)) {
       container = child
       continue
@@ -134,12 +140,12 @@ function set(
   container: Container,
   key: string,
   value: unknown,
-  write?: { op: 'add' | 'replace'; patch: RenderPatch }
+  write?: { op: 'add' | 'replace'; patch: RenderPatch; path: string }
 ): void {
   if (Array.isArray(container)) {
     const index = indexIn(container, key)
     if (index !== null) {
-      if (write !== undefined) inside(container, index, write.op, write.patch)
+      if (write !== undefined) inside(container, index, write.op, write.patch, write.path)
       container[index] = value
       return
     }
@@ -162,10 +168,11 @@ function inside(
   array: readonly unknown[],
   index: number,
   op: 'add' | 'replace',
-  patch: RenderPatch
+  patch: RenderPatch,
+  path: string
 ): void {
   if (index <= (op === 'add' ? array.length : array.length - 1)) return
-  throw fail(patch, 'writes past the end of an array')
+  throw fail(patch, 'writes past the end of an array', path)
 }
 
 function split(path: string, patch: RenderPatch): string[] {
@@ -179,7 +186,7 @@ function split(path: string, patch: RenderPatch): string[] {
     // reaches the prototype instead of the node.
     const prototype = segment === 'prototype' && segments[at - 1] === 'constructor'
     if (segment === '__proto__' || prototype) {
-      throw fail(patch, 'walks into a prototype, which is never part of a tree')
+      throw fail(patch, 'walks into a prototype, which is never part of a tree', path)
     }
   })
   return segments
@@ -189,9 +196,9 @@ function isContainer(value: unknown): value is Container {
   return typeof value === 'object' && value !== null
 }
 
-function asContainer(value: unknown, patch: RenderPatch): Container {
+function asContainer(value: unknown, patch: RenderPatch, path: string): Container {
   if (isContainer(value)) return value
-  throw fail(patch, 'passes through a value that is not an object')
+  throw fail(patch, 'passes through a value that is not an object', path)
 }
 
 function shallowCopy(container: Container): Container {
@@ -205,6 +212,7 @@ function adopt(value: unknown, created: Set<object>): unknown {
   return copy
 }
 
-function fail(patch: RenderPatch, detail: string): Error {
-  return new Error(`render patch: "${patch.op}" at "${patch.path}" ${detail}`)
+/** The path that did not fit the base, which for a `move` is often its source. */
+function fail(patch: RenderPatch, detail: string, path: string = patch.path): Error {
+  return new Error(`render patch: "${patch.op}" at "${path}" ${detail}`)
 }

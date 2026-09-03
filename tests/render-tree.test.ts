@@ -319,7 +319,30 @@ describe('applyRenderPatches', () => {
       /"remove" at "\/children\/-" cannot address the end/
     )
     expect(() => alone({ op: 'move', from: '/children/-', path: '/children/0' })).toThrow(
-      /"move" at "\/children\/0" cannot address the end/
+      /"move" at "\/children\/-" cannot address the end/
+    )
+  })
+
+  /**
+   * A slot no element occupies is nothing to take out: the remove would quietly
+   * change nothing, and the move would carry a hole to its destination.
+   */
+  it('throws on a read past the end of an array', () => {
+    expect(() => alone({ op: 'remove', path: '/children/9' })).toThrow(
+      /"remove" at "\/children\/9" reads past the end/
+    )
+    expect(() => alone({ op: 'move', from: '/children/9', path: '/children/0' })).toThrow(
+      /"move" at "\/children\/9" reads past the end/
+    )
+  })
+
+  /** Half of a move is its source, and a failure there names that half. */
+  it('names the source path when a move fails resolving it', () => {
+    expect(() => alone({ op: 'move', from: '/children/9/props/x', path: '/children/0' })).toThrow(
+      /"move" at "\/children\/9\/props\/x" passes through a value that is not an object/
+    )
+    expect(() => alone({ op: 'move', from: '/children/0/__proto__', path: '/children/0' })).toThrow(
+      /"move" at "\/children\/0\/__proto__" walks into a prototype/
     )
   })
 
