@@ -226,6 +226,31 @@ export default function Peg() {
 }
 `
 
+/**
+ * A list that asks to hear the word rather than every letter, and writes down
+ * each search text it is actually handed. One line per delivery is the only way
+ * to count deliveries from outside the worker.
+ */
+const THROTTLED_SOURCE = `
+import { List, environment } from "lumanin";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+export default function TypeFast() {
+  return (
+    <List
+      throttle
+      searchBarPlaceholder="Type fast"
+      onSearchTextChange={(text) =>
+        writeFileSync(join(environment.supportPath, "typed.txt"), text + "\\n", { flag: "a" })
+      }
+    >
+      <List.Item id="ready" title="Ready To Type" />
+    </List>
+  );
+}
+`
+
 const MANIFEST = {
   name: 'fruit',
   title: 'Fruit',
@@ -262,6 +287,12 @@ const MANIFEST = {
       name: 'peg',
       title: 'Peg',
       description: 'A command that stops answering',
+      mode: 'view'
+    },
+    {
+      name: 'throttled',
+      title: 'Type Fast',
+      description: 'A list that throttles its search text',
       mode: 'view'
     }
   ]
@@ -343,6 +374,7 @@ test.beforeAll(async () => {
   writeFileSync(join(source, 'src', 'compose.tsx'), FORM_SOURCE)
   writeFileSync(join(source, 'src', 'crowd.tsx'), CROWD_SOURCE)
   writeFileSync(join(source, 'src', 'peg.tsx'), PEG_SOURCE)
+  writeFileSync(join(source, 'src', 'throttled.tsx'), THROTTLED_SOURCE)
 
   // Built with the same externals the product uses, because that list is the
   // single-React rule's build half and building it any other way would test a
@@ -354,7 +386,8 @@ test.beforeAll(async () => {
       join(source, 'src', 'browse.tsx'),
       join(source, 'src', 'compose.tsx'),
       join(source, 'src', 'crowd.tsx'),
-      join(source, 'src', 'peg.tsx')
+      join(source, 'src', 'peg.tsx'),
+      join(source, 'src', 'throttled.tsx')
     ],
     outdir: join(installed, 'commands'),
     bundle: true,
@@ -828,6 +861,44 @@ test('a command can launch another one, with a context', async () => {
   // and Escape closes the window — even after `launchCommand` swapped the
   // command inside it. Shown again for whatever runs next, which is what the
   // user would do by pressing their hotkey.
+  await page.locator('.search__input').press('Escape')
+  await expect(page.locator('.actionbar')).toHaveCount(0)
+  expect((await askDaemon({ kind: 'show' })).ok).toBe(true)
+})
+
+/**
+ * Typing at a list that declared `throttle`.
+ *
+ * The collapse happens in the renderer, so nothing downstream of it can show
+ * that it happened — the worker only ever sees what it was sent. Counting the
+ * deliveries from the plugin's own side is the only view of it that is real.
+ */
+test('a throttled list is handed the word, not every letter', async () => {
+  const typed = join(supportPath, 'typed.txt')
+  rmSync(typed, { force: true })
+
+  const reply = await askDaemon({ kind: 'open', target: 'extension:fruit/throttled' })
+  expect(reply.ok).toBe(true)
+  await expect(page.locator('.result__title').first()).toHaveText('Ready To Type', {
+    timeout: 10_000
+  })
+
+  const delivered = (): string[] => {
+    try {
+      return readFileSync(typed, 'utf8').split('\n').filter((line) => line.length > 0)
+    } catch {
+      return []
+    }
+  }
+
+  await page.locator('.search__input').pressSequentially('report', { delay: 0 })
+
+  // The last text always arrives: the timer fires a beat after the typing stops.
+  await expect.poll(() => delivered().at(-1) ?? '', { timeout: 10_000 }).toBe('report')
+  // Not "exactly one": how many of six keystrokes land inside one window is a
+  // property of the machine. Fewer than six is what proves the collapse.
+  expect(delivered().length).toBeLessThan(6)
+
   await page.locator('.search__input').press('Escape')
   await expect(page.locator('.actionbar')).toHaveCount(0)
   expect((await askDaemon({ kind: 'show' })).ok).toBe(true)
