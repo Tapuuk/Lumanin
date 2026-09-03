@@ -297,7 +297,7 @@ describe('the plugins group', () => {
     })
 
   it('keeps every pin off the empty root, and hoists an item pin while it is typed', () => {
-    // The empty root is a bare search bar (user decision 2026-09-02). A pin is
+    // The empty root is a bare search bar (user decision). A pin is
     // a ranking boost for what is typed, not a start page.
     const file =
       '[search]\npins = ["extension:godot/search#project", { id = "extension:godot/search#project:dawn!Run", title = "Dawnline - Run" }]\n'

@@ -58,7 +58,7 @@ describe('shell: targets', () => {
   })
 
   it('keeps a pinned command line off the empty root', () => {
-    // The empty root is a bare search bar (user decision 2026-09-02).
+    // The empty root is a bare search bar (user decision).
     expect(compose('', '[search]\npins = ["shell:systemctl suspend"]\n')).toEqual([])
   })
 
@@ -307,7 +307,7 @@ describe('category and item pins', () => {
     })
 
   it('keeps a pinned category off the empty root', () => {
-    // The empty root is a bare search bar (user decision 2026-09-02).
+    // The empty root is a bare search bar (user decision).
     expect(composeExt('', '[search]\npins = ["extension:1password/search#logins"]\n')).toEqual([])
   })
 
