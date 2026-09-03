@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { type Database as Db } from 'better-sqlite3'
+import { type Database as Db, type Statement } from 'better-sqlite3'
 import { openOwnerOnly } from './sqlite'
 import { decay, launchWeight, type Frecency } from '../shared/frecency'
 
@@ -56,11 +56,34 @@ export interface LaunchRecord extends Frecency {
 
 export class FrecencyStore {
   private readonly db: Db
+  private readonly selectAll: Statement
+  private readonly upsertLaunch: Statement
+  private readonly deleteLaunch: Statement
+  private readonly peakScore: Statement
   private epoch: number
+
+  /**
+   * The last result of {@link all}, or `null` when a write has invalidated it.
+   *
+   * Safe because this process holds the only handle on the launches table: no
+   * row can change without going through `record`, `forget` or `maybeRebase`,
+   * and each of those drops the snapshot.
+   */
+  private snapshot: ReadonlyMap<string, LaunchRecord> | null = null
 
   constructor(directory: string, filename = 'frecency.db') {
     // Owner-only, like every database of ours — `node/sqlite.ts` says why.
     this.db = openOwnerOnly(join(directory, filename), SCHEMA)
+    this.selectAll = this.db.prepare('SELECT id, score, last_used AS lastUsed, launches FROM launches')
+    this.upsertLaunch = this.db.prepare(
+      `INSERT INTO launches (id, score, last_used, launches) VALUES (?, ?, ?, 1)
+       ON CONFLICT(id) DO UPDATE SET
+         score = score + excluded.score,
+         last_used = excluded.last_used,
+         launches = launches + 1`
+    )
+    this.deleteLaunch = this.db.prepare('DELETE FROM launches WHERE id = ?')
+    this.peakScore = this.db.prepare('SELECT MAX(score) AS peak FROM launches')
     this.epoch = this.readEpoch()
   }
 
@@ -81,15 +104,8 @@ export class FrecencyStore {
   /** Record one launch. */
   record(id: string, at = Date.now()): void {
     const weight = launchWeight(at, this.epoch)
-    this.db
-      .prepare(
-        `INSERT INTO launches (id, score, last_used, launches) VALUES (?, ?, ?, 1)
-         ON CONFLICT(id) DO UPDATE SET
-           score = score + excluded.score,
-           last_used = excluded.last_used,
-           launches = launches + 1`
-      )
-      .run(id, weight, at)
+    this.upsertLaunch.run(id, weight, at)
+    this.snapshot = null
 
     this.maybeRebase()
   }
@@ -103,16 +119,17 @@ export class FrecencyStore {
    * keystroke.
    */
   all(): ReadonlyMap<string, LaunchRecord> {
-    const rows = this.db
-      .prepare('SELECT id, score, last_used AS lastUsed, launches FROM launches')
-      .all() as LaunchRecord[]
+    if (this.snapshot !== null) return this.snapshot
 
-    return new Map(rows.map((row) => [row.id, row]))
+    const rows = this.selectAll.all() as LaunchRecord[]
+    this.snapshot = new Map(rows.map((row) => [row.id, row]))
+    return this.snapshot
   }
 
   /** Forget one item — the reverse of `record`, for a removed app. */
   forget(id: string): void {
-    this.db.prepare('DELETE FROM launches WHERE id = ?').run(id)
+    this.deleteLaunch.run(id)
+    this.snapshot = null
   }
 
   /**
@@ -121,7 +138,7 @@ export class FrecencyStore {
    * would eventually overflow to Infinity and every app would rank equally.
    */
   private maybeRebase(): void {
-    const row = this.db.prepare('SELECT MAX(score) AS peak FROM launches').get() as { peak: number | null }
+    const row = this.peakScore.get() as { peak: number | null }
     if (row.peak === null || row.peak < REBASE_ABOVE) return
 
     const now = Date.now()
@@ -129,6 +146,7 @@ export class FrecencyStore {
     this.db.prepare('UPDATE launches SET score = score * ?').run(factor)
     this.db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run(EPOCH_KEY, String(now))
     this.epoch = now
+    this.snapshot = null
   }
 
   close(): void {

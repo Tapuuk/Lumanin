@@ -304,9 +304,26 @@ describe('the frecency store', () => {
     db.close()
   })
 
+  it('reads the table once until a launch changes it', () => {
+    const db = store()
+    db.record('a.desktop')
+
+    const first = db.all()
+    expect(db.all()).toBe(first)
+
+    db.record('b.desktop')
+    const third = db.all()
+    expect(third).not.toBe(first)
+    expect(third.get('b.desktop')?.launches).toBe(1)
+    db.close()
+  })
+
   it('forgets on request', () => {
     const db = store()
     db.record('gone.desktop')
+    // Read before the forget: a held map that is never dropped would still
+    // answer with the removed row.
+    expect(db.all().has('gone.desktop')).toBe(true)
     db.forget('gone.desktop')
 
     expect(db.all().has('gone.desktop')).toBe(false)
