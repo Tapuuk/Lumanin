@@ -198,11 +198,87 @@ export const LocalStorage = {
 
 const CACHE_DIRECTORY_NAME = 'cache'
 const CACHE_DEFAULT_CAPACITY = 10 * 1024 * 1024
+const DEFAULT_CACHE_WRITE_DEBOUNCE_MS = 250
 
 interface CacheFile {
   /** Insertion/refresh order, oldest first. The LRU list. */
   readonly order: string[]
   readonly entries: Record<string, string>
+}
+
+/** One parsed file, plus whatever is owed to the disk about it. */
+interface CacheStore {
+  readonly file: string
+  readonly directory: string
+  data: CacheFile
+  timer: NodeJS.Timeout | null
+  dirty: boolean
+}
+
+/**
+ * The stores are module-level and shared by every `Cache` addressing the same
+ * file: two instances holding their own parsed copy would each persist a
+ * snapshot missing the other's entries, so the last writer would silently drop
+ * everything the first one stored.
+ */
+const stores = new Map<string, CacheStore>()
+
+function storeFor(directory: string, namespace: string): CacheStore {
+  const id = `${directory}\0${namespace}`
+  const existing = stores.get(id)
+  if (existing !== undefined) return existing
+
+  const file = join(directory, `${encodeURIComponent(namespace)}.json`)
+  const store: CacheStore = { file, directory, data: load(file), timer: null, dirty: false }
+  stores.set(id, store)
+  return store
+}
+
+function load(file: string): CacheFile {
+  try {
+    const parsed = JSON.parse(readFileSync(file, 'utf8')) as Partial<CacheFile>
+    if (Array.isArray(parsed.order) && typeof parsed.entries === 'object' && parsed.entries !== null) {
+      return { order: parsed.order, entries: parsed.entries }
+    }
+  } catch {
+    // Missing or unreadable: an empty cache is always a correct answer for a
+    // cache, which is exactly why this is not reported as an error.
+  }
+  return { order: [], entries: {} }
+}
+
+function persistNow(store: CacheStore): void {
+  if (store.timer !== null) {
+    clearTimeout(store.timer)
+    store.timer = null
+  }
+  try {
+    mkdirSync(store.directory, { recursive: true, mode: 0o700 })
+    const temporary = `${store.file}.${process.pid}.tmp`
+    writeFileSync(temporary, JSON.stringify(store.data), { mode: 0o600 })
+    renameSync(temporary, store.file)
+    store.dirty = false
+  } catch {
+    // A cache that cannot be written is a slow extension, not a broken one.
+    // `dirty` stays set so the next write retries instead of losing the data.
+  }
+}
+
+function schedulePersist(store: CacheStore, delayMs: number): void {
+  if (store.timer !== null) clearTimeout(store.timer)
+  const timer = setTimeout(() => {
+    store.timer = null
+    persistNow(store)
+  }, delayMs)
+  timer.unref?.()
+  store.timer = timer
+}
+
+/** Write out every store that still owes the disk a write. */
+export function flushCaches(): void {
+  for (const store of stores.values()) {
+    if (store.dirty) persistNow(store)
+  }
 }
 
 /**
@@ -227,19 +303,15 @@ export class Cache {
   }
 
   private readonly directory: string
-  private readonly namespace: string
   private readonly capacity: number
-  private readonly file: string
-  private data: CacheFile = { order: [], entries: {} }
+  private readonly store: CacheStore
   private readonly subscribers = new Set<SpecCache.Subscriber>()
 
   constructor(options?: SpecCache.Options) {
-    this.namespace = options?.namespace ?? 'default'
     this.capacity = options?.capacity ?? CACHE_DEFAULT_CAPACITY
     this.directory =
       options?.directory ?? join(requireRuntime().spec.environment.supportPath, CACHE_DIRECTORY_NAME)
-    this.file = join(this.directory, `${encodeURIComponent(this.namespace)}.json`)
-    this.load()
+    this.store = storeFor(this.directory, options?.namespace ?? 'default')
   }
 
   get storageDirectory(): string {
@@ -247,38 +319,44 @@ export class Cache {
   }
 
   get isEmpty(): boolean {
-    return this.data.order.length === 0
+    return this.store.data.order.length === 0
   }
 
   get(key: string): string | undefined {
-    return this.data.entries[key]
+    return this.store.data.entries[key]
   }
 
   has(key: string): boolean {
-    return Object.hasOwn(this.data.entries, key)
+    return Object.hasOwn(this.store.data.entries, key)
   }
 
-  set(key: string, data: string): void {
-    const entries = { ...this.data.entries, [key]: data }
-    const order = [...this.data.order.filter((entry) => entry !== key), key]
-    this.data = evict({ order, entries }, this.capacity)
-    this.persist()
+  set(key: string, data: string, delayMs: number = DEFAULT_CACHE_WRITE_DEBOUNCE_MS): void {
+    const entries = { ...this.store.data.entries, [key]: data }
+    const order = [...this.store.data.order.filter((entry) => entry !== key), key]
+    this.store.data = evict({ order, entries }, this.capacity)
+    this.store.dirty = true
+    if (delayMs <= 0) persistNow(this.store)
+    else schedulePersist(this.store, delayMs)
     this.notify(key, data)
   }
 
   remove(key: string): boolean {
     if (!this.has(key)) return false
-    const entries = { ...this.data.entries }
+    const entries = { ...this.store.data.entries }
     delete entries[key]
-    this.data = { order: this.data.order.filter((entry) => entry !== key), entries }
-    this.persist()
+    this.store.data = { order: this.store.data.order.filter((entry) => entry !== key), entries }
+    this.store.dirty = true
+    // A deletion never waits: a pending write would otherwise be free to put the
+    // entry back a moment after the caller asked for it to be gone.
+    persistNow(this.store)
     this.notify(key, undefined)
     return true
   }
 
   clear(options?: { notifySubscribers: boolean }): void {
-    this.data = { order: [], entries: {} }
-    this.persist()
+    this.store.data = { order: [], entries: {} }
+    this.store.dirty = true
+    persistNow(this.store)
     if (options?.notifySubscribers !== false) this.notify(undefined, undefined)
   }
 
@@ -297,29 +375,6 @@ export class Cache {
         // A subscriber that throws is the extension's bug, and it must not
         // prevent the other subscribers from hearing about the write.
       }
-    }
-  }
-
-  private load(): void {
-    try {
-      const parsed = JSON.parse(readFileSync(this.file, 'utf8')) as Partial<CacheFile>
-      if (Array.isArray(parsed.order) && typeof parsed.entries === 'object' && parsed.entries !== null) {
-        this.data = { order: parsed.order, entries: parsed.entries }
-      }
-    } catch {
-      // Missing or unreadable: an empty cache is always a correct answer for a
-      // cache, which is exactly why this is not reported as an error.
-    }
-  }
-
-  private persist(): void {
-    try {
-      mkdirSync(this.directory, { recursive: true, mode: 0o700 })
-      const temporary = `${this.file}.${process.pid}.tmp`
-      writeFileSync(temporary, JSON.stringify(this.data), { mode: 0o600 })
-      renameSync(temporary, this.file)
-    } catch {
-      // A cache that cannot be written is a slow extension, not a broken one.
     }
   }
 }
