@@ -10,7 +10,14 @@ import {
   type SessionRef,
   type SessionSpec
 } from '../shared/ext-protocol'
-import { createPeer, RPC_ERRORS, RpcError, type RpcMessage, type RpcPeer } from '../node/rpc'
+import {
+  createPeer,
+  RPC_ERRORS,
+  RpcError,
+  withDeadline,
+  type RpcMessage,
+  type RpcPeer
+} from '../node/rpc'
 
 /**
  * The extension host: the `utilityProcess` between main and the workers.
@@ -361,6 +368,17 @@ async function forward(params: SessionRef, method: string): Promise<null> {
   return null
 }
 
+/**
+ * How long a worker gets to acknowledge that its session is over.
+ *
+ * A worker that has not answered by then is not going to: the thread is inside a
+ * loop of the extension's own making, and the call it was sent is queued behind
+ * work that never yields. Waiting on it is what leaked a spinning thread and its
+ * heap ceiling per launch, so the wait is bounded and the thread is stopped
+ * either way.
+ */
+const DESTROY_GRACE_MS = 1500
+
 async function destroy(sessionId: string): Promise<null> {
   const session = sessions.get(sessionId)
   if (session === undefined) return null
@@ -369,12 +387,21 @@ async function destroy(sessionId: string): Promise<null> {
   sessions.delete(sessionId)
 
   try {
-    await session.peer.call(WORKER_METHODS.DESTROY, { sessionId })
+    const answered = await withDeadline(
+      session.peer.call(WORKER_METHODS.DESTROY, { sessionId }).then(() => true),
+      DESTROY_GRACE_MS,
+      false
+    )
+    if (!answered) {
+      report('warn', `session ${sessionId} did not stop within ${DESTROY_GRACE_MS}ms; terminating`)
+    }
   } catch {
     // The worker may already be gone, which is the outcome we wanted anyway.
   }
   session.peer.dispose('the session ended')
-  await session.worker.terminate()
+  // Not awaited, for the same reason the deadline above exists: nothing waits on
+  // this reply, and a second unbounded wait would undo the first one's bound.
+  void session.worker.terminate()
 
   // A worker is never reused for a second command — its shim is now full of the
   // last command's state — so the pool is topped up instead.
