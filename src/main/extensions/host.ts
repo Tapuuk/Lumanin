@@ -5,8 +5,11 @@ import { applyPatch, type Operation } from 'fast-json-patch'
 import {
   APP_METHODS,
   HOST_METHODS,
+  HOST_NOT_RUNNING,
   type AlertPayload,
   type AlertRequest,
+  type ExtensionHostStatus,
+  type HostPing,
   type LogParams,
   type RenderParams,
   type SessionFailure,
@@ -17,6 +20,7 @@ import type { SessionInfo } from '../../shared/ipc'
 import { emptyTree, type RenderNode } from '../../shared/render-tree'
 import { createPeer, RpcError, RPC_ERRORS, type RpcMessage, type RpcPeer } from '../../node/rpc'
 import type { Logger } from '../../node/logger'
+import { canFork, isNewIncident, restartDelay, waitSeconds } from './backoff'
 import { missingRequiredPreferences, resolvePreferences, type InstalledCommand } from './registry'
 import type { ExtensionStore, StorageValue } from './storage'
 
@@ -124,8 +128,13 @@ interface LiveSession {
   failure: { message: string; stack: string | null } | null
 }
 
-/** How long to wait before restarting a host that died. Backed off, then given up on. */
-const RESTART_DELAYS_MS = [200, 1000, 5000]
+/**
+ * How long {@link ExtensionHost.probe} waits for the host to answer.
+ *
+ * Its own deadline, because the peer deliberately has none: a wedged host would
+ * otherwise leave `status` waiting for as long as the caller was willing to.
+ */
+const PROBE_TIMEOUT_MS = 500
 
 let sessionCounter = 0
 let alertCounter = 0
@@ -134,6 +143,10 @@ export class ExtensionHost {
   private child: UtilityProcess | null = null
   private peer: RpcPeer | null = null
   private restarts = 0
+  /** When a fork is allowed again, after the host died. `0` while nothing has died. */
+  private nextForkAt = 0
+  /** When the running host was forked, which is how long it has been alive. */
+  private forkedAt = 0
   private readonly sessions = new Map<string, LiveSession>()
   private readonly alerts = new Map<string, (confirmed: boolean) => void>()
 
@@ -144,16 +157,26 @@ export class ExtensionHost {
   }
 
   /**
-   * Start the host process.
+   * Start the host process, or hand back the one that is running.
    *
-   * Called lazily, on the first extension launch, rather than at daemon startup.
-   * A user with no extensions installed should not be paying for a Node process
-   * and a warm worker they will never use — and the cost of starting it is
-   * measured against the launch that asked for it, which is the honest place for
-   * it to land.
+   * Normally it is already running: the daemon pre-starts it once it is
+   * otherwise idle, so the process and its warm worker are paid for at rest and
+   * every launch of the session gets the warm path. This is still the only place
+   * that forks, because a launch that arrives before the pre-start, or after a
+   * crash, has to work.
+   *
+   * A host that keeps dying is refused here rather than forked in a loop. The
+   * sentence names the wait, because it is shown to the person who pressed the
+   * key.
    */
   private ensure(): RpcPeer {
     if (this.peer !== null) return this.peer
+
+    const now = Date.now()
+    if (!canFork(now, this.nextForkAt)) {
+      const wait = waitSeconds(now, this.nextForkAt)
+      throw new Error(`the extension host keeps stopping unexpectedly. Try again in ${wait}s.`)
+    }
 
     const child = utilityProcess.fork(this.deps.hostScript, [], {
       serviceName: 'lumanin-extensions',
@@ -178,8 +201,59 @@ export class ExtensionHost {
 
     this.child = child
     this.peer = peer
+    this.forkedAt = Date.now()
     this.deps.logger.info('extension host started')
     return peer
+  }
+
+  /**
+   * Start the host before anything has asked for it.
+   *
+   * Called from a timer once the daemon is idle, which is why the refusal above
+   * is caught: a throw from a timer is an unhandled exception in main, and the
+   * launch that arrives later will report the same thing to somebody who is
+   * actually waiting for it.
+   */
+  prewarm(): void {
+    if (this.peer !== null) return
+    try {
+      this.ensure()
+    } catch (error) {
+      this.deps.logger.warn('could not pre-start the extension host', { error })
+    }
+  }
+
+  /**
+   * What the host is doing. Never forks: a status read must not start a process.
+   *
+   * `running: true` with `spare: 'unknown'` is the honest reading of a host that
+   * was forked and did not answer within {@link PROBE_TIMEOUT_MS}.
+   */
+  async probe(): Promise<ExtensionHostStatus> {
+    const peer = this.peer
+    if (peer === null) return HOST_NOT_RUNNING
+
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    let answer: HostPing | null
+    try {
+      answer = await Promise.race([
+        peer.call<HostPing>(HOST_METHODS.PING).catch(() => null),
+        new Promise<null>((resolve) => {
+          deadline = setTimeout(() => resolve(null), PROBE_TIMEOUT_MS)
+          deadline.unref?.()
+        })
+      ])
+    } finally {
+      if (deadline !== undefined) clearTimeout(deadline)
+    }
+
+    // A host that exited mid-probe disposes the peer, which rejects the call,
+    // and that rejection looks exactly like the deadline from here. Re-reading
+    // the peer tells the two apart, so a process that is definitively gone is
+    // not reported as running but silent.
+    if (this.peer === null) return HOST_NOT_RUNNING
+    if (answer === null) return { running: true, sessions: this.sessions.size, spare: 'unknown' }
+    return { running: true, sessions: answer.sessions, spare: answer.spare }
   }
 
   /**
@@ -213,11 +287,18 @@ export class ExtensionHost {
     }
 
     if (!wasRunning) return
-    const delay = RESTART_DELAYS_MS[Math.min(this.restarts, RESTART_DELAYS_MS.length - 1)]
+    // A host that ran for a long time before dying is a fresh incident, not the
+    // next step of the last one. Measured by uptime rather than by a later
+    // successful call, because a host that dies on every render would answer one
+    // call, reset the count, and go on dying at the shortest delay for good.
+    if (isNewIncident(Date.now() - this.forkedAt)) this.restarts = 0
+    const delay = restartDelay(this.restarts)
     this.restarts += 1
+    this.nextForkAt = Date.now() + delay
     this.deps.logger.error('extension host exited', { code, restartInMs: delay })
-    // Restarted lazily rather than on a timer: the next launch calls `ensure()`,
-    // and a host with no sessions costs nothing to not have.
+    // Nothing is scheduled: the next launch calls `ensure()`, and a launch
+    // inside that window is refused with the wait named rather than forking a
+    // process that is only going to die again.
   }
 
   // --- launching ------------------------------------------------------------

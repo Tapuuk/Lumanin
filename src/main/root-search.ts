@@ -334,7 +334,7 @@ export function composeRoot(input: RootSearchInput): readonly ResultItem[] {
     return search === undefined ? null : webRow(search, needle)
   }
 
-  // Nothing typed: a bare search bar, always (user decision 2026-09-02). Pins
+  // Nothing typed: a bare search bar, always (user decision). Pins
   // used to be listed here, but the renderer opens the panel bare, so they only
   // ever surfaced when a query was erased mid-session - a row materialising out
   // of nowhere. A pin's job is ranking: it outranks everything the moment what

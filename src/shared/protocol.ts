@@ -10,6 +10,7 @@
  * request that does not parse into one of these is rejected without side effects.
  */
 
+import type { ExtensionHostStatus } from './ext-protocol'
 import type { EnumeratedItem } from './render-tree'
 
 export const VERB_KINDS = [
@@ -71,6 +72,15 @@ export interface DaemonStatus {
    * and when they differ, this is the one that is actually in effect.
    */
   backends: Readonly<Record<string, string>>
+  /**
+   * The extension host process and its warm worker.
+   *
+   * `spare` is `'ready'` once a worker has loaded React, the reconciler and the
+   * shim, `'warming'` while one is on its way, and `'none'` when there is no
+   * worker waiting. `running: true` with `spare: 'unknown'` is a host that was
+   * forked and did not answer the probe.
+   */
+  extensionHost: ExtensionHostStatus
 }
 
 export type Response =

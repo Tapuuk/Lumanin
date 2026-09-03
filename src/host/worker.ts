@@ -2,7 +2,13 @@ import Module from 'node:module'
 import { createElement, type FunctionComponent, type ReactNode } from 'react'
 import { parentPort, workerData } from 'node:worker_threads'
 import { compare } from 'fast-json-patch'
-import { APP_METHODS, WORKER_METHODS, type EventParams, type SessionSpec } from '../shared/ext-protocol'
+import {
+  APP_METHODS,
+  WORKER_METHODS,
+  WORKER_NOTIFICATIONS,
+  type EventParams,
+  type SessionSpec
+} from '../shared/ext-protocol'
 import { createPeer, toErrorBody, type RpcMessage } from '../node/rpc'
 import { emptyTree, isDateRef, type RenderNode } from '../shared/render-tree'
 import { createRenderer, type Renderer } from './reconciler'
@@ -483,4 +489,4 @@ process.on('uncaughtException', (error: Error) => fail(error, true))
 process.on('unhandledRejection', (reason: unknown) => fail(reason, false))
 
 shim = warmUp()
-peer.notify(APP_METHODS.LOG, { sessionId: '', level: 'debug', message: 'worker warm' })
+peer.notify(WORKER_NOTIFICATIONS.READY)

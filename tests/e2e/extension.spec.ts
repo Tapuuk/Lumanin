@@ -337,6 +337,15 @@ test.afterAll(async () => {
   await app.close().catch(() => undefined)
 })
 
+test('the extension host is warm before anything has asked for it', async () => {
+  // First in the file, and the suite runs one spec and one test at a time, so
+  // nothing has launched a plugin yet. A running host with a ready spare can
+  // therefore only have come from the daemon starting it by itself.
+  await expect
+    .poll(async () => (await askDaemon({ kind: 'status' })).data, { timeout: 20_000 })
+    .toMatchObject({ extensionHost: { running: true, spare: 'ready' } })
+})
+
 test('an installed extension command appears at the root', async () => {
   await page.locator('.search__input').fill('browse fruit')
   await expect(page.locator('.result[data-kind="extension"]').first()).toBeVisible()
@@ -430,11 +439,12 @@ test('Esc at the extension’s root returns to the launcher', async () => {
 })
 
 test('a pinned category launches straight into that category', async () => {
-  // The empty root is the pins, and only the pins - minus item pins, which
-  // are rows inside a plugin's search and only answer to typing.
-  await page.locator('.search__input').fill('')
+  // A category pin outranks everything once what is typed names it - the bare
+  // root stays empty (a pin's job is ranking, not a permanent listing). A web
+  // search row always tags along behind it once something is typed.
+  await page.locator('.search__input').fill('berries')
   await expect(page.locator('.result__title').first()).toHaveText('Fruit: Berries')
-  expect(await rowTitles()).toEqual(['Fruit: Berries'])
+  expect((await rowTitles())[0]).toEqual('Fruit: Berries')
 
   await page.locator('.result', { hasText: 'Fruit: Berries' }).click()
   // Only the berries render: launchContext.category crossed main → host →
@@ -447,7 +457,6 @@ test('a pinned category launches straight into that category', async () => {
 })
 
 test('a pinned item lands with its row selected', async () => {
-  await expect(page.locator('.result__title').first()).toHaveText('Fruit: Berries')
   // An item pin surfaces only when what is typed names it.
   await page.locator('.search__input').fill('cranberry')
   await expect(page.locator('.result__title').first()).toHaveText('Cranberry (pinned)')
@@ -492,7 +501,6 @@ test('an action target runs the action and never opens a window', async () => {
   // exactly there. Nothing about this launch is visible — that is the point of
   // binding an action rather than a category.
   await page.locator('.search__input').fill('')
-  await expect(page.locator('.result__title').first()).toHaveText('Fruit: Berries')
   const before = await rowTitles()
 
   const reply = await askDaemon({
