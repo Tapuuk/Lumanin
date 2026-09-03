@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createElement, type ReactNode } from 'react'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installRuntime, type ShimRuntime } from '../src/api-shim/runtime'
 import {
   defaultParseOutput,
@@ -13,7 +13,7 @@ import {
   type ExecOutcome
 } from '../src/api-shim/exec'
 import { flushCaches } from '../src/api-shim/system'
-import { useExec } from '../src/api-shim/utils'
+import { useExec, usePromise } from '../src/api-shim/utils'
 import { createRenderer } from '../src/host/reconciler'
 import { serializeTree, type SerializeSink } from '../src/host/tree'
 import type { RenderNode } from '../src/shared/render-tree'
@@ -448,5 +448,151 @@ describe('cacheWriteDebounce, through the hook', () => {
     // Nothing is left armed over a directory this file is about to remove.
     flushCaches()
     expect(existsSync(cacheFile(support))).toBe(true)
+  })
+})
+
+/**
+ * What happens to a run the user has already moved on from — by clearing the
+ * box, or by typing the next character. Both leave a command running and a
+ * promise that is about to answer a question nobody is asking any more.
+ */
+describe('a run the user has moved on from', () => {
+  const supports: string[] = []
+  let support = ''
+
+  beforeEach(() => {
+    support = mkdtempSync(join(tmpdir(), 'lumanin-supersede-'))
+    supports.push(support)
+    installRuntime(fakeRuntime(support))
+  })
+
+  afterAll(() => {
+    for (const dir of supports) rmSync(dir, { recursive: true, force: true })
+  })
+
+  const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+  /**
+   * These components never reach `isLoading: false` on the path being tested —
+   * that is the point of them — so they are driven for a fixed window instead of
+   * being settled.
+   */
+  async function pump(h: Harness, element: ReactNode, ms: number): Promise<RenderNode> {
+    let tree = h.render(element)
+    const until = Date.now() + ms
+    while (Date.now() < until) {
+      await sleep(10)
+      tree = h.render(element)
+    }
+    return tree
+  }
+
+  it('kills the command and discards its answer when execute goes false', async () => {
+    const marker = join(support, 'late.txt')
+    let execute = true
+    let seen: string | undefined
+    const Command = (): ReactNode => {
+      const { isLoading, data } = useExec('/bin/sh', ['-c', `sleep 2; echo late > ${marker}`], {
+        execute,
+        onError: () => {}
+      })
+      seen = data
+      return createElement('List', { isLoading })
+    }
+
+    const h = harness()
+    await pump(h, createElement(Command), 100)
+    execute = false
+    await pump(h, createElement(Command), 2500)
+
+    expect(existsSync(marker)).toBe(false)
+    expect(seen).toBeUndefined()
+  }, 15000)
+
+  /**
+   * Re-render until the hook has produced a given answer.
+   *
+   * `settle` cannot be used across a change of arguments: the render that
+   * carries the new ones is still holding the finished state of the old run, so
+   * it reads as already settled and returns last time's answer.
+   */
+  async function settleTo(h: Harness, element: ReactNode, title: string): Promise<void> {
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const tree = h.render(element)
+      const list = tree.children[0] as RenderNode | undefined
+      const item = list?.children[0] as RenderNode | undefined
+      if (item?.props['title'] === title) return
+      await sleep(10)
+    }
+    throw new Error(`the command never produced ${title}`)
+  }
+
+  it('re-runs when the input on stdin changes', async () => {
+    let input = 'one'
+    const Command = (): ReactNode => {
+      const { isLoading, data } = useExec('/bin/cat', [], { input })
+      return createElement(
+        'List',
+        { isLoading },
+        createElement('List.Item', { key: 'out', title: data ?? '' })
+      )
+    }
+
+    const h = harness()
+    await settleTo(h, createElement(Command), 'one')
+    input = 'two'
+    await settleTo(h, createElement(Command), 'two')
+  })
+
+  it('re-runs when the environment changes', async () => {
+    let mark = 'one'
+    const Command = (): ReactNode => {
+      const { isLoading, data } = useExec('/bin/sh', ['-c', 'echo "$MARK"'], {
+        env: { ...process.env, MARK: mark }
+      })
+      return createElement(
+        'List',
+        { isLoading },
+        createElement('List.Item', { key: 'out', title: data ?? '' })
+      )
+    }
+
+    const h = harness()
+    await settleTo(h, createElement(Command), 'one')
+    mark = 'two'
+    await settleTo(h, createElement(Command), 'two')
+  })
+
+  /**
+   * A plain promise, not a command: an aborted child rejects with an
+   * `AbortError`, which was already filtered, so this gap only shows on a hook
+   * with no controller to abort. The failure belongs to a query the user has
+   * left, and reporting it puts a toast over the answer to the one they are on.
+   */
+  it('reports nothing when a superseded promise rejects', async () => {
+    let which = 'first'
+    const onError = vi.fn()
+    const Command = (): ReactNode => {
+      const { isLoading } = usePromise(
+        async (asked: string) => {
+          if (asked === 'first') {
+            await sleep(200)
+            throw new Error('the answer nobody waited for')
+          }
+          await sleep(10)
+          return asked
+        },
+        [which],
+        { onError }
+      )
+      return createElement('List', { isLoading })
+    }
+
+    const h = harness()
+    await pump(h, createElement(Command), 50)
+    which = 'second'
+    await pump(h, createElement(Command), 500)
+
+    expect(onError).not.toHaveBeenCalled()
   })
 })
