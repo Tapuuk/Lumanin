@@ -12,6 +12,9 @@ import { Icon } from './icon'
 import { NO_OAUTH } from './namespaces'
 import { declined, pending, unsupported } from './unsupported'
 
+/** Bounds what one completed run costs: the whole file is stringified and rewritten. */
+const HOOK_CACHE_CAPACITY = 1024 * 1024
+
 /**
  * `@raycast/utils`, as far as the extension host needs it.
  *
@@ -182,10 +185,10 @@ type MutateFn<T> = (
 export function useCachedPromise<T>(
   fn: (...args: never[]) => Promise<T>,
   args: readonly unknown[] = [],
-  options: PromiseOptions<T> & { initialData?: T } = {}
+  options: PromiseOptions<T> & { initialData?: T; cacheWriteDebounce?: number } = {}
 ): AsyncState<T> & { revalidate: () => Promise<T>; mutate: MutateFn<T> } {
   const cache = useRef<Cache | null>(null)
-  cache.current ??= new Cache({ namespace: 'raycast-utils' })
+  cache.current ??= new Cache({ namespace: 'raycast-utils', capacity: HOOK_CACHE_CAPACITY })
 
   const key = `promise:${hash(fn.toString())}:${stableKey(args)}`
   const cached = readCached<T>(cache.current, key)
@@ -194,7 +197,7 @@ export function useCachedPromise<T>(
     ...options,
     ...(cached === undefined ? {} : { initialData: cached }),
     onData: (data) => {
-      writeCached(cache.current, key, data)
+      writeCached(cache.current, key, data, options.cacheWriteDebounce)
       options.onData?.(data)
     }
   })
@@ -208,7 +211,7 @@ export function useCachedPromise<T>(
 export function useCachedState<T>(
   key: string,
   initialValue?: T,
-  config?: { cacheNamespace?: string }
+  config?: { cacheNamespace?: string; cacheWriteDebounce?: number }
 ): [T, (value: T | ((previous: T) => T)) => void] {
   const cache = useRef<Cache | null>(null)
   cache.current ??= new Cache({
@@ -221,11 +224,11 @@ export function useCachedState<T>(
     (next: T | ((previous: T) => T)) => {
       setValue((previous) => {
         const resolved = typeof next === 'function' ? (next as (p: T) => T)(previous) : next
-        writeCached(cache.current, key, resolved)
+        writeCached(cache.current, key, resolved, config?.cacheWriteDebounce)
         return resolved
       })
     },
-    [key]
+    [key, config?.cacheWriteDebounce]
   )
 
   return [value, update]
@@ -425,6 +428,7 @@ export const DeeplinkType = { ScriptCommand: 'script-command', Extension: 'exten
 
 interface ExecHookOptions<T> extends PromiseOptions<T> {
   parseOutput?: ParseExecOutput<T, string> | ParseExecOutput<T, Buffer>
+  cacheWriteDebounce?: number
 }
 
 /**
@@ -576,10 +580,10 @@ function survivesJson(value: unknown, depth = 3): boolean {
   return Object.values(value).every((entry) => survivesJson(entry, depth - 1))
 }
 
-function writeCached(cache: Cache | null, key: string, value: unknown): void {
+function writeCached(cache: Cache | null, key: string, value: unknown, delayMs?: number): void {
   if (!survivesJson(value)) return
   try {
-    cache?.set(key, JSON.stringify(value))
+    cache?.set(key, JSON.stringify(value), delayMs)
   } catch {
     // Unserialisable data is not a reason to fail the request that produced it.
   }
