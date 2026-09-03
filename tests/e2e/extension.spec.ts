@@ -232,7 +232,7 @@ export default function Peg() {
  * to count deliveries from outside the worker.
  */
 const THROTTLED_SOURCE = `
-import { List, environment } from "lumanin";
+import { Action, ActionPanel, List, environment } from "lumanin";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -245,7 +245,17 @@ export default function TypeFast() {
         writeFileSync(join(environment.supportPath, "typed.txt"), text + "\\n", { flag: "a" })
       }
     >
-      <List.Item id="ready" title="Ready To Type" />
+      {/* The action is here so the view has an action bar: that is what a test
+          outside the window can watch appear and then go on Escape. */}
+      <List.Item
+        id="ready"
+        title="Ready To Type"
+        actions={
+          <ActionPanel>
+            <Action title="Note The Text" onAction={() => writeFileSync(join(environment.supportPath, "noted.txt"), "noted")} />
+          </ActionPanel>
+        }
+      />
     </List>
   );
 }
@@ -899,6 +909,7 @@ test('a throttled list is handed the word, not every letter', async () => {
   // property of the machine. Fewer than six is what proves the collapse.
   expect(delivered().length).toBeLessThan(6)
 
+  await expect(page.locator('.actionbar')).toHaveCount(1)
   await page.locator('.search__input').press('Escape')
   await expect(page.locator('.actionbar')).toHaveCount(0)
   expect((await askDaemon({ kind: 'show' })).ok).toBe(true)

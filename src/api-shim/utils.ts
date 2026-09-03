@@ -147,8 +147,10 @@ export function usePromise<T>(
       return
     }
     void run().catch(() => {
-      // Already recorded in state and surfaced as a toast. Rethrowing here would
-      // become an unhandled rejection and take the worker down.
+      // Either already recorded in state and surfaced by the guard above, or the
+      // rejection of a run that has been superseded and is deliberately silent.
+      // Rethrowing here would become an unhandled rejection and take the worker
+      // down.
     })
   }, [execute, run])
 
@@ -501,6 +503,11 @@ export function useExec<T = string>(
   // keyed without them never re-executes. They are hashed rather than spelled
   // out because this array is also the persisted cache key, and an inherited
   // environment would write kilobytes of it into a file with a fixed budget.
+  // Two costs come with keying the cache on them: a command handed the whole
+  // environment gets a key that moves whenever an inherited variable differs
+  // between launches, so its cached answer stops being found and a dead entry is
+  // left behind; and the digest is recomputed on every render, so a large
+  // `input` is stringified per keystroke.
   return useCachedPromise(
     run as (...args: never[]) => Promise<T>,
     [file, args, options.cwd, hash(stableKey([options.shell, options.input, options.env]))],

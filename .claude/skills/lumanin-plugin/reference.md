@@ -245,11 +245,13 @@ still contains Shift in places - prefer writing the chord out to importing one o
   the first one, on a single letter, is the slowest of them. Hold `isLoading` true while you
   wait for an answer, or the list reads as a search that found nothing - that part is still
   yours to do.
-- Superseding a run is handled for you. `execute: false` aborts the run in flight and discards
-  its result, so clearing the box stops the work rather than letting it finish into a query the
-  user has left; and a run that fails after a newer one started raises no toast and calls no
-  `onError`. `useExec` re-runs whenever `input`, `env`, `shell` or `cwd` change, not only on the
-  command and its arguments.
+- Superseding a run is handled for you. `execute: false` discards the result of the run in
+  flight, so an answer for a query the user has left is never applied; and a run that fails
+  after a newer one started raises no toast and calls no `onError`. Whether the work also
+  *stops* depends on who owns the controller: `useExec` owns the child process, so it is killed,
+  while a bare `usePromise` or `useFetch` keeps running to completion unless you pass an
+  `abortable` ref for the hook to abort. `useExec` re-runs whenever `input`, `env`, `shell` or
+  `cwd` change, not only on the command and its arguments.
 - `pagination` is parsed but `onLoadMore` never fires - show your first page.
 - `List.Dropdown`'s `storeValue` does not persist across launches yet; `defaultValue` does fire
   `onChange` on mount, so gate initial loads on that. The launcher's Tab key cycles the dropdown
