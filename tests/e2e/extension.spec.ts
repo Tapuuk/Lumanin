@@ -337,6 +337,15 @@ test.afterAll(async () => {
   await app.close().catch(() => undefined)
 })
 
+test('the extension host is warm before anything has asked for it', async () => {
+  // First in the file, and the suite runs one spec and one test at a time, so
+  // nothing has launched a plugin yet. A running host with a ready spare can
+  // therefore only have come from the daemon starting it by itself.
+  await expect
+    .poll(async () => (await askDaemon({ kind: 'status' })).data, { timeout: 20_000 })
+    .toMatchObject({ extensionHost: { running: true, spare: 'ready' } })
+})
+
 test('an installed extension command appears at the root', async () => {
   await page.locator('.search__input').fill('browse fruit')
   await expect(page.locator('.result[data-kind="extension"]').first()).toBeVisible()
