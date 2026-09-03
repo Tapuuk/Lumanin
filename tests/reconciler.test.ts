@@ -17,6 +17,7 @@ import { INTERNAL_TYPES, type RenderNode } from '../src/shared/render-tree'
 
 interface Harness {
   render(element: ReactNode): RenderNode
+  unmount(): void
   readonly handlers: Map<string, (payload: unknown) => void>
   readonly rejected: { node: string; prop: string; reason: string }[]
   readonly errors: unknown[]
@@ -49,6 +50,9 @@ function harness(): Harness {
       const { node, handlers: live } = serializeTree(renderer.root, sink)
       for (const id of [...handlers.keys()]) if (!live.has(id)) handlers.delete(id)
       return node
+    },
+    unmount() {
+      renderer.unmount()
     }
   }
 }
@@ -193,6 +197,29 @@ describe('the reconciler', () => {
     // A second pass so the effect's state update is committed.
     const tree = h.render(createElement(Counter, null))
     expect((tree.children[0] as RenderNode).props['title']).toBe('count 1')
+  })
+
+  /**
+   * Tearing a session down terminates the thread right after this returns, so an
+   * effect cleanup left queued never runs at all — and abandoning a spawned
+   * command is exactly the kind of thing extensions put in one.
+   */
+  it('runs effect cleanups before unmount returns', () => {
+    const h = harness()
+    let cleaned = false
+
+    function Watcher(): ReactNode {
+      useEffect(() => {
+        return () => {
+          cleaned = true
+        }
+      }, [])
+      return createElement('List', null)
+    }
+
+    h.render(createElement(Watcher, null))
+    h.unmount()
+    expect(cleaned).toBe(true)
   })
 
   it('reports a render error instead of throwing it', () => {

@@ -446,7 +446,10 @@ export function createRenderer(options: {
     },
     unmount() {
       reconciler.updateContainerSync(null, opaque, null, null)
-      reconciler.flushSyncWork()
+      // Through the same drain as a render: a cleanup queued in the passive
+      // phase — where abandoning a spawned command lives — has to have run
+      // before the caller terminates the thread.
+      this.flush()
     }
   }
 }
