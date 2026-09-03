@@ -4,7 +4,9 @@ import {
   APP_METHODS,
   HOST_METHODS,
   WORKER_METHODS,
+  WORKER_NOTIFICATIONS,
   type EventParams,
+  type HostPing,
   type SessionRef,
   type SessionSpec
 } from '../shared/ext-protocol'
@@ -54,14 +56,40 @@ interface Session {
 
 const sessions = new Map<string, Session>()
 
-/** A worker that has loaded React, the reconciler and the shim, and has no command yet. */
-let spare: { worker: Worker; peer: RpcPeer } | null = null
+/** A started worker, warm or still warming. */
+interface PooledWorker {
+  readonly worker: Worker
+  readonly peer: RpcPeer
+  /** True once the worker has said that React, the reconciler and the shim are loaded. */
+  readonly ready: boolean
+}
+
+/** The worker held for the next launch. Warm once it has announced itself. */
+let spare: PooledWorker | null = null
+
+/**
+ * How many spares may fail to start before the pool gives up.
+ *
+ * A worker that cannot start will not start on the fourth attempt either, and a
+ * retry loop inside the host process is worse than a slow launch: nothing would
+ * ever say why, and the failures would keep costing a thread each.
+ */
+const MAX_SPARE_FAILURES = 3
+
+/** Long enough that a replacement is not spawned into whatever killed the last one. */
+const SPARE_RETRY_MS = 200
+
+/** Consecutive spares that died before they were used. Reset by any worker warming up. */
+let spareFailures = 0
 
 const host = createPeer({
   send: (message) => parent.postMessage(message),
   onError: (context, error) => report('debug', `host rpc ${context}: ${String(error)}`),
   methods: {
-    [HOST_METHODS.PING]: () => ({ sessions: sessions.size, spare: spare !== null }),
+    [HOST_METHODS.PING]: (): HostPing => ({
+      sessions: sessions.size,
+      spare: spare === null ? 'none' : spare.ready ? 'ready' : 'warming'
+    }),
     [HOST_METHODS.CREATE]: (params) => create(params as SessionSpec),
     [HOST_METHODS.EVENT]: (params) => forward(params as EventParams, WORKER_METHODS.EVENT),
     [HOST_METHODS.POP]: (params) => forward(params as SessionRef, WORKER_METHODS.POP),
@@ -88,7 +116,7 @@ function report(level: 'debug' | 'info' | 'warn' | 'error', message: string): vo
  * is in main. Relaying keeps the round trip honest — the worker's promise
  * settles when main actually did the thing, not when the host said it would.
  */
-function spawn(): { worker: Worker; peer: RpcPeer } {
+function spawn(): PooledWorker {
   const worker = new Worker(WORKER_PATH, {
     workerData: { modulePath: MODULE_PATH },
     resourceLimits: { maxOldGenerationSizeMb: WORKER_MEMORY_MB },
@@ -120,20 +148,47 @@ function spawn(): { worker: Worker; peer: RpcPeer } {
    * Both become "there is no spare", which is a state the pool already knows
    * how to be in. The guard is what makes this a *spare* handler: once adopted,
    * the session's own handlers own the failure.
+   *
+   * "There is no spare" used to be where it ended, and the pool was topped up
+   * only when a session was closed: until somebody closed one, every launch
+   * paid the cold path. So a replacement is scheduled here too, and a failure
+   * that keeps repeating stops at {@link MAX_SPARE_FAILURES} with a line at
+   * error level rather than spawning threads forever.
    */
   const forget = (why: string): void => {
     if (spare?.worker !== worker) return
     spare = null
+    spareFailures += 1
+    if (spareFailures >= MAX_SPARE_FAILURES) {
+      report(
+        'error',
+        `the warm spare worker ${why}, ${spareFailures} times running; not warming another`
+      )
+      return
+    }
     report('warn', `the warm spare worker ${why}`)
+    topUpSpare(SPARE_RETRY_MS)
   }
   worker.on('error', (error: Error) => forget(`could not start: ${error.message}`))
   worker.on('exit', () => forget('exited before it was used'))
+
+  let ready = false
 
   const peer = createPeer({
     send: (message) => worker.postMessage(message),
     onError: (context, error) => report('debug', `worker rpc ${context}: ${String(error)}`),
     methods: {},
-    onNotification: (method, params) => host.notify(method, params),
+    onNotification: (method, params) => {
+      if (method === WORKER_NOTIFICATIONS.READY) {
+        ready = true
+        // A worker got all the way up in this process, so whatever the last
+        // failures were, they were not "no worker can ever start here".
+        spareFailures = 0
+        report('debug', 'worker warm')
+        return
+      }
+      host.notify(method, params)
+    },
     // A worker call is really a call on main, so it is relayed with main's own
     // answer — including main's error, which is what the extension should see.
     timeoutMs: 0
@@ -150,7 +205,13 @@ function spawn(): { worker: Worker; peer: RpcPeer } {
     peer.handle(message)
   })
 
-  return { worker, peer }
+  return {
+    worker,
+    peer,
+    get ready(): boolean {
+      return ready
+    }
+  }
 }
 
 /** Pass one worker request to main and post the answer back to that worker. */
@@ -173,14 +234,31 @@ function relay(worker: Worker, id: number, method: string, params: unknown): voi
  * The replacement is spawned *after* the current one is handed over, so the cost
  * of warming it lands while the user is looking at an extension that has already
  * started rendering rather than in front of the launch they just asked for.
+ *
+ * A spare that has not announced itself yet is handed over anyway: half warm
+ * still beats cold, and the launch is about to await `session.create` regardless.
  */
-function takeWarm(): { worker: Worker; peer: RpcPeer } {
+function takeWarm(): PooledWorker {
   const taken = spare ?? spawn()
   spare = null
+  topUpSpare()
+  return taken
+}
+
+/**
+ * Put a spare in place, unless there is one already or there should not be.
+ *
+ * The one place that decides it, because four callers want the same three
+ * conditions and a failure cap remembered in four places is a cap remembered in
+ * three. Always deferred through a timer, which also keeps the spawn out of
+ * whatever awaited handler asked for it: the reply goes out first and the
+ * thread starts after.
+ */
+function topUpSpare(delayMs = 0): void {
+  if (spareFailures >= MAX_SPARE_FAILURES) return
   setTimeout(() => {
     if (spare === null && sessions.size < MAX_SESSIONS) spare = spawn()
-  }, 0).unref?.()
-  return taken
+  }, delayMs).unref?.()
 }
 
 /**
@@ -246,6 +324,11 @@ function died(session: Session, error: Error): void {
     ...(error.stack === undefined ? {} : { stack: error.stack }),
     fatal: true
   })
+
+  // A session dying at the session ceiling was the one path that left the pool
+  // empty: the replacement `takeWarm` scheduled declined while the map was
+  // full, and only a deliberate close ever tried again.
+  topUpSpare()
 }
 
 async function forward(params: SessionRef, method: string): Promise<null> {
@@ -277,7 +360,7 @@ async function destroy(sessionId: string): Promise<null> {
 
   // A worker is never reused for a second command — its shim is now full of the
   // last command's state — so the pool is topped up instead.
-  if (spare === null) spare = spawn()
+  topUpSpare()
   return null
 }
 
