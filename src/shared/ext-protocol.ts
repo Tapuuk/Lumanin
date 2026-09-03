@@ -112,6 +112,19 @@ export type SpareState = 'ready' | 'warming' | 'none' | 'unknown'
 export interface HostPing {
   readonly sessions: number
   readonly spare: SpareState
+  /**
+   * Every worker thread the host has started and not seen exit, the spare
+   * included.
+   *
+   * A count that stays high after the panel closed is a thread that outlived its
+   * session — a wedged command still burning a core and holding its heap. That
+   * is invisible from anywhere else, because a session is dropped from the map
+   * before its worker is asked to stop.
+   *
+   * `null` means the host did not answer, the same admission `spare: 'unknown'`
+   * makes.
+   */
+  readonly workers: number | null
 }
 
 /** {@link HostPing} plus the one thing only main knows: whether it forked at all. */
@@ -119,13 +132,16 @@ export interface ExtensionHostStatus {
   readonly running: boolean
   readonly sessions: number
   readonly spare: SpareState
+  /** As {@link HostPing.workers}; `0` when there is no host process. */
+  readonly workers: number | null
 }
 
 /** The answer when the host process has not been started. Written once. */
 export const HOST_NOT_RUNNING: ExtensionHostStatus = {
   running: false,
   sessions: 0,
-  spare: 'none'
+  spare: 'none',
+  workers: 0
 }
 
 /** Everything a worker needs to run one command. */

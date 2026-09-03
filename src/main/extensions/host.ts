@@ -252,8 +252,15 @@ export class ExtensionHost {
     // the peer tells the two apart, so a process that is definitively gone is
     // not reported as running but silent.
     if (this.peer === null) return HOST_NOT_RUNNING
-    if (answer === null) return { running: true, sessions: this.sessions.size, spare: 'unknown' }
-    return { running: true, sessions: answer.sessions, spare: answer.spare }
+    if (answer === null) {
+      return { running: true, sessions: this.sessions.size, spare: 'unknown', workers: null }
+    }
+    return {
+      running: true,
+      sessions: answer.sessions,
+      spare: answer.spare,
+      workers: answer.workers
+    }
   }
 
   /**

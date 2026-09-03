@@ -199,6 +199,33 @@ export default function Crowd() {
 }
 `
 
+/**
+ * A command that stops answering, the way a plugin accidentally does: a loop
+ * with no await in it. The first commit is out and the worker is back on its
+ * event loop before the loop starts, so the panel renders and *then* the thread
+ * stops responding to anything — including being told its session is over.
+ */
+const PEG_SOURCE = `
+import { List } from "lumanin";
+import { useEffect } from "react";
+
+export default function Peg() {
+  useEffect(() => {
+    setTimeout(() => {
+      for (;;) {
+        Date.now();
+      }
+    }, 50);
+  }, []);
+
+  return (
+    <List>
+      <List.Item id="pegged" title="Pegged" />
+    </List>
+  );
+}
+`
+
 const MANIFEST = {
   name: 'fruit',
   title: 'Fruit',
@@ -230,6 +257,12 @@ const MANIFEST = {
       title: 'Crowd',
       description: 'Two thousand rows',
       mode: 'view'
+    },
+    {
+      name: 'peg',
+      title: 'Peg',
+      description: 'A command that stops answering',
+      mode: 'view'
     }
   ]
 }
@@ -260,6 +293,43 @@ function askDaemon(verb: object): Promise<{ ok: boolean; data?: unknown; error?:
   })
 }
 
+/**
+ * How many worker threads the host is holding.
+ *
+ * A gap in the answer reads as "too many" rather than as a pass, so a poll on
+ * this keeps trying instead of succeeding on a status the host never filled in.
+ */
+async function hostWorkers(): Promise<number> {
+  const reply = await askDaemon({ kind: 'status' })
+  const data = reply.data as { extensionHost?: { workers?: number | null } } | undefined
+  const workers = data?.extensionHost?.workers
+  return typeof workers === 'number' ? workers : Number.POSITIVE_INFINITY
+}
+
+/**
+ * The worker count once it has stopped moving.
+ *
+ * A single read is not a baseline. A worker torn down by an earlier test may
+ * not have emitted its exit yet, so the count can still be on its way down —
+ * and a baseline read one too high is one a teardown reaches by doing nothing.
+ * Two equal reads a beat apart are the quiet state.
+ */
+async function settledHostWorkers(): Promise<number> {
+  let previous = Number.POSITIVE_INFINITY
+  await expect
+    .poll(
+      async () => {
+        const current = await hostWorkers()
+        const steady = Number.isFinite(current) && current === previous
+        previous = current
+        return steady
+      },
+      { timeout: 20_000, intervals: [250] },
+    )
+    .toBe(true)
+  return previous
+}
+
 async function rowTitles(): Promise<string[]> {
   return page.locator('.result__title').allTextContents()
 }
@@ -272,6 +342,7 @@ test.beforeAll(async () => {
   writeFileSync(join(source, 'src', 'browse.tsx'), EXTENSION_SOURCE)
   writeFileSync(join(source, 'src', 'compose.tsx'), FORM_SOURCE)
   writeFileSync(join(source, 'src', 'crowd.tsx'), CROWD_SOURCE)
+  writeFileSync(join(source, 'src', 'peg.tsx'), PEG_SOURCE)
 
   // Built with the same externals the product uses, because that list is the
   // single-React rule's build half and building it any other way would test a
@@ -282,7 +353,8 @@ test.beforeAll(async () => {
     entryPoints: [
       join(source, 'src', 'browse.tsx'),
       join(source, 'src', 'compose.tsx'),
-      join(source, 'src', 'crowd.tsx')
+      join(source, 'src', 'crowd.tsx'),
+      join(source, 'src', 'peg.tsx')
     ],
     outdir: join(installed, 'commands'),
     bundle: true,
@@ -588,6 +660,44 @@ test('cycling the category faster than patches come back settles, never loops', 
   await page.waitForTimeout(1000)
   await expect(page.locator('.result__title').first()).toHaveText('sweet Row 1')
 
+  await page.locator('.search__input').press('Escape')
+  await expect(page.locator('.actionbar')).toHaveCount(0)
+})
+
+/**
+ * Closing a command that has stopped answering.
+ *
+ * The teardown asks the worker to end its session and the worker is in a loop
+ * that will never read the message. Without a bound on that wait the thread is
+ * never terminated: the panel goes back to the root looking fine while a thread
+ * spins on with its own heap, one more of them per launch.
+ */
+test('a command that stops answering is still torn down', async () => {
+  // The count only means something once the pool has settled: a host still
+  // warming its spare holds fewer threads than its own quiet state does, and a
+  // baseline taken there is one the teardown can never get back down to.
+  await expect
+    .poll(async () => (await askDaemon({ kind: 'status' })).data, { timeout: 20_000 })
+    .toMatchObject({ extensionHost: { running: true, spare: 'ready' } })
+  const baseline = await settledHostWorkers()
+  expect(baseline).toBeLessThan(Number.POSITIVE_INFINITY)
+
+  const reply = await askDaemon({ kind: 'open', target: 'extension:fruit/peg' })
+  expect(reply.ok).toBe(true)
+  await expect(page.locator('.result__title').first()).toHaveText('Pegged', { timeout: 10_000 })
+  // Long enough for the loop to have started.
+  await page.waitForTimeout(300)
+
+  await page.locator('.search__input').press('Escape')
+  await expect(page.locator('.actionbar')).toHaveCount(0)
+
+  await expect.poll(hostWorkers, { timeout: 15_000 }).toBeLessThanOrEqual(baseline)
+
+  // And the host is still a host: this session began with an `open` verb, so
+  // Escape closed the window and the next launch needs it shown again.
+  expect((await askDaemon({ kind: 'show' })).ok).toBe(true)
+  expect((await askDaemon({ kind: 'open', target: 'extension:fruit/browse' })).ok).toBe(true)
+  await expect(page.locator('.result__title').first()).toHaveText('Avocado', { timeout: 10_000 })
   await page.locator('.search__input').press('Escape')
   await expect(page.locator('.actionbar')).toHaveCount(0)
 })
