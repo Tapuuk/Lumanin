@@ -1,10 +1,10 @@
 import { spawn } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createElement, type ReactNode } from 'react'
 import { afterAll, describe, expect, it } from 'vitest'
-import { installRuntime } from '../src/api-shim/runtime'
+import { installRuntime, type ShimRuntime } from '../src/api-shim/runtime'
 import {
   defaultParseOutput,
   killAfterGrace,
@@ -12,6 +12,7 @@ import {
   splitCommand,
   type ExecOutcome
 } from '../src/api-shim/exec'
+import { flushCaches } from '../src/api-shim/system'
 import { useExec } from '../src/api-shim/utils'
 import { createRenderer } from '../src/host/reconciler'
 import { serializeTree, type SerializeSink } from '../src/host/tree'
@@ -244,7 +245,7 @@ describe('what a failure turns into', () => {
 const supportPath = mkdtempSync(join(tmpdir(), 'lumanin-exec-'))
 afterAll(() => rmSync(supportPath, { recursive: true, force: true }))
 
-installRuntime({
+const fakeRuntime = (support: string): ShimRuntime => ({
   spec: {
     sessionId: 'exec-test',
     extensionName: 'fixture',
@@ -259,7 +260,7 @@ installRuntime({
     launchArguments: {},
     environment: {
       assetsPath: '/tmp/fixture/assets',
-      supportPath,
+      supportPath: support,
       appearance: 'dark',
       textSize: 'medium',
       isDevelopment: false,
@@ -273,6 +274,8 @@ installRuntime({
   nextHandlerId: () => 'h',
   scheduleRender: () => {}
 })
+
+installRuntime(fakeRuntime(supportPath))
 
 interface Harness {
   render(element: ReactNode): RenderNode
@@ -376,5 +379,74 @@ describe('useExec, rendered', () => {
 
     expect(seen.length).toBeGreaterThan(0)
     expect(seen.every((value) => Buffer.isBuffer(value))).toBe(true)
+  })
+
+  /**
+   * Two hooks in one command address one cache file. Each holding its own parsed
+   * copy would mean the second write persists a snapshot taken before the first
+   * one, so whichever finished last would be the only entry left on disk.
+   */
+  it('keeps both hooks of a command in the written cache', async () => {
+    const h = harness()
+    const Command = (): ReactNode => {
+      const first = useExec('/bin/echo', ['first hook'])
+      const second = useExec('/bin/echo', ['second hook'])
+      return createElement('List', { isLoading: first.isLoading || second.isLoading })
+    }
+
+    await settle(h, createElement(Command))
+    flushCaches()
+
+    const written = readFileSync(join(supportPath, 'cache', 'raycast-utils.json'), 'utf8')
+    expect(written).toContain('first hook')
+    expect(written).toContain('second hook')
+    expect(h.errors).toEqual([])
+  })
+})
+
+/**
+ * `cacheWriteDebounce` travels from a plugin's options through the hook into
+ * `Cache.set`, and every step of that is a value being passed on rather than
+ * used, so an argument dropped anywhere along it still typechecks and still
+ * renders, and every plugin silently gets the default delay instead of the one
+ * it asked for. What the option changes is when the file appears, so that is
+ * what these two read.
+ */
+describe('cacheWriteDebounce, through the hook', () => {
+  const cacheFile = (support: string): string => join(support, 'cache', 'raycast-utils.json')
+
+  /** A support directory of its own, so an earlier case's file cannot answer for this one. */
+  function freshSupport(): string {
+    const support = mkdtempSync(join(tmpdir(), 'lumanin-debounce-'))
+    afterAll(() => rmSync(support, { recursive: true, force: true }))
+    installRuntime(fakeRuntime(support))
+    return support
+  }
+
+  it('writes the cache as the run finishes when asked for no delay', async () => {
+    const support = freshSupport()
+    const Command = (): ReactNode => {
+      const { isLoading } = useExec('/bin/echo', ['no delay'], { cacheWriteDebounce: 0 })
+      return createElement('List', { isLoading })
+    }
+
+    await settle(harness(), createElement(Command))
+
+    expect(existsSync(cacheFile(support))).toBe(true)
+  })
+
+  it('holds the write back when the option is left out', async () => {
+    const support = freshSupport()
+    const Command = (): ReactNode => {
+      const { isLoading } = useExec('/bin/echo', ['default delay'])
+      return createElement('List', { isLoading })
+    }
+
+    await settle(harness(), createElement(Command))
+
+    expect(existsSync(cacheFile(support))).toBe(false)
+    // Nothing is left armed over a directory this file is about to remove.
+    flushCaches()
+    expect(existsSync(cacheFile(support))).toBe(true)
   })
 })

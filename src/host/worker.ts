@@ -473,6 +473,11 @@ function teardown(): void {
   } catch (error) {
     log('warn', `an extension threw while unmounting: ${describe(error)}`)
   }
+  try {
+    shim?.__lumaninInternals.flushCaches()
+  } catch (error) {
+    log('warn', `cache could not be written on teardown: ${describe(error)}`)
+  }
   treeHandlers.clear()
   detachedHandlers.clear()
   renderer = null

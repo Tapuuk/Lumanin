@@ -26,6 +26,7 @@ import {
   clearSearchBar,
   closeMainWindow,
   environment,
+  flushCaches,
   getApplications,
   getDefaultApplication,
   getFrontmostApplication,
@@ -220,6 +221,7 @@ export function render(element: ReactNode): void {
 
 export const __lumaninInternals = {
   CommandRoot,
+  flushCaches,
   popNavigation,
   unsupportedApis,
   legacyRoot: (): ReactNode => legacyRoot
