@@ -1,4 +1,5 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import type { FSWatcher } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -632,6 +633,58 @@ describe('keeping the index fresh', () => {
       vi.advanceTimersByTime(200)
 
       expect(builds()).toBe(after)
+      search.dispose()
+    })
+
+    it('arms the age fallback again once a watch has died', () => {
+      const root = mkdtempSync(join(tmpdir(), 'lumanin-show-'))
+      mkdirSync(join(root, 'applications'), { recursive: true })
+
+      const { search, builds } = counted(root)
+      search.reindex()
+      search.watch()
+      const after = builds()
+
+      // What the error handler is for: a watcher that has stopped must stop
+      // counting as one, or the directory it covered is never rebuilt again.
+      const watchers = (search as unknown as { watchers: FSWatcher[] }).watchers
+      expect(watchers).toHaveLength(1)
+      watchers[0]?.emit('error', new Error('watch died'))
+
+      vi.advanceTimersByTime(61_000)
+      search.refreshIfStale()
+      vi.advanceTimersByTime(200)
+
+      expect(builds()).toBe(after + 1)
+      search.dispose()
+    })
+
+    it('leaves an armed rebuild where it is when a second show arrives', () => {
+      const root = mkdtempSync(join(tmpdir(), 'lumanin-show-'))
+      mkdirSync(join(root, 'applications'), { recursive: true })
+
+      const { search, builds } = counted(root)
+      search.reindex()
+      const after = builds()
+
+      writeFileSync(
+        join(root, 'applications', 'twice.desktop'),
+        '[Desktop Entry]\nType=Application\nName=Twice\nExec=twice\n'
+      )
+
+      search.refreshIfStale()
+      vi.advanceTimersByTime(100)
+      // A second show while one is armed neither queues another rebuild nor
+      // pushes the armed one further out, so it still lands 150 ms after the
+      // first show rather than 150 ms after this one.
+      search.refreshIfStale()
+      vi.advanceTimersByTime(60)
+
+      expect(builds()).toBe(after + 1)
+      expect(apps(search, 'twice').map((r) => r.title)).toEqual(['Twice'])
+
+      vi.advanceTimersByTime(200)
+      expect(builds()).toBe(after + 1)
       search.dispose()
     })
 
