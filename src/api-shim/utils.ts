@@ -120,10 +120,13 @@ export function usePromise<T>(
       const failure = error instanceof Error ? error : new Error(String(error))
       // An abort is the hook doing its job, not a failure to report.
       if (failure.name === 'AbortError') throw failure
-      if (generation.current === ours) setState({ isLoading: false, error: failure })
-
-      if (current.onError !== undefined) current.onError(failure)
-      else void showFailureToast(failure, current.failureToastOptions)
+      if (generation.current === ours) {
+        setState({ isLoading: false, error: failure })
+        if (current.onError !== undefined) current.onError(failure)
+        else void showFailureToast(failure, current.failureToastOptions)
+      }
+      // Rethrown outside the guard: `revalidate()` and `mutate()` awaited this
+      // call and are owed its rejection even once a newer run has taken over.
       throw failure
       // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     }
@@ -134,6 +137,12 @@ export function usePromise<T>(
 
   useEffect(() => {
     if (!execute) {
+      // An abandoned run must stop, and must not be applied if it finishes
+      // anyway: the bump supersedes a late result, the abort stops the work
+      // producing it. A caller with no `abortable` gets only the supersede,
+      // which is the whole of what the hook can do without a controller.
+      generation.current += 1
+      latest.current.options.abortable?.current?.abort()
       setState((previous) => ({ ...previous, isLoading: false }))
       return
     }
@@ -488,10 +497,18 @@ export function useExec<T = string>(
   // still be going when the next command opens.
   useEffect(() => () => abortable.current?.abort(), [])
 
-  return useCachedPromise(run as (...args: never[]) => Promise<T>, [file, args, options.cwd], {
-    ...options,
-    abortable
-  })
+  // `shell`, `input` and `env` change what the command is asked to do, so a run
+  // keyed without them never re-executes. They are hashed rather than spelled
+  // out because this array is also the persisted cache key, and an inherited
+  // environment would write kilobytes of it into a file with a fixed budget.
+  return useCachedPromise(
+    run as (...args: never[]) => Promise<T>,
+    [file, args, options.cwd, hash(stableKey([options.shell, options.input, options.env]))],
+    {
+      ...options,
+      abortable
+    }
+  )
 }
 
 // --- not implemented ---------------------------------------------------------
