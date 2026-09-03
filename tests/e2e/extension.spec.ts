@@ -306,6 +306,30 @@ async function hostWorkers(): Promise<number> {
   return typeof workers === 'number' ? workers : Number.POSITIVE_INFINITY
 }
 
+/**
+ * The worker count once it has stopped moving.
+ *
+ * A single read is not a baseline. A worker torn down by an earlier test may
+ * not have emitted its exit yet, so the count can still be on its way down —
+ * and a baseline read one too high is one a teardown reaches by doing nothing.
+ * Two equal reads a beat apart are the quiet state.
+ */
+async function settledHostWorkers(): Promise<number> {
+  let previous = Number.POSITIVE_INFINITY
+  await expect
+    .poll(
+      async () => {
+        const current = await hostWorkers()
+        const steady = Number.isFinite(current) && current === previous
+        previous = current
+        return steady
+      },
+      { timeout: 20_000, intervals: [250] },
+    )
+    .toBe(true)
+  return previous
+}
+
 async function rowTitles(): Promise<string[]> {
   return page.locator('.result__title').allTextContents()
 }
@@ -655,7 +679,7 @@ test('a command that stops answering is still torn down', async () => {
   await expect
     .poll(async () => (await askDaemon({ kind: 'status' })).data, { timeout: 20_000 })
     .toMatchObject({ extensionHost: { running: true, spare: 'ready' } })
-  const baseline = await hostWorkers()
+  const baseline = await settledHostWorkers()
   expect(baseline).toBeLessThan(Number.POSITIVE_INFINITY)
 
   const reply = await askDaemon({ kind: 'open', target: 'extension:fruit/peg' })

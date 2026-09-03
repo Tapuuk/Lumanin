@@ -87,9 +87,11 @@ function stripNewline<D extends string | Buffer>(value: D, strip: boolean): D {
 /**
  * How long a killed child gets to exit on its own before SIGKILL.
  *
- * Deliberately shorter than the grace the extension host gives a worker it is
- * tearing down: a command aborted by a view being unmounted has to have time to
- * escalate before the isolate that armed the timer is gone.
+ * The escalation is reachable in two situations: a command that runs past its
+ * own timeout, and one aborted while its session carries on — a popped view
+ * whose worker keeps living. A child whose worker is torn down instead is
+ * orphaned regardless of this value: the timer dies with the isolate, and the
+ * child belongs to the host process rather than to the thread that spawned it.
  */
 const KILL_GRACE_MS = 1000
 
