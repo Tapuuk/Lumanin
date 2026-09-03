@@ -3,7 +3,14 @@ import { describe, expect, it } from 'vitest'
 import { applyPatch, compare, type Operation } from 'fast-json-patch'
 import { createRenderer } from '../src/host/reconciler'
 import { sameTree, serializeTree } from '../src/host/tree'
-import { actionHandlerOf, listItemsOf, emptyTree, type RenderNode } from '../src/shared/render-tree'
+import {
+  actionHandlerOf,
+  listItemsOf,
+  emptyTree,
+  type RenderNode,
+  type RenderPatch
+} from '../src/shared/render-tree'
+import { applyRenderPatches } from '../src/shared/render-patch'
 
 /**
  * The patch round-trip: render fixture components in-worker, snapshot trees,
@@ -40,15 +47,30 @@ function session(): Session {
   }
 }
 
+/**
+ * Both halves of the seam, so every fixture below runs against each. The
+ * library applier is what shipped first; the sharing one has to be
+ * indistinguishable from it on anything the reconciler can produce.
+ */
+type Applier = (tree: RenderNode, patches: readonly Operation[]) => RenderNode
+
+const library: Applier = (tree, patches) =>
+  applyPatch(tree, patches as Operation[], false, false).newDocument
+const sharing: Applier = (tree, patches) =>
+  applyRenderPatches(tree, patches as unknown as readonly RenderPatch[])
+
 /** The renderer's half: a document and nothing else. */
-function player(): { apply(patches: readonly Operation[]): void; readonly tree: RenderNode } {
+function player(applier: Applier): {
+  apply(patches: readonly Operation[]): void
+  readonly tree: RenderNode
+} {
   let document: RenderNode = emptyTree()
   return {
     get tree(): RenderNode {
       return document
     },
     apply(patches) {
-      document = applyPatch(document, patches as Operation[], false, false).newDocument
+      document = applier(document, patches)
     }
   }
 }
@@ -72,10 +94,24 @@ function List(props: { readonly items: readonly string[]; readonly loading?: boo
   )
 }
 
-describe('the patch round-trip', () => {
+/** Titles that change under keys that do not, which is what a data load looks like. */
+function Rows(props: { readonly titles: readonly string[] }): ReactNode {
+  return createElement(
+    'List',
+    null,
+    ...props.titles.map((title, index) =>
+      createElement('List.Item', { key: `row-${index}`, title, accessories: [{ text: title }] })
+    )
+  )
+}
+
+describe.each([
+  ['fast-json-patch', library],
+  ['applyRenderPatches', sharing]
+])('the patch round-trip (%s)', (_label, applier: Applier) => {
   it('leaves the player holding exactly what the worker holds', () => {
     const worker = session()
-    const renderer = player()
+    const renderer = player(applier)
 
     const steps: ReactNode[] = [
       createElement(List, { items: [], loading: true }),
@@ -113,7 +149,7 @@ describe('the patch round-trip', () => {
     }
 
     const worker = session()
-    const renderer = player()
+    const renderer = player(applier)
     renderer.apply(worker.step(createElement(Counter, null)))
 
     const item = worker.tree.children[0] as RenderNode
@@ -123,7 +159,7 @@ describe('the patch round-trip', () => {
 
   it('round-trips text children and keeps their identity', () => {
     const worker = session()
-    const renderer = player()
+    const renderer = player(applier)
 
     renderer.apply(worker.step(createElement('Detail', null, 'first')))
     renderer.apply(worker.step(createElement('Detail', null, 'second')))
@@ -142,12 +178,132 @@ describe('the patch round-trip', () => {
    */
   it('cannot recover from a missed batch, which is why snapshots exist', () => {
     const worker = session()
-    const late = player()
+    const late = player(applier)
 
     worker.step(createElement(List, { items: [], loading: true })) // dropped
     const second = worker.step(createElement(List, { items: ['alpha'] }))
 
     expect(() => late.apply(second)).toThrow()
+  })
+})
+
+describe('applyRenderPatches', () => {
+  const hand = (): RenderNode => ({
+    id: 'root',
+    type: '__root',
+    props: {},
+    children: [
+      { id: 'a', type: 'List.Item', props: { title: 'A', 'a/b~c': 'raw' }, children: [] },
+      { id: 'b', type: 'List.Item', props: { title: 'B' }, children: [] },
+      { id: 'c', type: 'List.Item', props: { title: 'C' }, children: [] }
+    ]
+  })
+
+  const alone = (patch: RenderPatch): RenderNode =>
+    sharing(hand(), [patch] as unknown as Operation[])
+
+  const both = (patch: RenderPatch): void => {
+    const patches = [patch] as unknown as Operation[]
+    expect(sharing(hand(), patches)).toEqual(library(hand(), patches))
+  }
+
+  it('agrees with the library on every batch a real render produces', () => {
+    const worker = session()
+    const one = player(library)
+    const other = player(sharing)
+
+    for (const titles of [
+      ['one', 'two'],
+      ['one', 'two', 'three'],
+      ['three', 'two'],
+      ['three']
+    ]) {
+      const patches = worker.step(createElement(Rows, { titles }))
+      one.apply(patches)
+      other.apply(patches)
+      expect(other.tree).toEqual(one.tree)
+      expect(sameTree(other.tree, worker.tree)).toBe(true)
+    }
+  })
+
+  it('returns the tree itself when there is nothing to apply', () => {
+    const tree = hand()
+    expect(applyRenderPatches(tree, [])).toBe(tree)
+  })
+
+  /** The point of the whole applier: a redrawn row must not redraw its siblings. */
+  it('keeps every node off the patched path', () => {
+    const worker = session()
+    const first = worker.step(createElement(Rows, { titles: ['one', 'two'] }))
+    const before = sharing(emptyTree(), first)
+    const patches = worker.step(createElement(Rows, { titles: ['one changed', 'two'] }))
+    const after = sharing(before, patches)
+
+    const list = (tree: RenderNode): RenderNode => tree.children[0] as RenderNode
+    const row = (tree: RenderNode, index: number): RenderNode =>
+      list(tree).children[index] as RenderNode
+
+    expect(row(after, 0).props['title']).toBe('one changed')
+    expect(row(after, 1)).toBe(row(before, 1))
+    expect(row(after, 1).props).toBe(row(before, 1).props)
+    expect(after).not.toBe(before)
+    expect(row(before, 0).props['title']).toBe('one')
+  })
+
+  it('removes the first element of an array the way the library does', () => {
+    both({ op: 'remove', path: '/children/0' })
+  })
+
+  it('adds at an interior index the way the library does', () => {
+    both({
+      op: 'add',
+      path: '/children/1',
+      value: { id: 'd', type: 'List.Item', props: { title: 'D' }, children: [] }
+    })
+  })
+
+  it('moves a child within its array the way the library does', () => {
+    both({ op: 'move', from: '/children/2', path: '/children/0' })
+  })
+
+  it('replaces a whole subtree the way the library does', () => {
+    both({
+      op: 'replace',
+      path: '/children/1',
+      value: { id: 'e', type: 'Detail', props: { markdown: 'x' }, children: [] }
+    })
+  })
+
+  it('unescapes a prop name containing a slash and a tilde', () => {
+    both({ op: 'replace', path: '/children/0/props/a~1b~0c', value: 'cooked' })
+    const patched = alone({ op: 'replace', path: '/children/0/props/a~1b~0c', value: 'cooked' })
+    expect((patched.children[0] as RenderNode).props['a/b~c']).toBe('cooked')
+  })
+
+  it('appends at the end of an array', () => {
+    const value = { id: 'd', type: 'List.Item', props: { title: 'D' }, children: [] }
+    const patched = alone({ op: 'add', path: '/children/-', value })
+    expect(patched.children).toHaveLength(4)
+    expect(patched.children[3]).toEqual(value)
+  })
+
+  /**
+   * Refused rather than approximated: a wrongly applied batch does not fail
+   * loudly, it produces a tree that never existed on either side.
+   */
+  it('throws on an operation the render diff never produces', () => {
+    expect(() => alone({ op: 'copy', from: '/children/0', path: '/children/1' })).toThrow(
+      /"copy" at "\/children\/1"/
+    )
+    expect(() => alone({ op: 'test', path: '/children/0', value: null })).toThrow(
+      /"test" at "\/children\/0"/
+    )
+  })
+
+  it('throws when the path leads through a node that is not there', () => {
+    expect(() => alone({ op: 'replace', path: '/children/9/props/title', value: 'x' })).toThrow(
+      /"replace" at "\/children\/9\/props\/title"/
+    )
   })
 })
 
