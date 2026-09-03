@@ -234,6 +234,31 @@ export function createPeer(options: PeerOptions): RpcPeer {
 }
 
 /**
+ * Give a promise a deadline, and a value to settle with when it passes.
+ *
+ * Two hops build their peer with `timeoutMs: 0` on purpose — a relayed call has
+ * to carry the far side's own answer, however long that takes, and an extension
+ * may legitimately sit in a confirmation dialog for minutes. So the bound
+ * belongs to the caller that actually needs one, and this is where it lives:
+ * next to the peer whose missing timeout is the reason it is needed.
+ *
+ * Racing rather than ignoring is the important part. `Promise.race` attaches
+ * handlers to `work`, so a failure that arrives *after* the deadline is already
+ * handled and cannot become an unhandled rejection — which, in a process with no
+ * `unhandledRejection` listener, would take every extension down with it.
+ */
+export function withDeadline<T>(work: Promise<T>, ms: number, onTimeout: T): Promise<T> {
+  let timer: NodeJS.Timeout | undefined
+  const deadline = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(onTimeout), ms)
+    timer.unref?.()
+  })
+  return Promise.race([work, deadline]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer)
+  })
+}
+
+/**
  * Turn a thrown value into a wire error.
  *
  * The message is preserved verbatim because it is the only thing the user will

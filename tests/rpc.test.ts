@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createPeer, RpcError, RPC_ERRORS, toErrorBody, type RpcMessage } from '../src/node/rpc'
+import {
+  createPeer,
+  RpcError,
+  RPC_ERRORS,
+  toErrorBody,
+  withDeadline,
+  type RpcMessage
+} from '../src/node/rpc'
 
 /**
  * The JSON-RPC peer.
@@ -153,5 +160,59 @@ describe('the JSON-RPC peer', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(sent).toEqual([{ jsonrpc: '2.0', id: 1, result: null }])
+  })
+})
+
+/**
+ * The bound a caller puts on a peer that has none.
+ *
+ * Both worker hops are built without a call timeout on purpose, so tearing a
+ * wedged worker down depends entirely on this helper settling when the reply
+ * never comes.
+ */
+describe('a call with a deadline', () => {
+  it('resolves with the work\'s value when it settles first', async () => {
+    await expect(withDeadline(Promise.resolve('answered'), 1000, 'gave up')).resolves.toBe(
+      'answered'
+    )
+  })
+
+  it('resolves with the fallback when the work never settles', async () => {
+    await expect(withDeadline(new Promise<string>(() => {}), 10, 'gave up')).resolves.toBe(
+      'gave up'
+    )
+  })
+
+  it('rejects when the work fails before the deadline', async () => {
+    await expect(withDeadline(Promise.reject(new Error('broke')), 1000, 'gave up')).rejects.toThrow(
+      'broke'
+    )
+  })
+
+  /**
+   * Disposing a peer rejects every call still in flight, which for a call that
+   * already hit its deadline is a rejection arriving at a settled race. Handled
+   * by construction here; left to itself it is an unhandled rejection, and the
+   * host process has no listener for those.
+   */
+  it('does not leave a failure that arrives after the deadline unhandled', async () => {
+    const unhandled: unknown[] = []
+    const listener = (reason: unknown): void => {
+      unhandled.push(reason)
+    }
+    process.on('unhandledRejection', listener)
+    try {
+      let fail: (error: Error) => void = () => {}
+      const work = new Promise<string>((_resolve, reject) => {
+        fail = reject
+      })
+      await expect(withDeadline(work, 10, 'gave up')).resolves.toBe('gave up')
+      fail(new Error('too late'))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(unhandled).toEqual([])
+    } finally {
+      process.off('unhandledRejection', listener)
+    }
   })
 })
