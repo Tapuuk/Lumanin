@@ -238,12 +238,18 @@ still contains Shift in places - prefer writing the chord out to importing one o
 
 ## Gotchas
 
-- `List`'s `throttle` prop is accepted and ignored; debounce yourself inside
-  `onSearchTextChange` if the work is expensive. This matters most when each query spawns a
-  process: `useExec` aborts the superseded child, so it stays *correct* without a debounce but
-  not cheap - typing six letters starts six searches and the first one, on a single letter, is
-  the slowest of them. ~120 ms in a `useState`+`setTimeout` hook is enough, and hold `isLoading`
-  true through the gap or the list reads as a search that found nothing.
+- `List`'s `throttle` is honoured: the typed text reaches `onSearchTextChange` as a 150 ms
+  trailing debounce, so a burst of keystrokes is one call carrying the last of them. An emptied
+  search box still arrives at once - cancelling is never worth waiting for. Set it whenever a
+  query costs a process or a request: typing six letters would otherwise start six searches and
+  the first one, on a single letter, is the slowest of them. Hold `isLoading` true while you
+  wait for an answer, or the list reads as a search that found nothing - that part is still
+  yours to do.
+- Superseding a run is handled for you. `execute: false` aborts the run in flight and discards
+  its result, so clearing the box stops the work rather than letting it finish into a query the
+  user has left; and a run that fails after a newer one started raises no toast and calls no
+  `onError`. `useExec` re-runs whenever `input`, `env`, `shell` or `cwd` change, not only on the
+  command and its arguments.
 - `pagination` is parsed but `onLoadMore` never fires - show your first page.
 - `List.Dropdown`'s `storeValue` does not persist across launches yet; `defaultValue` does fire
   `onChange` on mount, so gate initial loads on that. The launcher's Tab key cycles the dropdown
