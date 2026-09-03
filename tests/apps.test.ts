@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -618,13 +618,47 @@ describe('keeping the index fresh', () => {
       search.dispose()
     })
 
-    it('reads a directory that cannot be stat\'d as one that is not there', () => {
+    it('never rebuilds on age alone while every directory is watched', () => {
+      const root = mkdtempSync(join(tmpdir(), 'lumanin-show-'))
+      mkdirSync(join(root, 'applications'), { recursive: true })
+
+      const { search, builds } = counted(root)
+      search.reindex()
+      search.watch()
+      const after = builds()
+
+      vi.advanceTimersByTime(61_000)
+      search.refreshIfStale()
+      vi.advanceTimersByTime(200)
+
+      expect(builds()).toBe(after)
+      search.dispose()
+    })
+
+    it('reads a directory that is not there as absent', () => {
       const root = mkdtempSync(join(tmpdir(), 'lumanin-show-'))
       mkdirSync(join(root, 'applications'), { recursive: true })
 
       const mtimes = directoryMtimes([join(root, 'applications'), join(root, 'nowhere')])
 
       expect([...mtimes.keys()]).toEqual([join(root, 'applications')])
+    })
+
+    it('reads a directory it is not allowed to stat as absent', () => {
+      const root = mkdtempSync(join(tmpdir(), 'lumanin-show-'))
+      const parent = join(root, 'locked')
+      const directory = join(parent, 'applications')
+      mkdirSync(directory, { recursive: true })
+
+      // Root can stat through any mode, so there is nothing to observe there.
+      if (process.getuid?.() === 0) return
+
+      chmodSync(parent, 0o000)
+      try {
+        expect([...directoryMtimes([directory]).keys()]).toEqual([])
+      } finally {
+        chmodSync(parent, 0o700)
+      }
     })
 
     it('calls two directory snapshots different when a key or a time differs', () => {

@@ -250,6 +250,11 @@ export class SearchService {
           this.scheduleReindex()
         })
         watcher.on('error', (error: unknown) => {
+          // Dropped rather than left in the array as a dead handle: the number
+          // of live watchers is what arms the age fallback, so a watch that has
+          // stopped must stop counting as one.
+          watcher.close()
+          this.watchers = this.watchers.filter((candidate) => candidate !== watcher)
           this.deps.logger.warn('stopped watching an application directory', { directory, error })
         })
         this.watchers.push(watcher)
@@ -476,6 +481,7 @@ export class SearchService {
   /** Stop watching. The daemon owns the lifetime; nothing else calls this. */
   dispose(): void {
     if (this.pending !== null) clearTimeout(this.pending)
+    this.pending = null
     for (const watcher of this.watchers) watcher.close()
     this.watchers = []
   }
