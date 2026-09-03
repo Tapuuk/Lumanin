@@ -667,6 +667,7 @@ async function withHeadlessList<T>(
       command,
       { ...context, enumerate: true },
       {
+        headless: true,
         onSession: (sessionId) => {
           launchedId = sessionId
           headlessSessions.set(sessionId, name)

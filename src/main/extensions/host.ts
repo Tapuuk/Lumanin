@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { utilityProcess, type UtilityProcess } from 'electron'
-import { applyPatch, type Operation } from 'fast-json-patch'
 import {
   APP_METHODS,
   HOST_METHODS,
@@ -17,6 +16,7 @@ import {
   type ToastPayload
 } from '../../shared/ext-protocol'
 import type { SessionInfo } from '../../shared/ipc'
+import { applyRenderPatches } from '../../shared/render-patch'
 import { emptyTree, type RenderNode } from '../../shared/render-tree'
 import { createPeer, RpcError, RPC_ERRORS, type RpcMessage, type RpcPeer } from '../../node/rpc'
 import type { Logger } from '../../node/logger'
@@ -118,6 +118,11 @@ interface LiveSession {
    */
   tree: RenderNode
   revision: number
+  /**
+   * Launched with no window, so there is no renderer to forward patches to.
+   * Main still applies them: the tree is what answers a read of the session.
+   */
+  readonly headless: boolean
   /**
    * Recorded before the session is dropped, so `launch` can still see it.
    *
@@ -330,6 +335,8 @@ export class ExtensionHost {
        * `confirmAlert` fired during startup consults it.
        */
       readonly onSession?: (sessionId: string) => void
+      /** No window will ever show this session, so its renders go nowhere. */
+      readonly headless?: boolean
     } = {}
   ): Promise<SessionInfo> {
     const stored = this.deps.store.preferences(
@@ -407,7 +414,14 @@ export class ExtensionHost {
       select: typeof context['item'] === 'string' ? context['item'] : null
     }
 
-    const live: LiveSession = { info, command, tree: emptyTree(), revision: 0, failure: null }
+    const live: LiveSession = {
+      info,
+      command,
+      tree: emptyTree(),
+      revision: 0,
+      headless: options.headless === true,
+      failure: null
+    }
     this.sessions.set(sessionId, live)
     options.onSession?.(sessionId)
     try {
@@ -672,7 +686,8 @@ export class ExtensionHost {
 
         const session = await this.launch(target, asRecord(context), {
           launchArguments: asStrings(launchArguments),
-          launchType: background === true ? 'background' : 'userInitiated'
+          launchType: background === true ? 'background' : 'userInitiated',
+          headless: background === true
         })
 
         // A background launch is a side effect with no screen. The session still
@@ -740,18 +755,13 @@ export class ExtensionHost {
         const render = params as RenderParams
         const session = this.sessions.get(render.sessionId)
         if (session === undefined) return
-        // Applied here first, then forwarded. `mutateDocument: false` because the
-        // tree we are holding may already have been handed to the renderer inside
-        // a `SessionInfo`, and mutating it afterwards would edit a value that has
-        // been sent.
-        session.tree = applyPatch(
-          session.tree,
-          render.patches as Operation[],
-          false,
-          false
-        ).newDocument
+        // Applied here first, then forwarded. Only the objects on each patched
+        // path are copied, and a new root comes back every batch — so the
+        // snapshot a `launch` already handed out, and the one a windowless read
+        // is polling, both still mean the revision they were taken at.
+        session.tree = applyRenderPatches(session.tree, render.patches)
         session.revision = render.revision
-        this.deps.emit('ext.render', render)
+        if (!session.headless) this.deps.emit('ext.render', render)
         return
       }
       case APP_METHODS.TOAST_SHOW: {
