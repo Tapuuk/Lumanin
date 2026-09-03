@@ -1,11 +1,11 @@
-import { watch, type FSWatcher } from 'node:fs'
+import { statSync, watch, type FSWatcher } from 'node:fs'
 import { rank } from '../shared/frecency'
 import { parseExtensionPin, type ResolvedConfig } from '../shared/config'
 import type { LaunchOutcome, ResultItem } from '../shared/ipc'
 import { isOpenableUrl } from '../shared/websearch'
 import { composeRoot, shellRow, type RootCommand, type ScoredRow } from './root-search'
 import { matchFields, type MatchTier } from '../shared/fuzzy'
-import { buildAppIndex, type AppIndexStats } from '../platform/apps/index'
+import { applicationDirectories, buildAppIndex, type AppIndexStats } from '../platform/apps/index'
 import type { DesktopEntry } from '../platform/apps/desktop-entry'
 import { createIconResolver, type IconResolver } from '../platform/apps/icons'
 import { launchEntry, runShellCommand, type LaunchResult } from '../platform/apps/launch'
@@ -119,8 +119,55 @@ export interface SearchDeps {
  */
 const REINDEX_DEBOUNCE_MS = 750
 
-/** Re-index on show if the index is older than this. See `refreshIfStale`. */
-const STALE_AFTER_MS = 5_000
+/**
+ * How long an index may stand unverified while a directory is unwatched.
+ *
+ * Only reachable while some existing application directory has no watcher on
+ * it: an edit inside such a directory changes nothing the show-path check can
+ * see, so time is the only remaining signal. With every directory watched there
+ * is no time-based rebuild at all.
+ */
+const UNWATCHED_STALE_AFTER_MS = 60_000
+
+/**
+ * How long a show waits before the rebuild it asked for runs.
+ *
+ * Long enough that the build cannot land in the frames the renderer spends
+ * drawing its first list, short enough that the fresh index is there before
+ * anyone has finished typing.
+ */
+const SHOW_REBUILD_DELAY_MS = 150
+
+/**
+ * The modification time of each directory that exists, keyed by path.
+ *
+ * A directory that is missing or unreadable is left out rather than recorded as
+ * absent, so it appearing or becoming readable reads as a difference. Stats are
+ * guarded because this runs on the show path, where a throw would take out
+ * unrelated work: `throwIfNoEntry` covers a missing path, the catch covers a
+ * path that exists but cannot be stat'd.
+ */
+export function directoryMtimes(directories: readonly string[]): ReadonlyMap<string, number> {
+  const mtimes = new Map<string, number>()
+  for (const directory of directories) {
+    try {
+      const stat = statSync(directory, { throwIfNoEntry: false })
+      if (stat !== undefined) mtimes.set(directory, stat.mtimeMs)
+    } catch {
+      // Unreadable: treated exactly as missing.
+    }
+  }
+  return mtimes
+}
+
+/** Whether two directory snapshots describe the same set of directories at the same times. */
+export function sameMtimes(a: ReadonlyMap<string, number>, b: ReadonlyMap<string, number>): boolean {
+  if (a.size !== b.size) return false
+  for (const [directory, mtime] of a) {
+    if (b.get(directory) !== mtime) return false
+  }
+  return true
+}
 
 /** Built once so the two places that construct a row cannot spell it differently. */
 const ICON_URL_PREFIX = 'lumanin-icon://app/'
@@ -133,6 +180,7 @@ export class SearchService {
   private watchers: FSWatcher[] = []
   private pending: NodeJS.Timeout | null = null
   private indexedAt = 0
+  private dirMtimes: ReadonlyMap<string, number> = new Map()
 
   constructor(private readonly deps: SearchDeps) {
     this.icons = createIconResolver({ env: deps.env, home: deps.home })
@@ -202,6 +250,11 @@ export class SearchService {
           this.scheduleReindex()
         })
         watcher.on('error', (error: unknown) => {
+          // Dropped rather than left in the array as a dead handle: the number
+          // of live watchers is what arms the age fallback, so a watch that has
+          // stopped must stop counting as one.
+          watcher.close()
+          this.watchers = this.watchers.filter((candidate) => candidate !== watcher)
           this.deps.logger.warn('stopped watching an application directory', { directory, error })
         })
         this.watchers.push(watcher)
@@ -215,40 +268,74 @@ export class SearchService {
     this.deps.logger.info('watching application directories', { count: this.watchers.length })
   }
 
-  private scheduleReindex(): void {
+  /** Where the index is looked for: the test override, or the XDG list. */
+  private directoryList(): readonly string[] {
+    return this.deps.directories ?? applicationDirectories(this.deps.env, this.deps.home)
+  }
+
+  private scheduleReindex(delayMs = REINDEX_DEBOUNCE_MS): void {
     if (this.pending !== null) clearTimeout(this.pending)
     this.pending = setTimeout(() => {
       this.pending = null
       this.reindex()
-    }, REINDEX_DEBOUNCE_MS)
+    }, delayMs)
     // The daemon must still be able to exit while a rebuild is pending.
     this.pending.unref?.()
   }
 
   /**
-   * Rebuild if the index has gone stale, off the critical path.
+   * Rebuild if something under the application directories moved, off the
+   * critical path.
    *
-   * Called just after the panel is shown, never before: indexing is 10–30 ms of
-   * disk work and the toggle budget is 80 ms, so it must not be something the
-   * user waits on. Opening the panel with an empty query means there is nothing
-   * on screen to go stale in the meantime.
+   * Called just after the panel is shown. Every show used to rebuild, because a
+   * launcher is opened far less often than once every few seconds and a
+   * time-based rule therefore always said "stale"; the whole walk ran in the
+   * few milliseconds the renderer spends asking for its first list. What runs
+   * now is one stat per candidate directory, compared against the snapshot
+   * taken at the last build — installing or removing an application changes the
+   * containing directory's modification time, so the common case is a handful
+   * of stats and no work.
    *
    * This is what makes freshness a guarantee rather than a hope. The watchers
    * catch installs instantly when they work; this catches everything else —
    * watch limits, directories that did not exist at startup, a Flatpak remote
-   * added after launch.
+   * added after launch. Where a directory exists with no watcher on it, an edit
+   * inside it is invisible to both, so the index is rebuilt on age alone.
+   *
+   * The rebuild itself is armed on a short timer rather than run here, so it
+   * cannot land inside the frames right after the show; a second show while one
+   * is armed neither queues another nor pushes it further out.
    */
   refreshIfStale(): void {
-    if (Date.now() - this.indexedAt < STALE_AFTER_MS) return
-    setImmediate(() => this.reindex())
+    if (this.pending !== null) return
+
+    if (this.indexedAt === 0) {
+      this.scheduleReindex(SHOW_REBUILD_DELAY_MS)
+      return
+    }
+
+    if (!sameMtimes(directoryMtimes(this.directoryList()), this.dirMtimes)) {
+      this.scheduleReindex(SHOW_REBUILD_DELAY_MS)
+      return
+    }
+
+    const unwatched = this.watchers.length < (this.stats?.directories.length ?? 0)
+    if (unwatched && Date.now() - this.indexedAt >= UNWATCHED_STALE_AFTER_MS) {
+      this.scheduleReindex(SHOW_REBUILD_DELAY_MS)
+    }
   }
 
   reindex(): void {
+    const directories = this.directoryList()
+    // Snapshotted before the walk, so a write that lands during the build is
+    // seen by the next check rather than swallowed by this one.
+    const mtimes = directoryMtimes(directories)
+
     const { entries, stats } = buildAppIndex({
       env: this.deps.env,
       home: this.deps.home,
       desktops: this.deps.desktops,
-      ...(this.deps.directories === undefined ? {} : { directories: this.deps.directories })
+      directories
     })
 
     const changed = stats.found !== this.stats?.found || this.indexedAt === 0
@@ -256,6 +343,7 @@ export class SearchService {
     this.entries = entries
     this.byId = new Map(entries.map((entry) => [entry.id, entry]))
     this.stats = stats
+    this.dirMtimes = mtimes
     this.indexedAt = Date.now()
 
     // Quiet on a rebuild that found the same thing — the watchers fire on every
@@ -393,6 +481,7 @@ export class SearchService {
   /** Stop watching. The daemon owns the lifetime; nothing else calls this. */
   dispose(): void {
     if (this.pending !== null) clearTimeout(this.pending)
+    this.pending = null
     for (const watcher of this.watchers) watcher.close()
     this.watchers = []
   }

@@ -1,7 +1,8 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import type { FSWatcher } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   localeKeys,
   parseDesktopEntry,
@@ -12,7 +13,7 @@ import {
 import { applicationDirectories, buildAppIndex } from '../src/platform/apps/index'
 import { launchEntry, openPath } from '../src/platform/apps/launch'
 import { PROBED_BINARIES, type BinaryMap } from '../src/platform/probe/binaries'
-import { SearchService } from '../src/main/search'
+import { SearchService, directoryMtimes, sameMtimes } from '../src/main/search'
 import { loadConfig } from '../src/shared/config'
 
 /**
@@ -478,6 +479,262 @@ describe('keeping the index fresh', () => {
     expect(apps(search, 'burst')).toHaveLength(25)
 
     search.dispose()
+  })
+
+  /**
+   * The check that runs when the panel is shown.
+   *
+   * Fake timers throughout, so a case can wait out the deferral or age the
+   * index by a minute without the suite taking a minute. Most cases skip
+   * `watch()`, so with no watcher on an existing directory the age fallback
+   * stays armed, which is what one case needs and the others stay well
+   * inside; the two that do call `watch()` are the ones asserting what a
+   * live watcher and a dead one each do to that fallback.
+   */
+  describe('the show-path check', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    /** Counts rebuilds: one that finds the same apps only logs at debug. */
+    function countingLogger(): { logger: Logger; builds: () => number } {
+      let builds = 0
+      const count = (msg: string): void => {
+        if (msg === 'application index built' || msg === 'application index rebuilt, unchanged') builds += 1
+      }
+      const logger = {
+        info: count,
+        debug: count,
+        warn: () => undefined,
+        error: () => undefined
+      } as unknown as Logger
+      return { logger, builds: () => builds }
+    }
+
+    function counted(root: string): { search: SearchService; builds: () => number } {
+      const { logger: counting, builds } = countingLogger()
+      const search = new SearchService({
+        ...APP_ONLY,
+        env: {},
+        home: root,
+        desktops: [],
+        binaries: binariesFor([]),
+        frecency: new FrecencyStore(root),
+        logger: counting,
+        directories: [join(root, 'applications')]
+      })
+      return { search, builds }
+    }
+
+    it('does no work when nothing under the application directories moved', () => {
+      const root = mkdtempSync(join(tmpdir(), 'lumanin-show-'))
+      mkdirSync(join(root, 'applications'), { recursive: true })
+
+      const { search, builds } = counted(root)
+      search.reindex()
+      const after = builds()
+
+      search.refreshIfStale()
+      vi.advanceTimersByTime(200)
+      search.refreshIfStale()
+      vi.advanceTimersByTime(200)
+
+      expect(builds()).toBe(after)
+      search.dispose()
+    })
+
+    it('builds an index that has never been built', () => {
+      const root = mkdtempSync(join(tmpdir(), 'lumanin-show-'))
+      mkdirSync(join(root, 'applications'), { recursive: true })
+
+      const { search, builds } = counted(root)
+      expect(builds()).toBe(0)
+
+      search.refreshIfStale()
+      vi.advanceTimersByTime(200)
+
+      expect(builds()).toBe(1)
+      search.dispose()
+    })
+
+    it('picks up an application written while no watcher was running', () => {
+      const root = mkdtempSync(join(tmpdir(), 'lumanin-show-'))
+      mkdirSync(join(root, 'applications'), { recursive: true })
+
+      const { search } = counted(root)
+      search.reindex()
+      expect(apps(search, 'zzyzx')).toHaveLength(0)
+
+      writeFileSync(
+        join(root, 'applications', 'zzyzx.desktop'),
+        '[Desktop Entry]\nType=Application\nName=Zzyzx\nExec=zzyzx\n'
+      )
+
+      search.refreshIfStale()
+      vi.advanceTimersByTime(200)
+
+      expect(apps(search, 'zzyzx').map((r) => r.title)).toEqual(['Zzyzx'])
+      search.dispose()
+    })
+
+    it('picks up a directory that did not exist when the index was built', () => {
+      const root = mkdtempSync(join(tmpdir(), 'lumanin-show-'))
+
+      const { search } = counted(root)
+      search.reindex()
+      expect(search.indexStats?.directories).toEqual([])
+
+      mkdirSync(join(root, 'applications'), { recursive: true })
+      writeFileSync(
+        join(root, 'applications', 'later.desktop'),
+        '[Desktop Entry]\nType=Application\nName=Later\nExec=later\n'
+      )
+
+      search.refreshIfStale()
+      vi.advanceTimersByTime(200)
+
+      expect(apps(search, 'later').map((r) => r.title)).toEqual(['Later'])
+      search.dispose()
+    })
+
+    it('rebuilds an unwatched index on age alone, once it is old enough', () => {
+      const root = mkdtempSync(join(tmpdir(), 'lumanin-show-'))
+      mkdirSync(join(root, 'applications'), { recursive: true })
+
+      const { search, builds } = counted(root)
+      search.reindex()
+      const after = builds()
+
+      vi.advanceTimersByTime(30_000)
+      search.refreshIfStale()
+      vi.advanceTimersByTime(200)
+      expect(builds()).toBe(after)
+
+      vi.advanceTimersByTime(31_000)
+      search.refreshIfStale()
+      vi.advanceTimersByTime(200)
+      expect(builds()).toBe(after + 1)
+
+      search.dispose()
+    })
+
+    it('never rebuilds on age alone while every directory is watched', () => {
+      const root = mkdtempSync(join(tmpdir(), 'lumanin-show-'))
+      mkdirSync(join(root, 'applications'), { recursive: true })
+
+      const { search, builds } = counted(root)
+      search.reindex()
+      search.watch()
+      const after = builds()
+
+      vi.advanceTimersByTime(61_000)
+      search.refreshIfStale()
+      vi.advanceTimersByTime(200)
+
+      expect(builds()).toBe(after)
+      search.dispose()
+    })
+
+    it('arms the age fallback again once a watch has died', () => {
+      const root = mkdtempSync(join(tmpdir(), 'lumanin-show-'))
+      mkdirSync(join(root, 'applications'), { recursive: true })
+
+      const { search, builds } = counted(root)
+      search.reindex()
+      search.watch()
+      const after = builds()
+
+      // What the error handler is for: a watcher that has stopped must stop
+      // counting as one, or the directory it covered is never rebuilt again.
+      const watchers = (search as unknown as { watchers: FSWatcher[] }).watchers
+      expect(watchers).toHaveLength(1)
+      watchers[0]?.emit('error', new Error('watch died'))
+
+      vi.advanceTimersByTime(61_000)
+      search.refreshIfStale()
+      vi.advanceTimersByTime(200)
+
+      expect(builds()).toBe(after + 1)
+      search.dispose()
+    })
+
+    it('leaves an armed rebuild where it is when a second show arrives', () => {
+      const root = mkdtempSync(join(tmpdir(), 'lumanin-show-'))
+      mkdirSync(join(root, 'applications'), { recursive: true })
+
+      const { search, builds } = counted(root)
+      search.reindex()
+      const after = builds()
+
+      writeFileSync(
+        join(root, 'applications', 'twice.desktop'),
+        '[Desktop Entry]\nType=Application\nName=Twice\nExec=twice\n'
+      )
+
+      search.refreshIfStale()
+      vi.advanceTimersByTime(100)
+      // A second show while one is armed neither queues another rebuild nor
+      // pushes the armed one further out, so it still lands 150 ms after the
+      // first show rather than 150 ms after this one.
+      search.refreshIfStale()
+      vi.advanceTimersByTime(60)
+
+      expect(builds()).toBe(after + 1)
+      expect(apps(search, 'twice').map((r) => r.title)).toEqual(['Twice'])
+
+      vi.advanceTimersByTime(200)
+      expect(builds()).toBe(after + 1)
+      search.dispose()
+    })
+
+    it('reads a directory that is not there as absent', () => {
+      const root = mkdtempSync(join(tmpdir(), 'lumanin-show-'))
+      mkdirSync(join(root, 'applications'), { recursive: true })
+
+      const mtimes = directoryMtimes([join(root, 'applications'), join(root, 'nowhere')])
+
+      expect([...mtimes.keys()]).toEqual([join(root, 'applications')])
+    })
+
+    it('reads a directory it is not allowed to stat as absent', () => {
+      const root = mkdtempSync(join(tmpdir(), 'lumanin-show-'))
+      const parent = join(root, 'locked')
+      const directory = join(parent, 'applications')
+      mkdirSync(directory, { recursive: true })
+
+      // Root can stat through any mode, so there is nothing to observe there.
+      if (process.getuid?.() === 0) return
+
+      chmodSync(parent, 0o000)
+      try {
+        expect([...directoryMtimes([directory]).keys()]).toEqual([])
+      } finally {
+        chmodSync(parent, 0o700)
+      }
+    })
+
+    it('calls two directory snapshots different when a key or a time differs', () => {
+      const base = new Map([
+        ['/a', 1],
+        ['/b', 2]
+      ])
+
+      expect(sameMtimes(base, new Map(base))).toBe(true)
+      expect(sameMtimes(base, new Map([...base, ['/c', 3]]))).toBe(false)
+      expect(sameMtimes(base, new Map([['/a', 1]]))).toBe(false)
+      expect(
+        sameMtimes(
+          base,
+          new Map([
+            ['/a', 1],
+            ['/b', 9]
+          ])
+        )
+      ).toBe(false)
+    })
   })
 })
 
