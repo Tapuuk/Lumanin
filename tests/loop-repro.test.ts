@@ -109,8 +109,8 @@ describe('useExec under a controlled dropdown', () => {
     const first = { count: 0 }
     await mountOnce(first, errors, ARGS)
 
-    // The second mount finds the first one's cache on disk - the state the
-    // real window is in every time a command is reopened.
+    // The second mount finds the first one's value in the worker's copy of the
+    // cache - the state the real window is in every time a command is reopened.
     const second = { count: 0 }
     await mountOnce(second, errors, ARGS)
 

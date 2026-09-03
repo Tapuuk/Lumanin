@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createElement, type ReactNode } from 'react'
@@ -12,6 +12,7 @@ import {
   splitCommand,
   type ExecOutcome
 } from '../src/api-shim/exec'
+import { flushCaches } from '../src/api-shim/system'
 import { useExec } from '../src/api-shim/utils'
 import { createRenderer } from '../src/host/reconciler'
 import { serializeTree, type SerializeSink } from '../src/host/tree'
@@ -376,5 +377,27 @@ describe('useExec, rendered', () => {
 
     expect(seen.length).toBeGreaterThan(0)
     expect(seen.every((value) => Buffer.isBuffer(value))).toBe(true)
+  })
+
+  /**
+   * Two hooks in one command address one cache file. Each holding its own parsed
+   * copy would mean the second write persists a snapshot taken before the first
+   * one, so whichever finished last would be the only entry left on disk.
+   */
+  it('keeps both hooks of a command in the written cache', async () => {
+    const h = harness()
+    const Command = (): ReactNode => {
+      const first = useExec('/bin/echo', ['first hook'])
+      const second = useExec('/bin/echo', ['second hook'])
+      return createElement('List', { isLoading: first.isLoading || second.isLoading })
+    }
+
+    await settle(h, createElement(Command))
+    flushCaches()
+
+    const written = readFileSync(join(supportPath, 'cache', 'raycast-utils.json'), 'utf8')
+    expect(written).toContain('first hook')
+    expect(written).toContain('second hook')
+    expect(h.errors).toEqual([])
   })
 })
