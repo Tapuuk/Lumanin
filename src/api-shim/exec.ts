@@ -9,6 +9,7 @@
  * can import. A helper is not an API.
  */
 
+import type { ChildProcess } from 'node:child_process'
 
 /** `ExecOptions`, verbatim from the spec. Defaults are the spec's, not ours. */
 export interface ExecOptions {
@@ -84,6 +85,39 @@ function stripNewline<D extends string | Buffer>(value: D, strip: boolean): D {
 }
 
 /**
+ * How long a killed child gets to exit on its own before SIGKILL.
+ *
+ * Deliberately shorter than the grace the extension host gives a worker it is
+ * tearing down: a command aborted by a view being unmounted has to have time to
+ * escalate before the isolate that armed the timer is gone.
+ */
+const KILL_GRACE_MS = 1000
+
+/** Children already on their way to SIGKILL, so a second arming is a no-op. */
+const escalating = new WeakSet<ChildProcess>()
+
+/**
+ * Make a SIGTERM final.
+ *
+ * SIGTERM is a request, and a program is entitled to ignore it — a shell
+ * trapping it, or a child mid-syscall. Left there, the promise waiting on
+ * `close` never settles and the hook behind it stays loading forever. The timer
+ * is `unref`'d so a process that is otherwise finished does not wait on it, and
+ * it is cleared the moment the child exits so a well-behaved one is never
+ * signalled twice.
+ */
+export function killAfterGrace(child: ChildProcess, graceMs = KILL_GRACE_MS): void {
+  if (child.pid === undefined || escalating.has(child)) return
+  escalating.add(child)
+
+  const timer = setTimeout(() => {
+    child.kill('SIGKILL')
+  }, graceMs)
+  timer.unref?.()
+  child.once('exit', () => clearTimeout(timer))
+}
+
+/**
  * Run one command to completion.
  *
  * The process rule — *"anything that spawns a process takes an argv array,
@@ -143,6 +177,7 @@ export async function runCommand(
       ? setTimeout(() => {
           timedOut = true
           child.kill('SIGTERM')
+          killAfterGrace(child)
         }, timeout)
       : null
 
@@ -159,6 +194,12 @@ export async function runCommand(
     })
   })
   if (timer !== null) clearTimeout(timer)
+
+  // An aborted spawn settles the instant Node sends its own SIGTERM, so this is
+  // the one place the child can still be alive after the promise resolved.
+  if (child.pid !== undefined && child.exitCode === null && child.signalCode === null) {
+    killAfterGrace(child)
+  }
 
   const decode = (chunks: Buffer[]): string | Buffer => {
     const joined = Buffer.concat(chunks)

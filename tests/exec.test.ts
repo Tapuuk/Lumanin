@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,6 +7,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { installRuntime } from '../src/api-shim/runtime'
 import {
   defaultParseOutput,
+  killAfterGrace,
   runCommand,
   splitCommand,
   type ExecOutcome
@@ -144,6 +146,41 @@ describe('running a command', () => {
     const outcome = await runCommand('/definitely/not/here', [], {}, never)
     expect(outcome.error).toBeInstanceOf(Error)
     expect(outcome.exitCode).toBeNull()
+  })
+
+  /**
+   * A shell that traps SIGTERM is the case the escalation exists for: without
+   * it the loop below outlives the launcher. The body sleeps in short bursts on
+   * purpose — a single long sleep would survive the shell as an orphan.
+   */
+  it('escalates to SIGKILL when a child ignores SIGTERM', async () => {
+    const child = spawn('/bin/sh', [
+      '-c',
+      'trap "" TERM; echo trapped; while :; do sleep 0.2; done'
+    ])
+    const ended = new Promise<NodeJS.Signals | null>((resolve) => {
+      child.on('close', (_code: number | null, signal: NodeJS.Signals | null) => resolve(signal))
+    })
+    // Signalling before the shell has read its own trap would kill it by the
+    // default disposition and prove nothing.
+    await new Promise((resolve) => child.stdout?.once('data', resolve))
+
+    child.kill('SIGTERM')
+    killAfterGrace(child, 200)
+    await expect(ended).resolves.toBe('SIGKILL')
+  })
+
+  it('does not leave a timed-out command running when it ignores SIGTERM', async () => {
+    const started = Date.now()
+    const outcome = await runCommand(
+      'trap "" TERM; while :; do sleep 0.2; done',
+      [],
+      { shell: true, timeout: 200 },
+      never
+    )
+    expect(Date.now() - started).toBeLessThan(2500)
+    expect(outcome.timedOut).toBe(true)
+    expect(outcome.signal).toBe('SIGKILL')
   })
 
   it('stops a command when its signal is aborted', async () => {
