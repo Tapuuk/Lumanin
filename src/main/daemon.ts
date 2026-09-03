@@ -1246,7 +1246,10 @@ app.whenReady().then(async () => {
     onVisibilityChange: (visible) => {
       emit('window.visibility', { visible })
       // Freshness backstop, deliberately after the show rather than before it:
-      // re-indexing is 10-30 ms of disk work and the toggle budget is 80 ms.
+      // it stats the application directories and re-indexes only when one of
+      // them changed, or when a directory has no watcher and the index is old.
+      // The rebuild is armed on a short timer so it cannot run inside the first
+      // frames after the show.
       if (visible) search?.refreshIfStale()
       // The first time the panel is ever summoned on an unconfigured machine,
       // open the setup wizard alongside it — the panel works with defaults, but
