@@ -231,3 +231,25 @@ test('moves the selection with the keys the config named', async () => {
   await page.locator('.search__input').press('ArrowDown')
   await expect(page.locator('.result').first()).toHaveAttribute('aria-selected', 'true')
 })
+
+/**
+ * A new query always starts at the top of the list it produced.
+ *
+ * The row under the cursor must never change identity between the keystroke and
+ * Enter, so editing the query puts the selection back on the first row — in the
+ * same frame as the text, not one after it.
+ */
+test('a new query puts the selection back on the first row', async () => {
+  const list = await rows('re')
+  expect(list.length).toBeGreaterThan(1)
+
+  // `Ctrl+N`, because this config rebound the arrows away.
+  await page.locator('.search__input').press('Control+n')
+  await expect(page.locator('.result').nth(1)).toHaveAttribute('aria-selected', 'true')
+
+  // A different query on purpose: refilling the same text produces no change
+  // event, so the assertion would hold without anything having happened.
+  const next = await rows('rescan')
+  expect(next.length).toBeGreaterThan(1)
+  await expect(page.locator('.result').first()).toHaveAttribute('aria-selected', 'true')
+})
