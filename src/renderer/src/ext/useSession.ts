@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { applyPatch, type Operation } from 'fast-json-patch'
 import type { AlertPayload, ToastPayload } from '@shared/ext-protocol'
 import type { SessionInfo } from '@shared/ipc'
+import { applyRenderPatches } from '@shared/render-patch'
 import { emptyTree, type RenderNode } from '@shared/render-tree'
 
 /**
@@ -83,6 +83,21 @@ export function useSession(): SessionState {
   const revision = useRef(0)
   const active = useRef<string | null>(null)
 
+  /**
+   * The tree again, in a ref, and the one writer that keeps the two in step.
+   *
+   * A batch is applied where it arrives rather than inside a state updater: an
+   * updater runs twice under strict mode and has nowhere to report a batch it
+   * could not apply. Applying eagerly means the failure can be answered — by
+   * fetching the document again — and it means the revision advances only when
+   * a batch actually lands.
+   */
+  const treeRef = useRef(tree)
+  const putTree = useCallback((next: RenderNode) => {
+    treeRef.current = next
+    setTree(next)
+  }, [])
+
   const begin = useCallback((next: SessionInfo) => {
     active.current = next.sessionId
     // The snapshot the launch carried, not an empty tree: the command rendered
@@ -90,7 +105,7 @@ export function useSession(): SessionState {
     // this runs. See `SessionInfo.tree`.
     revision.current = next.revision
     setSession(next)
-    setTree(next.tree)
+    putTree(next.tree)
     setToast(null)
     setAlert(null)
     // Usually `null`. It is not when the command died before this ran, in which
@@ -100,13 +115,13 @@ export function useSession(): SessionState {
     setSearchText('')
     setRequestedItem(next.select)
     setFieldCommand(null)
-  }, [])
+  }, [putTree])
 
   const end = useCallback(() => {
     const current = active.current
     active.current = null
     setSession(null)
-    setTree(emptyTree())
+    putTree(emptyTree())
     setToast(null)
     setAlert(null)
     setFailure(null)
@@ -114,7 +129,7 @@ export function useSession(): SessionState {
     setRequestedItem(null)
     setFieldCommand(null)
     if (current !== null) void window.lumanin.invoke('ext.close', { sessionId: current })
-  }, [])
+  }, [putTree])
 
   useEffect(() => {
     const offRender = window.lumanin.on('ext.render', (update) => {
@@ -132,23 +147,62 @@ export function useSession(): SessionState {
         return
       }
 
+      let next: RenderNode
+      try {
+        // A new root every batch, because React decides what to redraw by
+        // comparing identities — but only the nodes the batch named are new,
+        // so a row that changed does not cost its neighbours a redraw.
+        next = applyRenderPatches(treeRef.current, update.patches)
+      } catch {
+        // The batch does not fit the document we are holding, which means the
+        // document is wrong. There is nothing to log to and nothing to salvage;
+        // the revision stays put and the whole tree is fetched again.
+        void resync(update.sessionId)
+        return
+      }
       revision.current = update.revision
-      setTree((current) => {
-        // `mutateDocument: false` — React compares by identity, and patching in
-        // place would leave the new tree `===` the old one and nothing would
-        // re-render. `validate: false` because the producer is our own
-        // reconciler, and validating every op on every keystroke is real work.
-        const result = applyPatch(current, update.patches as Operation[], false, false)
-        return result.newDocument
-      })
+      putTree(next)
     })
 
-    const resync = async (sessionId: string): Promise<void> => {
-      const snapshot = await window.lumanin.invoke('ext.attach', { sessionId })
-      if (snapshot === null || sessionId !== active.current) return
-      if (snapshot.revision < revision.current) return
-      revision.current = snapshot.revision
-      setTree(snapshot.tree)
+    /**
+     * In flight, so a burst of gaps costs one fetch rather than one each.
+     *
+     * Held together with the session it is fetching for. A fetch for a session
+     * that has since ended answers nothing about the one that replaced it, and
+     * handing its promise back would leave the new session waiting on a reply
+     * that its own continuation then throws away.
+     */
+    let resyncing: { sessionId: string; promise: Promise<void> } | null = null
+    /**
+     * A gap that showed up while a fetch was already out. That fetch was asked
+     * for before the gap existed, so the document it comes back with may be
+     * older than the batch that revealed it, and one more round follows.
+     */
+    let again = false
+
+    const resync = (sessionId: string): Promise<void> => {
+      if (resyncing !== null && resyncing.sessionId === sessionId) {
+        again = true
+        return resyncing.promise
+      }
+      again = false
+      const pending = (async () => {
+        const snapshot = await window.lumanin.invoke('ext.attach', { sessionId })
+        if (snapshot === null || sessionId !== active.current) return
+        // Equal revisions are equal trees, and swapping one for the other would
+        // throw away every node the two have in common.
+        if (snapshot.revision <= revision.current) return
+        revision.current = snapshot.revision
+        putTree(snapshot.tree)
+      })().finally(() => {
+        if (resyncing?.promise !== pending) return
+        resyncing = null
+        if (!again) return
+        again = false
+        if (active.current === sessionId) void resync(sessionId)
+      })
+      resyncing = { sessionId, promise: pending }
+      return pending
     }
 
     const offToast = window.lumanin.on('ext.toast', ({ sessionId, toast: next }) => {
@@ -174,7 +228,7 @@ export function useSession(): SessionState {
         // A clean finish: the command did what it was for.
         active.current = null
         setSession(null)
-        setTree(emptyTree())
+        putTree(emptyTree())
         return
       }
       // A crash keeps the session object so the error card can name the command
@@ -200,7 +254,7 @@ export function useSession(): SessionState {
       offEnded()
       offCommand()
     }
-  }, [])
+  }, [putTree])
 
   useEffect(() => {
     if (hud === null) return
