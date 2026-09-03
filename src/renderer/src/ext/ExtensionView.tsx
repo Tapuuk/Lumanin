@@ -3,6 +3,7 @@ import { matchFields, matchGroup } from '@shared/fuzzy'
 import { matchesShortcut } from '@shared/shortcut'
 import { keyActionFor, type KeyMap } from '@shared/keys'
 import { moveSelection } from '@shared/selection'
+import { createSearchDispatch, type SearchDispatch } from '@shared/search-throttle'
 import { SearchBar } from '../components/SearchBar'
 import { ActionOverlay, ActionBar } from './ActionPanel'
 import { readActionPanel, type ActionEntry, type ActionSet } from './actions'
@@ -173,12 +174,34 @@ export function ExtensionView({ state, focusToken, keys, onExit }: ExtensionView
     [send, formState]
   )
 
+  // One dispatch for the life of the view, because a new one per render would
+  // have no burst to collapse. It reaches `send` through a ref: `send` is rebuilt
+  // whenever the session changes, and a dispatch built once would otherwise keep
+  // posting into the session it was born in.
+  const sender = useRef(send)
+  sender.current = send
+  const dispatch = useRef<SearchDispatch | null>(null)
+  dispatch.current ??= createSearchDispatch((handlerId, text) => sender.current(handlerId, text))
+
+  /**
+   * A text still waiting to be sent belongs to the view that was on screen when
+   * it was typed. Handler ids are per node, so a pushed view, a popped one and a
+   * whole new session all change this — and delivering after any of them would
+   * address a handler the worker has already dropped. Typing does not trigger it:
+   * the handler id is the same string from one keystroke to the next.
+   */
+  useEffect(() => () => dispatch.current?.cancel(), [session?.sessionId, list?.onSearchTextChange])
+
   const onSearch = useCallback(
     (text: string) => {
+      // Unconditional and first: the box and anything the panel filters itself
+      // never wait on the extension.
       setSearchText(text)
-      if (list?.onSearchTextChange != null) send(list.onSearchTextChange, text)
+      if (list?.onSearchTextChange != null) {
+        dispatch.current?.send(list.onSearchTextChange, text, list.throttle)
+      }
     },
-    [list, send, setSearchText]
+    [list, setSearchText]
   )
 
   const onKeyDown = useCallback(
@@ -561,6 +584,7 @@ interface ListModel {
   readonly onSearchTextChange: string | null
   readonly onSelectionChange: string | null
   readonly filtered: boolean
+  readonly throttle: boolean
 }
 
 /**
@@ -635,7 +659,8 @@ function readList(node: RenderNode, query: string): ListModel {
     emptyView,
     onSearchTextChange,
     onSelectionChange: handler(node.props['onSelectionChange']),
-    filtered: filtering
+    filtered: filtering,
+    throttle: bool(node.props['throttle'])
   }
 }
 
