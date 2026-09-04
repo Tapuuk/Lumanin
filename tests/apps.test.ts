@@ -827,6 +827,25 @@ describe('icons on application rows', () => {
 
     search.dispose()
   })
+
+  it('offers a repaired name only when nothing in the index matched exactly', () => {
+    // The same rule the ordering suites state, asked of a real index: scoring
+    // happens in two passes now, and what a query answers must not depend on
+    // which of them produced the row.
+    const { root, search } = fixture()
+    install(root, 'paint', 'Paint Shop', 'lumanin-fixture-paint')
+    install(root, 'print', 'Print Settings', 'lumanin-fixture-print')
+    search.reindex()
+
+    // "paint" is Paint Shop exactly and Print Settings at one edit. A guess does
+    // not get to stand beside an answer.
+    expect(appRows(search, 'paint', 50).map((row) => row.title)).toEqual(['Paint Shop'])
+
+    // With nothing matching exactly, the nearest by one edit is still found.
+    expect(appRows(search, 'paont', 50).map((row) => row.title)).toEqual(['Paint Shop'])
+
+    search.dispose()
+  })
 })
 
 /**

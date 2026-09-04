@@ -6,7 +6,7 @@ import {
   type SearchRule,
   type WebSearch
 } from '../shared/config'
-import { matchFields, matchGroup, TIER, type MatchTier } from '../shared/fuzzy'
+import { matchFields, matchGroup, TIER, type MatchOptions, type MatchTier } from '../shared/fuzzy'
 import type { ResultItem } from '../shared/ipc'
 import { buildSearchUrl, matchKeyword } from '../shared/websearch'
 
@@ -103,8 +103,19 @@ export interface RootSearchInput {
   readonly query: string
   readonly config: ResolvedConfig
   readonly commands: readonly RootCommand[]
-  /** Scored application rows. The cutoff is applied here, across all kinds. */
+  /**
+   * Scored application rows, matched exactly. The cutoff is applied here, across
+   * all kinds.
+   */
   readonly apps: readonly ScoredRow[]
+  /**
+   * The same rows, scored again with a typo forgiven — asked for only when
+   * nothing anywhere matched exactly, since a repaired row is never shown
+   * alongside one that is not. Optional: a caller that hands in `apps` alone
+   * gets both passes over the same rows, which is what a pre-scored fixture
+   * wants.
+   */
+  readonly appsWithTypos?: () => readonly ScoredRow[]
   /**
    * Resolve an alias or pin target to a row. Targets can name a command or an
    * application, and only the caller knows the application index.
@@ -214,15 +225,23 @@ function matchesPinTitle(needle: string, title: string): boolean {
   return match !== null && match.score >= SCORE_FLOOR
 }
 
-function matchCommands(needle: string, commands: readonly RootCommand[]): ScoredRow[] {
+function matchCommands(
+  needle: string,
+  commands: readonly RootCommand[],
+  options?: MatchOptions
+): ScoredRow[] {
   const scored: ScoredRow[] = []
 
   for (const command of commands) {
-    const match = matchFields(needle, [
-      { name: 'title', text: command.title, weight: 1, isName: true },
-      { name: 'keywords', text: command.keywords.join(' '), weight: 0.7, mode: 'word' },
-      { name: 'subtitle', text: command.subtitle, weight: 0.3, mode: 'word' }
-    ])
+    const match = matchFields(
+      needle,
+      [
+        { name: 'title', text: command.title, weight: 1, isName: true },
+        { name: 'keywords', text: command.keywords.join(' '), weight: 0.7, mode: 'word' },
+        { name: 'subtitle', text: command.subtitle, weight: 0.3, mode: 'word' }
+      ],
+      options
+    )
     if (match === null || match.score < SCORE_FLOOR) continue
     scored.push({ row: commandRow(command), score: match.score, tier: match.tier, at: match.at })
   }
@@ -395,15 +414,40 @@ export function composeRoot(input: RootSearchInput): readonly ResultItem[] {
   // ranked *apart* — see the header — so that their group's position decides
   // where they land rather than their score against an application's name.
   const isPlugin = (command: RootCommand): boolean => (command.kind ?? 'command') === 'extension'
-  const ranked: ScoredRow[] = [
-    ...(order.includes('apps') ? input.apps : []),
-    ...(order.includes('commands')
-      ? matchCommands(needle, commands.filter((command) => !isPlugin(command)))
-      : [])
-  ]
-  const pluginRanked: ScoredRow[] = order.includes('plugins')
-    ? matchCommands(needle, commands.filter(isPlugin))
-    : []
+  const rankAll = (
+    apps: () => readonly ScoredRow[],
+    options: MatchOptions
+  ): { ranked: ScoredRow[]; pluginRanked: ScoredRow[] } => ({
+    ranked: [
+      ...(order.includes('apps') ? apps() : []),
+      ...(order.includes('commands')
+        ? matchCommands(needle, commands.filter((command) => !isPlugin(command)), options)
+        : [])
+    ],
+    pluginRanked: order.includes('plugins')
+      ? matchCommands(needle, commands.filter(isPlugin), options)
+      : []
+  })
+
+  // Everything is matched exactly first, and a typo is forgiven only if that
+  // found nothing worth showing — which is the same rule the group cutoff below
+  // applies, moved earlier so the work is skipped rather than done and deleted.
+  // The question spans applications, commands and plugin commands together: a
+  // query that lands on a command exactly is no reason to go repairing two
+  // thousand application names.
+  //
+  // The second source is a function and stays one until the group order has had
+  // its say: an order without `apps` never reads it, so a scan is not paid for
+  // rows that would be dropped for not being in the list at all.
+  let { ranked, pluginRanked } = rankAll(() => input.apps, { allowTypos: false })
+  const anyExact = [ranked, pluginRanked].some((rows) =>
+    rows.some((entry) => matchGroup(entry.tier) < 2)
+  )
+  if (!anyExact) {
+    ;({ ranked, pluginRanked } = rankAll(() => input.appsWithTypos?.() ?? input.apps, {
+      allowTypos: true
+    }))
+  }
 
   const appsFirst = order.indexOf('apps') <= order.indexOf('commands')
   const kindRank = (row: ResultItem): number =>

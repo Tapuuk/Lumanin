@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { composeRoot, type RootCommand, type ScoredRow } from '../src/main/root-search'
 import { TIER, type MatchTier } from '../src/shared/fuzzy'
 import { calculate } from '../src/shared/calculator'
@@ -50,12 +50,20 @@ function config(file = ''): ResolvedConfig {
   return loadConfig({ fileContents: file, env: {} })
 }
 
-function compose(query: string, options: { file?: string; apps?: readonly ScoredRow[] } = {}) {
+function compose(
+  query: string,
+  options: {
+    file?: string
+    apps?: readonly ScoredRow[]
+    appsWithTypos?: () => readonly ScoredRow[]
+  } = {}
+) {
   return composeRoot({
     query,
     config: config(options.file ?? ''),
     commands: COMMANDS,
     apps: options.apps ?? [],
+    ...(options.appsWithTypos === undefined ? {} : { appsWithTypos: options.appsWithTypos }),
     resolveAlias: (target) => {
       if (target === 'firefox.desktop') return APP
       const command = COMMANDS.find((candidate) => candidate.id === target)
@@ -722,5 +730,104 @@ describe('web searches', () => {
       env: {}
     })
     expect(mixed.search.webSearches.value).toHaveLength(1)
+  })
+})
+
+/**
+ * Repairing a typo is a second pass over the index, and the index is the
+ * expensive thing here: a repaired row is only ever shown when nothing matched
+ * exactly, so asking for one before that is known wastes the whole scan.
+ */
+describe('the pass that forgives a typo', () => {
+  const RAYCAST: ResultItem = { id: 'app:ray.desktop', title: 'Raycast', kind: 'app' }
+
+  it('is not asked for when an application matched exactly', () => {
+    const again = vi.fn((): readonly ScoredRow[] => [])
+    compose('firefox', { apps: [scored(APP)], appsWithTypos: again })
+    expect(again).not.toHaveBeenCalled()
+  })
+
+  it('is not asked for when only a command matched exactly', () => {
+    // The case the question has to span every kind for: "reload" is a command
+    // and no application at all, and rescanning two thousand names for repairs
+    // that the command already outranks is the work being removed.
+    const again = vi.fn((): readonly ScoredRow[] => [])
+    compose('reload', { apps: [], appsWithTypos: again })
+    expect(again).not.toHaveBeenCalled()
+  })
+
+  it('is asked for, once, when nothing matched exactly, and its rows are shown', () => {
+    const again = vi.fn((): readonly ScoredRow[] => [scored(RAYCAST, 200, TIER.TYPO, 0)])
+    const rows = compose('racyast', { apps: [], appsWithTypos: again })
+    expect(again).toHaveBeenCalledTimes(1)
+    expect(rows.map((row) => row.title)).toContain('Raycast')
+  })
+
+  it('is not asked for when applications are not in the order at all', () => {
+    // An order without applications throws every application row away, so the
+    // scan that produces them is pure cost. The source stays a function until
+    // the group order has been consulted, which is what makes this free.
+    const again = vi.fn((): readonly ScoredRow[] => [scored(RAYCAST, 200, TIER.TYPO, 0)])
+    const rows = compose('racyast', {
+      file: '[search]\norder = ["web", "commands"]\n',
+      apps: [],
+      appsWithTypos: again
+    })
+    expect(again).not.toHaveBeenCalled()
+    expect(rows.map((row) => row.title)).not.toContain('Raycast')
+  })
+
+  it('decides whether a pinned application matching only by repair is shown', () => {
+    // A pin exempts a row from the cutoff, so a pinned application found only by
+    // a repair used to reach the root while other rows matched exactly. It now
+    // follows the same rule as every other repaired row: shown when nothing
+    // matched exactly, and not before.
+    const file = '[search]\npins = ["app:print.desktop"]\n'
+    const print = scored({ id: 'app:print.desktop', title: 'Print Settings', kind: 'app' }, 300, TIER.TYPO, 0)
+    const pinned = (): readonly ScoredRow[] => [print]
+
+    const alongside = compose('paint', {
+      file,
+      apps: [scored({ id: 'app:pinta.desktop', title: 'Pinta', kind: 'app' }, 100, TIER.NOT_NAME, 13)],
+      appsWithTypos: pinned
+    })
+    expect(alongside.map((row) => row.title)).not.toContain('Print Settings')
+
+    const alone = compose('paint', { file, apps: [], appsWithTypos: pinned })
+    expect(alone.map((row) => row.title)).toContain('Print Settings')
+  })
+
+  it('leaves a pinned shell command tolerant whatever else matched', () => {
+    // A pin like this exists only in the config: the ranking never produces one,
+    // so it is matched against its own text and never consulted the rule about
+    // groups. A handful of pins is not the scan worth saving.
+    const rows = compose('suspned', {
+      file: '[search]\npins = ["shell:systemctl suspend"]\n',
+      apps: [scored({ id: 'app:sus.desktop', title: 'Suspend Helper', kind: 'app' }, 100)]
+    })
+    expect(rows.some((row) => row.kind === 'shell')).toBe(true)
+  })
+
+  it('leaves a pinned plugin category tolerant too', () => {
+    const commands: readonly RootCommand[] = [
+      ...COMMANDS,
+      {
+        id: 'godot/search',
+        title: 'Search Godot Projects',
+        subtitle: 'Godot',
+        keywords: [],
+        kind: 'extension',
+        extensionTitle: 'Godot',
+        categories: [{ id: 'project', title: 'Project' }]
+      }
+    ]
+    const rows = composeRoot({
+      query: 'projct',
+      config: config('[search]\npins = ["extension:godot/search#project"]\n'),
+      commands,
+      apps: [scored({ id: 'app:projector.desktop', title: 'Projector', kind: 'app' }, 120)],
+      resolveAlias: () => null
+    })
+    expect(rows.map((row) => row.id)).toContain('extension:godot/search#project')
   })
 })
