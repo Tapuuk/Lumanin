@@ -835,15 +835,16 @@ interface ListBodyProps {
 const MAX_RENDERED_ROWS = 150
 
 /**
- * Rows below the selected one whose icons load immediately.
+ * Rows on either side of the selected one whose icons load immediately.
  *
  * The rest wait for the browser to decide they are near the viewport, because a
  * plugin's icon can be a remote favicon and a full window of them would be a
  * hundred and fifty network requests fired for rows nobody is about to look at.
- * Counted from the selection rather than from the top of the window, because a
- * long list draws its window centred on the selection and the rows on screen are
- * then in the middle of it. The panel shows fewer than ten rows at its tallest,
- * so this covers a scroll without covering the whole window.
+ * The band is measured from the selection rather than from the top of the
+ * window, and reaches the same distance in both directions, because a long list
+ * draws its window centred on the selection and the rows on screen are then in
+ * the middle of it. The panel shows fewer than ten rows at its tallest, so this
+ * covers a scroll in either direction without covering the whole window.
  */
 const EAGER_ROWS = 30
 
@@ -930,7 +931,7 @@ function ListBody({ list, selected, extension, send }: ListBodyProps): React.JSX
             showSection={showSection}
             extension={extension}
             send={send}
-            lazy={offset >= selectedIndex - start + EAGER_ROWS}
+            lazy={Math.abs(offset - (selectedIndex - start)) >= EAGER_ROWS}
             rowRef={isSelected ? selectedRef : undefined}
           />
         )
