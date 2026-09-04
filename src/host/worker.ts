@@ -12,7 +12,7 @@ import {
 import { createPeer, toErrorBody, type RpcMessage } from '../node/rpc'
 import { emptyTree, isDateRef, type RenderNode } from '../shared/render-tree'
 import { createRenderer, type Renderer } from './reconciler'
-import { serializeTree, type Instance } from './tree'
+import { handlerId, serializeTree, type Instance } from './tree'
 import type { HandlerFn, ShimRuntime } from '../api-shim/runtime'
 
 /**
@@ -314,7 +314,12 @@ function start(session: SessionSpec): null {
     renderer = createRenderer({
       onCommit: commit,
       onError: onRenderError,
-      publicInstance: formItemRef
+      publicInstance: formItemRef,
+      // A commit the reconciler decides not to publish is never serialized, and
+      // serializing is what usually refreshes this table. Without it, an action
+      // on a row whose only change was a rebuilt arrow function would run the
+      // previous render's closure.
+      onHandler: (nodeId, prop, fn) => treeHandlers.set(handlerId(nodeId, prop), fn)
     })
     renderRoot()
   }

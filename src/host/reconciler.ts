@@ -2,7 +2,14 @@ import type { ReactNode } from 'react'
 import ReactReconciler, { type HostConfig, type OpaqueRoot } from 'react-reconciler'
 import { ConcurrentRoot, DiscreteEventPriority, NoEventPriority } from 'react-reconciler/constants'
 import { INTERNAL_TYPES } from '../shared/render-tree'
-import { createIdFactory, isText, type Child, type Instance, type TextInstance } from './tree'
+import {
+  createIdFactory,
+  isText,
+  samePropsWhenSerialized,
+  type Child,
+  type Instance,
+  type TextInstance
+} from './tree'
 
 /**
  * The custom renderer.
@@ -58,6 +65,18 @@ let publicInstanceOf: ((instance: Instance) => unknown) | null = null
  * the same time.
  */
 let dirty = false
+
+/**
+ * Set by {@link createRenderer}: where a rebuilt callback prop is re-registered.
+ *
+ * Serializing a commit is what normally refreshes the caller's handler table, so
+ * a commit that is skipped would leave an action dispatching into the closure
+ * from an earlier render. That is the one way skipping could give a wrong answer
+ * rather than merely a faster one, and this closes it by construction.
+ */
+let onHandlerRebound:
+  | ((nodeId: string, prop: string, fn: (payload: unknown) => void) => void)
+  | null = null
 
 const nextId = createIdFactory()
 
@@ -348,13 +367,23 @@ const config: HostConfig<Instance, TextInstance, Container, HostContext, Instanc
    * next props, and merging would leave a prop that was *removed* this render
    * still on the node — the bug where an item that stops being `isLoading` never
    * stops spinning.
+   *
+   * Replaced whether or not anything changed, because the instance has to hold
+   * the closures a later commit will serialize. Only a change to the *document*
+   * counts as a change to the tree, and the props are compared against what the
+   * node last carried rather than against React's `prevProps` — that is the
+   * version the last published document was made from.
    */
   commitUpdate(instance, _type, _prevProps, nextProps) {
+    const changed = !samePropsWhenSerialized(instance.props, nextProps, (prop, fn) =>
+      onHandlerRebound?.(instance.id, prop, fn)
+    )
     instance.props = { ...nextProps }
-    dirty = true
+    if (changed) dirty = true
   },
 
   commitTextUpdate(textInstance, _oldText, newText) {
+    if (textInstance.text === newText) return
     textInstance.text = newText
     dirty = true
   },
@@ -442,8 +471,14 @@ export function createRenderer(options: {
    * the shim's business, not the tree builder's.
    */
   publicInstance?: (instance: Instance) => unknown
+  /**
+   * Where a callback prop that was rebuilt with the same encoding is
+   * re-registered, for the commits this renderer decides not to publish.
+   */
+  onHandler?: (nodeId: string, prop: string, fn: (payload: unknown) => void) => void
 }): Renderer {
   publicInstanceOf = options.publicInstance ?? null
+  onHandlerRebound = options.onHandler ?? null
   dirty = false
   const root: Instance = { id: 'root', type: INTERNAL_TYPES.ROOT, props: {}, children: [] }
 

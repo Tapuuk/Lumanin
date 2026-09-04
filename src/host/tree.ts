@@ -46,6 +46,28 @@ export function createIdFactory(): () => string {
   return () => `n${++next}`
 }
 
+/**
+ * Props the serializer never emits.
+ *
+ * `children` is the tree itself; `key` and `ref` are React's own bookkeeping.
+ * Shared with the comparison at the bottom of this file so the two cannot
+ * drift - a key the serializer drops must not be able to make a commit look
+ * like it changed something.
+ */
+const NEVER_SERIALIZED: ReadonlySet<string> = new Set(['children', 'key', 'ref'])
+
+/**
+ * The id a function prop encodes to.
+ *
+ * Built from the node and the prop name and never from the function itself,
+ * which is what lets a closure rebuilt on every render keep one id. Defined
+ * once on purpose: two places spelling this out independently are a rename away
+ * from a handler table that points at nothing.
+ */
+export function handlerId(nodeId: string, prop: string): string {
+  return `${nodeId}:${prop}`
+}
+
 /** What the serializer does with a function prop and what it could not encode. */
 export interface SerializeSink {
   /** Register (or re-register) a callback under a stable id. */
@@ -74,11 +96,11 @@ export function serializeTree(
     const encoded: Record<string, RenderValue> = {}
 
     for (const [key, value] of Object.entries(instance.props)) {
-      if (key === 'children' || key === 'key' || key === 'ref') continue
+      if (NEVER_SERIALIZED.has(key)) continue
       if (value === undefined) continue
 
       if (typeof value === 'function') {
-        const id = `${instance.id}:${key}`
+        const id = handlerId(instance.id, key)
         handlers.add(id)
         sink.handler(id, value as (payload: unknown) => void)
         encoded[key] = { __handler: id }
@@ -200,6 +222,50 @@ function isPlainObject(value: object): value is Record<string, unknown> {
 
 function describe(value: object): string {
   return value.constructor?.name ?? 'object'
+}
+
+/**
+ * Would these two props objects serialize to the same document?
+ *
+ * The question asked before a props update is allowed to count as a change.
+ * React hands the host a fresh props object for every child of a re-rendered
+ * parent, so on a list of a few hundred rows the great majority of updates
+ * carry identical values in a new object.
+ *
+ * The rules follow the serializer above exactly:
+ * - the three keys it never emits are invisible here too, and so is a key whose
+ *   value is `undefined`, which it also skips;
+ * - two functions under one key are equal, because what crosses is the handler
+ *   id and that is built from the node and the key. The new function is still
+ *   reported to `onHandler`, so a caller that goes on to skip the commit does
+ *   not keep dispatching into the closure from an earlier render;
+ * - everything else is `Object.is`. That makes an array or object prop rebuilt
+ *   with equal contents count as different, deliberately: comparing them deeply
+ *   would cost about what serializing them costs, which is the work being
+ *   avoided.
+ */
+export function samePropsWhenSerialized(
+  previous: Record<string, unknown>,
+  next: Record<string, unknown>,
+  onHandler: (prop: string, fn: (payload: unknown) => void) => void
+): boolean {
+  let same = true
+
+  for (const key of new Set([...Object.keys(previous), ...Object.keys(next)])) {
+    if (NEVER_SERIALIZED.has(key)) continue
+
+    const before = previous[key]
+    const after = next[key]
+    if (Object.is(before, after)) continue
+
+    if (typeof after === 'function') {
+      onHandler(key, after as (payload: unknown) => void)
+      if (typeof before === 'function') continue
+    }
+    same = false
+  }
+
+  return same
 }
 
 /** Deep-equality for two serialized trees. Used by the golden tests. */

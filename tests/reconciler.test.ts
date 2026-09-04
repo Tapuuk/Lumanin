@@ -2,7 +2,7 @@ import { createElement, useEffect, useState, type ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'
 import { compare } from 'fast-json-patch'
 import { createRenderer } from '../src/host/reconciler'
-import { serializeTree, type SerializeSink } from '../src/host/tree'
+import { handlerId, serializeTree, type SerializeSink } from '../src/host/tree'
 import { INTERNAL_TYPES, type RenderNode } from '../src/shared/render-tree'
 
 /**
@@ -25,11 +25,19 @@ interface Harness {
   readonly errors: unknown[]
 }
 
+/**
+ * The worker's own arrangement, minus the transport: serialize inside the commit
+ * callback, never outside it. Doing it that way rather than after every
+ * `render()` is what makes these tests able to see a commit the reconciler chose
+ * not to publish - and it is the arrangement whose handler table has to stay
+ * fresh without one.
+ */
 function harness(): Harness {
   const handlers = new Map<string, (payload: unknown) => void>()
   const rejected: { node: string; prop: string; reason: string }[] = []
   const errors: unknown[] = []
   let commits = 0
+  let tree: RenderNode = { id: 'root', type: INTERNAL_TYPES.ROOT, props: {}, children: [] }
 
   const sink: SerializeSink = {
     handler: (id, fn) => {
@@ -41,8 +49,12 @@ function harness(): Harness {
   const renderer = createRenderer({
     onCommit: () => {
       commits++
+      const { node, handlers: live } = serializeTree(renderer.root, sink)
+      for (const id of [...handlers.keys()]) if (!live.has(id)) handlers.delete(id)
+      tree = node
     },
-    onError: (error) => errors.push(error)
+    onError: (error) => errors.push(error),
+    onHandler: (nodeId, prop, fn) => handlers.set(handlerId(nodeId, prop), fn)
   })
 
   return {
@@ -53,9 +65,7 @@ function harness(): Harness {
     render(element) {
       renderer.render(element)
       renderer.flush()
-      const { node, handlers: live } = serializeTree(renderer.root, sink)
-      for (const id of [...handlers.keys()]) if (!live.has(id)) handlers.delete(id)
-      return node
+      return tree
     },
     unmount() {
       renderer.unmount()
@@ -260,6 +270,8 @@ describe('the reconciler', () => {
     }
 
     h.render(createElement(Settling, null))
+    // A second pass, because the effect's state update lands after the first.
+    h.render(createElement(Settling, null))
     expect(h.commits()).toBe(1)
   })
 
@@ -281,5 +293,80 @@ describe('the reconciler', () => {
 
     h.unmount()
     expect(h.commits()).toBeGreaterThan(mounted)
+  })
+
+  /**
+   * Two renders of one item, with the second frame's props in a fresh object.
+   *
+   * The shape every list has: a state change above re-runs the component, so
+   * React hands the host a new props object for the row whether or not a single
+   * value in it differs.
+   */
+  function twoFrames(
+    first: Record<string, unknown>,
+    second: Record<string, unknown>
+  ): { h: Harness; itemId: string } {
+    const h = harness()
+
+    function Row(): ReactNode {
+      const [step, setStep] = useState(0)
+      useEffect(() => {
+        if (step === 0) setStep(1)
+      }, [step])
+      return createElement('List', null, createElement('List.Item', step === 0 ? first : second))
+    }
+
+    h.render(createElement(Row, null))
+    // A second pass, because the effect's state update lands after the first.
+    const tree = h.render(createElement(Row, null))
+    const list = tree.children[0] as RenderNode
+    return { h, itemId: (list.children[0] as RenderNode).id }
+  }
+
+  it('does not commit a props update that would serialize the same, and keeps the handler fresh', () => {
+    const fired: number[] = []
+    const { h, itemId } = twoFrames(
+      { title: 'Alpha', subtitle: 'first', onAction: () => fired.push(1) },
+      { title: 'Alpha', subtitle: 'first', onAction: () => fired.push(2) }
+    )
+
+    expect(h.commits()).toBe(1)
+    h.handlers.get(handlerId(itemId, 'onAction'))?.(undefined)
+    expect(fired).toEqual([2])
+  })
+
+  it('commits a changed value', () => {
+    const { h } = twoFrames({ title: 'Alpha' }, { title: 'Beta' })
+    expect(h.commits()).toBe(2)
+  })
+
+  it('commits a prop that was removed', () => {
+    const { h } = twoFrames({ title: 'Alpha', subtitle: 'first' }, { title: 'Alpha' })
+    expect(h.commits()).toBe(2)
+  })
+
+  it('commits a prop that became undefined', () => {
+    const { h } = twoFrames(
+      { title: 'Alpha', subtitle: 'first' },
+      { title: 'Alpha', subtitle: undefined }
+    )
+    expect(h.commits()).toBe(2)
+  })
+
+  it('ignores a prop that is undefined on both sides, as the serializer does', () => {
+    const { h } = twoFrames(
+      { title: 'Alpha', subtitle: undefined },
+      { title: 'Alpha', subtitle: undefined }
+    )
+    expect(h.commits()).toBe(1)
+  })
+
+  /** The limit, pinned: the comparison is shallow, so an equal array is a change. */
+  it('commits an array prop rebuilt with equal contents', () => {
+    const { h } = twoFrames(
+      { title: 'Alpha', accessories: [{ text: 'one' }] },
+      { title: 'Alpha', accessories: [{ text: 'one' }] }
+    )
+    expect(h.commits()).toBe(2)
   })
 })
