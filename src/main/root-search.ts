@@ -415,11 +415,11 @@ export function composeRoot(input: RootSearchInput): readonly ResultItem[] {
   // where they land rather than their score against an application's name.
   const isPlugin = (command: RootCommand): boolean => (command.kind ?? 'command') === 'extension'
   const rankAll = (
-    apps: readonly ScoredRow[],
+    apps: () => readonly ScoredRow[],
     options: MatchOptions
   ): { ranked: ScoredRow[]; pluginRanked: ScoredRow[] } => ({
     ranked: [
-      ...(order.includes('apps') ? apps : []),
+      ...(order.includes('apps') ? apps() : []),
       ...(order.includes('commands')
         ? matchCommands(needle, commands.filter((command) => !isPlugin(command)), options)
         : [])
@@ -435,12 +435,18 @@ export function composeRoot(input: RootSearchInput): readonly ResultItem[] {
   // The question spans applications, commands and plugin commands together: a
   // query that lands on a command exactly is no reason to go repairing two
   // thousand application names.
-  let { ranked, pluginRanked } = rankAll(input.apps, { allowTypos: false })
+  //
+  // The second source is a function and stays one until the group order has had
+  // its say: an order without `apps` never reads it, so a scan is not paid for
+  // rows that would be dropped for not being in the list at all.
+  let { ranked, pluginRanked } = rankAll(() => input.apps, { allowTypos: false })
   const anyExact = [ranked, pluginRanked].some((rows) =>
     rows.some((entry) => matchGroup(entry.tier) < 2)
   )
-  if (needle.length > 0 && !anyExact) {
-    ;({ ranked, pluginRanked } = rankAll(input.appsWithTypos?.() ?? input.apps, { allowTypos: true }))
+  if (!anyExact) {
+    ;({ ranked, pluginRanked } = rankAll(() => input.appsWithTypos?.() ?? input.apps, {
+      allowTypos: true
+    }))
   }
 
   const appsFirst = order.indexOf('apps') <= order.indexOf('commands')

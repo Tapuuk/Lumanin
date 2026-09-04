@@ -763,10 +763,18 @@ describe('the pass that forgives a typo', () => {
     expect(rows.map((row) => row.title)).toContain('Raycast')
   })
 
-  it('is not asked for before anything is typed', () => {
-    const again = vi.fn((): readonly ScoredRow[] => [])
-    compose('   ', { apps: [], appsWithTypos: again })
+  it('is not asked for when applications are not in the order at all', () => {
+    // An order without applications throws every application row away, so the
+    // scan that produces them is pure cost. The source stays a function until
+    // the group order has been consulted, which is what makes this free.
+    const again = vi.fn((): readonly ScoredRow[] => [scored(RAYCAST, 200, TIER.TYPO, 0)])
+    const rows = compose('racyast', {
+      file: '[search]\norder = ["web", "commands"]\n',
+      apps: [],
+      appsWithTypos: again
+    })
     expect(again).not.toHaveBeenCalled()
+    expect(rows.map((row) => row.title)).not.toContain('Raycast')
   })
 
   it('decides whether a pinned application matching only by repair is shown', () => {
