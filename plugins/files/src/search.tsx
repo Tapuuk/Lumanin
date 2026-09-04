@@ -517,11 +517,15 @@ function rank(hits: readonly Hit[], query: string, order: readonly Category[], h
 /**
  * Wait for the typing to stop before spending a process on it.
  *
- * `<List throttle>` is accepted and ignored by this launcher, so nothing else
- * does this. Without it, "report" spawns six searches — `r`, `re`, `rep`, … —
- * and the first five are aborted a few milliseconds later. `useExec` killing the
- * superseded child keeps that correct but not cheap, and the first of those six
- * is the expensive one: `r` matches most of a home directory.
+ * Without it, "report" spawns six searches — `r`, `re`, `rep`, … — and the first
+ * five are aborted a few milliseconds later. `useExec` killing the superseded
+ * child keeps that correct but not cheap, and the first of those six is the
+ * expensive one: `r` matches most of a home directory.
+ *
+ * `<List throttle>` collapses the same burst before it ever leaves the launcher,
+ * and this search still keeps its own: the settled query is what gates `execute`
+ * and what the list compares against the typed text to stay loading through the
+ * gap. A query that arrived already debounced could do neither.
  *
  * Short enough to feel immediate: a search still starts inside the gap between
  * finishing a word and reading the screen.
