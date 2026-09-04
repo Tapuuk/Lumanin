@@ -1,4 +1,14 @@
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { createConnection } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -315,6 +325,8 @@ let socketPath: string
 let supportPath: string
 /** Where the fixture was installed, for the test that takes its files away. */
 let installedDir: string
+/** Node's compiled-bytecode cache for the host and its workers, inside this run's XDG tree. */
+let compileCacheDir: string
 
 /** One request over the daemon's real control socket, one reply back. */
 function askDaemon(verb: object): Promise<{ ok: boolean; data?: unknown; error?: string }> {
@@ -369,6 +381,15 @@ async function settledHostWorkers(): Promise<number> {
     )
     .toBe(true)
   return previous
+}
+
+/** How many regular files sit under `dir`, at any depth. Zero when it does not exist. */
+function countFiles(dir: string): number {
+  if (!existsSync(dir)) return 0
+  return readdirSync(dir).reduce((total, entry) => {
+    const path = join(dir, entry)
+    return total + (statSync(path).isDirectory() ? countFiles(path) : 1)
+  }, 0)
 }
 
 async function rowTitles(): Promise<string[]> {
@@ -439,6 +460,7 @@ test.beforeAll(async () => {
   })
 
   socketPath = join(root, 'run', 'lumanin.sock')
+  compileCacheDir = join(root, 'cache', 'lumanin', 'compile-cache')
   supportPath = join(installed, 'support')
   installedDir = installed
   page = await app.firstWindow()
@@ -551,6 +573,18 @@ test('Esc at the extension’s root returns to the launcher', async () => {
   await page.locator('.search__input').press('Escape')
   await expect(page.locator('.actionbar')).toHaveCount(0)
   await expect(page.locator('.search__input')).toHaveAttribute('placeholder', 'Search...')
+})
+
+/**
+ * The compiled-bytecode cache reached the worker threads.
+ *
+ * Placed after a session has ended, because the entries are written out when a
+ * thread stops - polling rather than asserting once for the same reason. An
+ * empty directory means the variable never reached the thread, not that the
+ * cache is slow.
+ */
+test('the worker threads write a compiled-bytecode cache', async () => {
+  await expect.poll(() => countFiles(compileCacheDir), { timeout: 20_000 }).toBeGreaterThan(0)
 })
 
 test('a pinned category launches straight into that category', async () => {

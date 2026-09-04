@@ -135,6 +135,9 @@ const live = new Set<Worker>()
  * settles when main actually did the thing, not when the host said it would.
  */
 function spawn(): PooledWorker {
+  // No `env` here on purpose: a thread inherits a copy of this process's
+  // environment, which is how the compiled-bytecode cache the daemon points us
+  // at reaches the worker's own modules as well as ours.
   const worker = new Worker(WORKER_PATH, {
     workerData: { modulePath: MODULE_PATH },
     resourceLimits: { maxOldGenerationSizeMb: WORKER_MEMORY_MB },

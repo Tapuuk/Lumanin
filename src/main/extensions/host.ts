@@ -43,6 +43,13 @@ export interface HostDeps {
   readonly store: ExtensionStore
   /** Where `out/main/host.js` lives. */
   readonly hostScript: string
+  /**
+   * Where Node keeps its compiled-bytecode cache for the host and its workers.
+   *
+   * Node's to create, fill and evict; safe to delete at any time, at the price
+   * of one slower start afterwards.
+   */
+  readonly compileCacheDir: string
   /** Push an event to the renderer. */
   readonly emit: EmitFn
   /** Hide the panel — `closeMainWindow`, `showHUD`, `popToRoot`. */
@@ -185,6 +192,14 @@ export class ExtensionHost {
 
     const child = utilityProcess.fork(this.deps.hostScript, [], {
       serviceName: 'lumanin-extensions',
+      // A worker thread's environment is a copy of the process that started it,
+      // so setting this once here reaches every worker: React, the reconciler,
+      // the api-shim and the plugin's own bundle are all read back as compiled
+      // bytecode instead of being parsed again on each spare. Passing `env` at
+      // all replaces the environment rather than extending it, hence the spread.
+      // Node writes the entries out when a thread stops, so nothing has to be
+      // flushed by hand.
+      env: { ...process.env, NODE_COMPILE_CACHE: this.deps.compileCacheDir },
       // Inherited, so an extension's stray `process.stdout.write` reaches our
       // stderr rather than a pipe nobody drains — a full pipe would block the
       // worker that wrote to it, which looks exactly like a hang.

@@ -1112,6 +1112,7 @@ app.whenReady().then(async () => {
       logger,
       store: extensionStore,
       hostScript: join(__dirname, 'host.js'),
+      compileCacheDir: join(paths.cache, 'compile-cache'),
       // `EmitMap` is a narrow view of the renderer's `EventMap` — the host may
       // raise the `ext.*` events and nothing else — so the daemon's `emit` is
       // handed over restricted to exactly those.
