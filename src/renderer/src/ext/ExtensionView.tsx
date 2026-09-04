@@ -7,7 +7,8 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
-  type Ref
+  type Ref,
+  type UIEvent
 } from 'react'
 import { filterRows } from '@shared/list-filter'
 import { matchesShortcut } from '@shared/shortcut'
@@ -828,6 +829,21 @@ const MAX_RENDERED_ROWS = 150
 
 function ListBody({ list, selected, extension, send }: ListBodyProps): React.JSX.Element | null {
   const selectedRef = useRef<HTMLDivElement>(null)
+  /**
+   * Rows drawn past the base window, and the place they were drawn for.
+   *
+   * The window has two axes. The keyboard moves the selection, which slides the
+   * window by moving `start`. A wheel cannot move the selection, so it extends
+   * the window downwards instead — which is the only way a mouse reaches row 200
+   * of a list that draws 150. Tying the count to the rows and the start it was
+   * measured against means a new query, a new tree or a slid window falls back
+   * to the base window without anything having to reset it.
+   */
+  const [revealed, setRevealed] = useState<{ rows: readonly Row[]; from: number; count: number }>({
+    rows: EMPTY_ROWS,
+    from: 0,
+    count: 0
+  })
 
   useLayoutEffect(() => {
     // Before paint: a selection that moved must never be shown off-screen first,
@@ -861,11 +877,23 @@ function ListBody({ list, selected, extension, send }: ListBodyProps): React.JSX
       list.rows.length - MAX_RENDERED_ROWS
     )
   }
-  const windowed =
-    list.rows.length > MAX_RENDERED_ROWS ? list.rows.slice(start, start + MAX_RENDERED_ROWS) : list.rows
+  const extra = revealed.rows === list.rows && revealed.from === start ? revealed.count : 0
+  const count = Math.min(list.rows.length - start, MAX_RENDERED_ROWS + extra)
+  const windowed = list.rows.length > MAX_RENDERED_ROWS ? list.rows.slice(start, start + count) : list.rows
+
+  const onScroll = (event: UIEvent<HTMLDivElement>): void => {
+    if (start + count >= list.rows.length) return
+    const { scrollTop, clientHeight, scrollHeight } = event.currentTarget
+    // A viewport short of the end rather than at it: scrolling stops firing once
+    // the box has nowhere left to go, so the last row drawn has to be the trigger
+    // and not the destination. Appending below the pointer moves nothing above
+    // it, and puts the end far enough away that one gesture is one reveal.
+    if (scrollTop + clientHeight * 2 < scrollHeight) return
+    setRevealed({ rows: list.rows, from: start, count: extra + MAX_RENDERED_ROWS })
+  }
 
   const items = (
-    <div className="results" role="listbox" aria-label="Results">
+    <div className="results" role="listbox" aria-label="Results" onScroll={onScroll}>
       {windowed.map((row, offset) => {
         const index = start + offset
         const isSelected = row.id === selected?.id
@@ -896,7 +924,11 @@ function ListBody({ list, selected, extension, send }: ListBodyProps): React.JSX
   // long document usable next to a long list.
   return (
     <div className="ext-split">
-      <div className="ext-split__list">{items}</div>
+      {/* Whichever of the two is the scroll box: the list scrolls itself when it
+          is alone, and this wrapper scrolls it when a detail pane is beside it. */}
+      <div className="ext-split__list" onScroll={onScroll}>
+        {items}
+      </div>
       <div className="ext-split__detail">
         <DetailBody node={selected.detail} extension={extension} />
       </div>
