@@ -139,6 +139,23 @@ const UNWATCHED_STALE_AFTER_MS = 60_000
 const SHOW_REBUILD_DELAY_MS = 150
 
 /**
+ * How long after a rebuild the icon cache is filled in the background.
+ *
+ * Resolving an icon is filesystem probing, and a name that has none is the
+ * expensive case. Doing it once while nothing is happening is what keeps it out
+ * of the first keystroke after an install.
+ */
+const ICON_WARM_DELAY_MS = 500
+
+/**
+ * Entries warmed per turn of the event loop.
+ *
+ * A machine with two thousand applications must not spend the whole pass with
+ * the main thread to itself; the window has to stay able to open mid-pass.
+ */
+const ICON_WARM_CHUNK = 50
+
+/**
  * The modification time of each directory that exists, keyed by path.
  *
  * A directory that is missing or unreadable is left out rather than recorded as
@@ -179,6 +196,7 @@ export class SearchService {
   private readonly icons: IconResolver
   private watchers: FSWatcher[] = []
   private pending: NodeJS.Timeout | null = null
+  private warmTimer: NodeJS.Timeout | null = null
   private indexedAt = 0
   private dirMtimes: ReadonlyMap<string, number> = new Map()
 
@@ -346,6 +364,11 @@ export class SearchService {
     this.dirMtimes = mtimes
     this.indexedAt = Date.now()
 
+    // Unconditional, because an upgrade can replace an application's icon file
+    // without changing how many applications there are.
+    this.icons.refresh()
+    this.scheduleIconWarm()
+
     // Quiet on a rebuild that found the same thing — the watchers fire on every
     // chmod and mtime touch, and a log line per rebuild would bury everything
     // else during a system upgrade.
@@ -431,7 +454,7 @@ export class SearchService {
     const history = this.deps.frecency.all()
     const frecencyWeight = this.deps.config().search.frecencyWeight.value
 
-    const scored: { item: ResultItem; score: number; tier: MatchTier; at: number }[] = []
+    const scored: { entry: DesktopEntry; item: ResultItem; score: number; tier: MatchTier; at: number }[] = []
 
     for (const entry of this.entries) {
       const match = matchFields(needle, [
@@ -449,19 +472,14 @@ export class SearchService {
 
       const score = rank(match.score, history.get(entry.id), now, frecencyWeight)
       scored.push({
+        entry,
         score,
         tier: match.tier,
         at: match.at,
         item: {
           id: `app:${entry.id}`,
           title: entry.name,
-          kind: 'app',
-          // A stable URL rather than a path: the renderer is sandboxed and must
-          // not learn filesystem paths, and `lumanin-icon:` lets main decide
-          // what it will actually serve.
-          ...(this.icons.resolve(entry.icon) === null
-            ? {}
-            : { icon: `${ICON_URL_PREFIX}${encodeURIComponent(entry.id)}` }),
+          kind: 'app'
         }
       })
     }
@@ -473,15 +491,59 @@ export class SearchService {
       (a, b) => a.tier - b.tier || a.at - b.at || b.score - a.score || a.item.title.localeCompare(b.item.title)
     )
 
-    return scored
-      .slice(0, limit)
-      .map((entry) => ({ row: entry.item, score: entry.score, tier: entry.tier, at: entry.at }))
+    // Icons are resolved here rather than in the loop above: a broad query scores
+    // every application and returns fifty, and probing for the other thousands
+    // is filesystem work on the keystroke that nothing ever draws.
+    return scored.slice(0, limit).map((scoredEntry) => ({
+      row: {
+        ...scoredEntry.item,
+        // A stable URL rather than a path: the renderer is sandboxed and must
+        // not learn filesystem paths, and `lumanin-icon:` lets main decide what
+        // it will actually serve.
+        ...(this.icons.resolve(scoredEntry.entry.icon) === null
+          ? {}
+          : { icon: `${ICON_URL_PREFIX}${encodeURIComponent(scoredEntry.entry.id)}` })
+      },
+      score: scoredEntry.score,
+      tier: scoredEntry.tier,
+      at: scoredEntry.at
+    }))
+  }
+
+  /**
+   * Fill the icon cache for the whole index, once the machine is idle.
+   *
+   * Chunked and spread across turns of the event loop so a large index cannot
+   * hold the main thread, and abandoned the moment a newer index replaces the
+   * one it started on. Every timer is unref'd: warming icons is never a reason
+   * for the daemon to stay alive.
+   */
+  private scheduleIconWarm(): void {
+    if (this.warmTimer !== null) clearTimeout(this.warmTimer)
+
+    this.warmTimer = setTimeout(() => {
+      this.warmTimer = null
+      const entries = this.entries
+
+      const warmFrom = (start: number): void => {
+        if (this.entries !== entries || start >= entries.length) return
+        for (const entry of entries.slice(start, start + ICON_WARM_CHUNK)) {
+          this.icons.resolve(entry.icon)
+        }
+        setImmediate(() => warmFrom(start + ICON_WARM_CHUNK)).unref()
+      }
+
+      warmFrom(0)
+    }, ICON_WARM_DELAY_MS)
+    this.warmTimer.unref()
   }
 
   /** Stop watching. The daemon owns the lifetime; nothing else calls this. */
   dispose(): void {
     if (this.pending !== null) clearTimeout(this.pending)
     this.pending = null
+    if (this.warmTimer !== null) clearTimeout(this.warmTimer)
+    this.warmTimer = null
     for (const watcher of this.watchers) watcher.close()
     this.watchers = []
   }
