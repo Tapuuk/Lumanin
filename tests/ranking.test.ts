@@ -221,6 +221,87 @@ describe('single-typo tolerance', () => {
     // Four characters is the floor: the same edit is accepted there.
     expect(fuzzyMatch('zats', 'Cats')?.typos).toBe(1)
   })
+
+  it('is skipped entirely for a caller asking to match exactly', () => {
+    const exactly = { allowTypos: false }
+    expect(fuzzyMatch('racyast', 'Raycast', 'fuzzy', exactly)).toBeNull()
+    expect(fuzzyMatch('obsidain', 'Obsidian', 'fuzzy', exactly)).toBeNull()
+    // Left alone, or asked for, the same needle still repairs.
+    expect(fuzzyMatch('racyast', 'Raycast')?.typos).toBe(1)
+    expect(fuzzyMatch('racyast', 'Raycast', 'fuzzy', { allowTypos: true })?.typos).toBe(1)
+
+    const fields = [
+      { name: 'name', text: 'Raycast', weight: 1, isName: true },
+      { name: 'keywords', text: 'launcher;palette', weight: 1, mode: 'word' as const }
+    ]
+    expect(matchFields('racyast', fields, exactly)).toBeNull()
+    expect(matchFields('racyast', fields)?.tier).toBe(TIER.TYPO)
+    // Only the repair goes: everything that matched without one still matches.
+    expect(matchFields('raycast', fields, exactly)?.tier).toBe(TIER.PREFIX)
+    expect(matchFields('launcher', fields, exactly)?.tier).toBe(TIER.NOT_NAME)
+  })
+
+  it('is where the cost of a miss over a large index lives', () => {
+    // Not a benchmark - a net for an order-of-magnitude regression. It fails if
+    // asking to match exactly ever stops being the cheaper of the two.
+    const corpus = Array.from({ length: 2000 }, (_, index) => [
+      { name: 'name', text: `Synthetic Application ${index}`, weight: 1, isName: true },
+      { name: 'keywords', text: `alpha beta gamma ${index}`, weight: 0.6, mode: 'word' as const }
+    ])
+    // Four characters, so long enough to be worth repairing, and matching
+    // nothing in the corpus by either route.
+    const needles = Array.from({ length: 20 }, (_, index) => `zqv${String.fromCharCode(97 + index)}`)
+
+    const scan = (allowTypos: boolean): number => {
+      let matched = 0
+      const started = performance.now()
+      for (const needle of needles) {
+        for (const fields of corpus) {
+          if (matchFields(needle, fields, { allowTypos }) !== null) matched += 1
+        }
+      }
+      const elapsed = performance.now() - started
+      expect(matched).toBe(0)
+      return elapsed
+    }
+
+    // Both paths run once first, so the measured pair is not also measuring
+    // which one the compiler happened to warm up.
+    scan(false)
+    scan(true)
+
+    const exactly = scan(false)
+    const repairing = scan(true)
+
+    expect(exactly).toBeLessThan(repairing)
+    // Wide on purpose: a loaded machine must not fail this, a lost second pass
+    // over 2000 entries must.
+    expect(exactly).toBeLessThan(2000)
+  })
+})
+
+describe('a field that carries its own lowered copy', () => {
+  const name = 'LibreOffice Calc'
+  const plain = (): ReturnType<typeof matchFields> =>
+    matchFields('calc', [{ name: 'name', text: name, weight: 1, isName: true }])
+
+  it('answers exactly as the same field without one', () => {
+    const lowered = matchFields('calc', [
+      { name: 'name', text: name, lower: name.toLowerCase(), weight: 1, isName: true }
+    ])
+    expect(lowered).toEqual(plain())
+    // The positions still index the original text, mixed case and all.
+    expect(lowered?.positions.map((at) => name[at]).join('')).toBe('Calc')
+  })
+
+  it('is ignored unless it lines up with the text character for character', () => {
+    // Lowering is not length-preserving in every script, and a shorter copy
+    // would slide every reported position. It is dropped rather than trusted.
+    const wrong = matchFields('calc', [
+      { name: 'name', text: name, lower: 'libre', weight: 1, isName: true }
+    ])
+    expect(wrong).toEqual(plain())
+  })
 })
 
 describe('frecency', () => {
