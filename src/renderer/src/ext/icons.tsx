@@ -251,6 +251,8 @@ interface IconImageProps {
   readonly tint?: string | undefined
   /** What a failed load degrades to, when the caller knows better than the dot. */
   readonly fallback?: string | undefined
+  /** Set only for a row too far down the list to be about to be drawn. */
+  readonly lazy?: boolean | undefined
 }
 
 /**
@@ -262,7 +264,7 @@ interface IconImageProps {
  * `src`: a re-render with the same dead URL must not retry and flash, and a
  * *new* URL deserves a fresh attempt.
  */
-export function IconImage({ src, tint, fallback }: IconImageProps): React.JSX.Element {
+export function IconImage({ src, tint, fallback, lazy }: IconImageProps): React.JSX.Element {
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
 
   useEffect(() => {
@@ -283,7 +285,14 @@ export function IconImage({ src, tint, fallback }: IconImageProps): React.JSX.El
   }
 
   return (
-    <img src={src} alt="" draggable={false} loading="lazy" decoding="async" onError={() => setFailedSrc(src)} />
+    <img
+      src={src}
+      alt=""
+      draggable={false}
+      loading={lazy === true ? 'lazy' : 'eager'}
+      decoding="async"
+      onError={() => setFailedSrc(src)}
+    />
   )
 }
 
@@ -291,9 +300,10 @@ interface IconProps {
   readonly icon: ResolvedIcon | null
   /** Drawn when there is no icon at all, so the column keeps its width. */
   readonly placeholder?: string
+  readonly lazy?: boolean | undefined
 }
 
-export function ExtIcon({ icon, placeholder }: IconProps): React.JSX.Element {
+export function ExtIcon({ icon, placeholder, lazy }: IconProps): React.JSX.Element {
   if (icon === null) {
     return (
       <span className="result__icon">
@@ -307,7 +317,7 @@ export function ExtIcon({ icon, placeholder }: IconProps): React.JSX.Element {
   return (
     <span className="result__icon">
       {icon.src !== undefined ? (
-        <IconImage src={icon.src} tint={icon.tint} />
+        <IconImage src={icon.src} tint={icon.tint} lazy={lazy} />
       ) : (
         <span
           className="result__glyph"
