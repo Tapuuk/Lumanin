@@ -1,4 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type Ref
+} from 'react'
 import { filterRows } from '@shared/list-filter'
 import { matchesShortcut } from '@shared/shortcut'
 import { keyActionFor, type KeyMap } from '@shared/keys'
@@ -731,6 +741,76 @@ function tintOf(value: unknown): string | null {
   return object === null ? null : str(object['color'])
 }
 
+interface ListRowProps {
+  readonly row: Row
+  readonly isSelected: boolean
+  /** True on the first row of a section, which draws the section's heading. */
+  readonly showSection: boolean
+  readonly extension: string
+  readonly send: (handlerId: string | null, payload?: unknown) => void
+  /**
+   * Set on the selected row only, so the list can scroll it into view. A named
+   * prop rather than `ref` because this one has to take part in the shallow
+   * compare below.
+   */
+  readonly rowRef?: Ref<HTMLDivElement> | undefined
+}
+
+/**
+ * One row of a plugin's list.
+ *
+ * Memoized: a selection change is two rows changing, not the whole list, and
+ * every row body it skips is an `IconImage` — a component with state and an
+ * effect — that does not have to run again, plus an icon to resolve for the row
+ * and for each of its accessories.
+ */
+const ListRow = memo(function ListRow({
+  row,
+  isSelected,
+  showSection,
+  extension,
+  send,
+  rowRef
+}: ListRowProps): React.JSX.Element {
+  return (
+    <div>
+      {showSection && <div className="results__section">{row.sectionTitle}</div>}
+      <div
+        ref={rowRef}
+        className="result"
+        data-kind="extension"
+        role="option"
+        aria-selected={isSelected}
+        onClick={() => send(readActionPanel(row.actions).primary?.handlerId ?? null)}
+      >
+        <ExtIcon icon={resolveIcon(row.icon, extension)} />
+        <span className="result__text">
+          <span className="result__title">{row.title}</span>
+          {row.subtitle !== null && <span className="result__subtitle">{row.subtitle}</span>}
+        </span>
+        {row.accessories.map((accessory, accessoryIndex) => {
+          const icon = resolveIcon(accessory.icon, extension)
+          if (accessory.text === null && icon === null) return null
+          return (
+            <span
+              className="result__accessory"
+              key={accessoryIndex}
+              style={accessory.tint === undefined ? undefined : { color: accessory.tint }}
+            >
+              {icon !== null && (
+                <span className="result__accessory-icon" aria-hidden="true">
+                  {icon.src !== undefined ? <IconImage src={icon.src} tint={icon.tint} /> : icon.glyph}
+                </span>
+              )}
+              {accessory.text}
+            </span>
+          )
+        })}
+      </div>
+    </div>
+  )
+})
+
 interface ListBodyProps {
   readonly list: ListModel | null
   readonly selected: Row | null
@@ -749,7 +829,9 @@ const MAX_RENDERED_ROWS = 150
 function ListBody({ list, selected, extension, send }: ListBodyProps): React.JSX.Element | null {
   const selectedRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    // Before paint: a selection that moved must never be shown off-screen first,
+    // which is what a passive effect here looked like on a long list.
     selectedRef.current?.scrollIntoView({ block: 'nearest' })
   }, [selected?.id])
 
@@ -787,49 +869,21 @@ function ListBody({ list, selected, extension, send }: ListBodyProps): React.JSX
       {windowed.map((row, offset) => {
         const index = start + offset
         const isSelected = row.id === selected?.id
+        // Whether this row opens a section is a question about the row before
+        // it, so it is answered here rather than inside the row.
         const showSection =
           row.sectionTitle !== null && row.sectionTitle !== list.rows[index - 1]?.sectionTitle
 
         return (
-          <div key={row.id}>
-            {showSection && <div className="results__section">{row.sectionTitle}</div>}
-            <div
-              ref={isSelected ? selectedRef : undefined}
-              className="result"
-              data-kind="extension"
-              role="option"
-              aria-selected={isSelected}
-              onClick={() => send(readActionPanel(row.actions).primary?.handlerId ?? null)}
-            >
-              <ExtIcon icon={resolveIcon(row.icon, extension)} />
-              <span className="result__text">
-                <span className="result__title">{row.title}</span>
-                {row.subtitle !== null && <span className="result__subtitle">{row.subtitle}</span>}
-              </span>
-              {row.accessories.map((accessory, accessoryIndex) => {
-                const icon = resolveIcon(accessory.icon, extension)
-                if (accessory.text === null && icon === null) return null
-                return (
-                  <span
-                    className="result__accessory"
-                    key={accessoryIndex}
-                    style={accessory.tint === undefined ? undefined : { color: accessory.tint }}
-                  >
-                    {icon !== null && (
-                      <span className="result__accessory-icon" aria-hidden="true">
-                        {icon.src !== undefined ? (
-                          <IconImage src={icon.src} tint={icon.tint} />
-                        ) : (
-                          icon.glyph
-                        )}
-                      </span>
-                    )}
-                    {accessory.text}
-                  </span>
-                )
-              })}
-            </div>
-          </div>
+          <ListRow
+            key={row.id}
+            row={row}
+            isSelected={isSelected}
+            showSection={showSection}
+            extension={extension}
+            send={send}
+            rowRef={isSelected ? selectedRef : undefined}
+          />
         )
       })}
     </div>
