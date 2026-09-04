@@ -1,5 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { matchFields, matchGroup } from '@shared/fuzzy'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type Ref,
+  type UIEvent
+} from 'react'
+import { filterRows } from '@shared/list-filter'
 import { matchesShortcut } from '@shared/shortcut'
 import { keyActionFor, type KeyMap } from '@shared/keys'
 import { moveSelection } from '@shared/selection'
@@ -51,6 +62,15 @@ const EMPTY_FORM: FormModel = Object.freeze({
   enableDrafts: false
 })
 
+/**
+ * Stands in for the rows of a view that is not a list.
+ *
+ * One frozen array rather than a fresh `[]` per render: the rows are a
+ * dependency of the effects below, and a new empty array every time would run
+ * them on every render of a form or a detail.
+ */
+const EMPTY_ROWS: readonly Row[] = Object.freeze([])
+
 interface ExtensionViewProps {
   readonly state: SessionState
   readonly focusToken: number
@@ -99,27 +119,42 @@ export function ExtensionView({ state, focusToken, keys, onExit }: ExtensionView
    * the user had just re-opened. Raycast resets too, and the top of a
    * freshly-filtered list is the only position that is right regardless of what
    * the filter did.
+   *
+   * This is the only thing that moves the cursor for a changed query, and a null
+   * selection already *means* the top row wherever one is derived. So nothing
+   * writes the derived id back into this state: doing that was a second render
+   * per keystroke, spent reconciling the same rows again to reach a selection the
+   * list had already settled on.
    */
   useEffect(() => {
     setSelectedId(null)
   }, [searchText])
 
-  const list = useMemo(() => (view?.type === 'List' ? readList(view, searchText) : null), [view, searchText])
+  // Reading the tree and narrowing it are separate steps because they change for
+  // separate reasons: a keystroke leaves the tree alone, and a patch from the
+  // extension leaves the query alone. Splitting them means typing re-runs the
+  // filter over rows that are still the objects they were, which is what lets the
+  // rows below skip their own render.
+  const shape = useMemo(() => (view?.type === 'List' ? readListShape(view) : null), [view])
+  const visible = useMemo(
+    () => (shape === null ? EMPTY_ROWS : filterRows(shape.rows, searchText, shape.filtered)),
+    [shape, searchText]
+  )
+  const list = useMemo(
+    () => (shape === null ? null : { ...shape, rows: visible }),
+    [shape, visible]
+  )
   const form = useMemo(() => (isForm && view !== null ? readForm(view) : null), [isForm, view])
   const formState = useFormState(form ?? EMPTY_FORM, send, state.fieldCommand)
 
   // Selection is by *id*, not index: the list re-sorts and re-filters under the
   // cursor constantly, and an index would silently change which row Enter runs.
-  const rows = list?.rows ?? []
+  const rows = list?.rows ?? EMPTY_ROWS
   const selectedIndex = Math.max(
     0,
     rows.findIndex((row) => row.id === selectedId)
   )
   const selected = rows[selectedIndex] ?? rows[0] ?? null
-
-  useEffect(() => {
-    if (selected !== null && selected.id !== selectedId) setSelectedId(selected.id)
-  }, [selected, selectedId])
 
   /**
    * A requested landing spot — a pinned item, or `selectItemWithId` from the
@@ -588,23 +623,20 @@ interface ListModel {
 }
 
 /**
- * Read a `<List>` and decide what is on screen.
+ * Read a `<List>`: every row it holds, and what the view itself says.
  *
- * Filtering happens here because the spec says it does: `<List>` filters
+ * Whether those rows are then narrowed is decided by the spec: `<List>` filters
  * client-side unless the extension takes `onSearchTextChange`, in which case the
  * extension owns the query and filtering defaults **off** — filtering its results
- * again would hide rows it deliberately returned.
+ * again would hide rows it deliberately returned. That answer travels as
+ * `filtered`, and `filterRows` applies it; *how* a query narrows a list is the
+ * launcher's own search, documented there.
  *
- * *How* it filters follows the launcher's own search, not a substring scan:
- * the item's **title**, plus its explicit
- * `keywords`, with the same one forgiven typo as the root list — and **never
- * the subtitle**. A subtitle is a description; matching it made every row
- * whose description contained the query look like a result. Title matches
- * rank above keyword matches above repaired typos, author order within each
- * group. A plugin that wants different rules owns the query with
- * `onSearchTextChange`.
+ * `rows` here is every row in the tree. What the caller hands on as a
+ * `ListModel` carries the visible ones, which is what every consumer means by
+ * `rows`.
  */
-function readList(node: RenderNode, query: string): ListModel {
+function readListShape(node: RenderNode): ListModel {
   const onSearchTextChange = handler(node.props['onSearchTextChange'])
   const explicitFiltering = node.props['filtering']
   const filtering =
@@ -636,23 +668,8 @@ function readList(node: RenderNode, query: string): ListModel {
   }
   collect(node, null)
 
-  const needle = query.trim()
-  let visible: readonly Row[] = rows
-  if (filtering && needle.length > 0) {
-    const matched = rows.flatMap((row) => {
-      const match = matchFields(needle, [
-        { name: 'title', text: row.title, weight: 1, isName: true },
-        { name: 'keywords', text: row.keywords, weight: 0.7, mode: 'word' as const }
-      ])
-      return match === null ? [] : [{ row, group: matchGroup(match.tier) }]
-    })
-    // `sort` is stable, so within a group the extension's own order survives.
-    matched.sort((a, b) => a.group - b.group)
-    visible = matched.map((entry) => entry.row)
-  }
-
   return {
-    rows: visible,
+    rows,
     isLoading: bool(node.props['isLoading']),
     showingDetail: bool(node.props['isShowingDetail']),
     placeholder: str(node.props['searchBarPlaceholder']) ?? 'Search...',
@@ -664,7 +681,27 @@ function readList(node: RenderNode, query: string): ListModel {
   }
 }
 
+/**
+ * One `Row` per tree node, reused while the node is.
+ *
+ * A patch batch copies only the containers on the paths it names, so a node no
+ * operation touched comes back as the very object it was — and a row is a pure
+ * function of its node and the section it sits in. Rebuilding anyway would hand
+ * every row below a new object, which is the one thing that stops a memoized row
+ * from skipping its render when the extension re-renders for its own reasons.
+ */
+const rowCache = new WeakMap<RenderNode, { sectionTitle: string | null; row: Row }>()
+
 function readRow(node: RenderNode, sectionTitle: string | null): Row {
+  const cached = rowCache.get(node)
+  if (cached !== undefined && cached.sectionTitle === sectionTitle) return cached.row
+
+  const row = buildRow(node, sectionTitle)
+  rowCache.set(node, { sectionTitle, row })
+  return row
+}
+
+function buildRow(node: RenderNode, sectionTitle: string | null): Row {
   const title = str(node.props['title']) ?? textOf(node)
   const subtitle = str(node.props['subtitle'])
   const keywords = arrayProp(node.props['keywords'])
@@ -705,6 +742,76 @@ function tintOf(value: unknown): string | null {
   return object === null ? null : str(object['color'])
 }
 
+interface ListRowProps {
+  readonly row: Row
+  readonly isSelected: boolean
+  /** True on the first row of a section, which draws the section's heading. */
+  readonly showSection: boolean
+  readonly extension: string
+  readonly send: (handlerId: string | null, payload?: unknown) => void
+  /**
+   * Set on the selected row only, so the list can scroll it into view. A named
+   * prop rather than `ref` because this one has to take part in the shallow
+   * compare below.
+   */
+  readonly rowRef?: Ref<HTMLDivElement> | undefined
+}
+
+/**
+ * One row of a plugin's list.
+ *
+ * Memoized: a selection change is two rows changing, not the whole list, and
+ * every row body it skips is an `IconImage` — a component with state and an
+ * effect — that does not have to run again, plus an icon to resolve for the row
+ * and for each of its accessories.
+ */
+const ListRow = memo(function ListRow({
+  row,
+  isSelected,
+  showSection,
+  extension,
+  send,
+  rowRef
+}: ListRowProps): React.JSX.Element {
+  return (
+    <div>
+      {showSection && <div className="results__section">{row.sectionTitle}</div>}
+      <div
+        ref={rowRef}
+        className="result"
+        data-kind="extension"
+        role="option"
+        aria-selected={isSelected}
+        onClick={() => send(readActionPanel(row.actions).primary?.handlerId ?? null)}
+      >
+        <ExtIcon icon={resolveIcon(row.icon, extension)} />
+        <span className="result__text">
+          <span className="result__title">{row.title}</span>
+          {row.subtitle !== null && <span className="result__subtitle">{row.subtitle}</span>}
+        </span>
+        {row.accessories.map((accessory, accessoryIndex) => {
+          const icon = resolveIcon(accessory.icon, extension)
+          if (accessory.text === null && icon === null) return null
+          return (
+            <span
+              className="result__accessory"
+              key={accessoryIndex}
+              style={accessory.tint === undefined ? undefined : { color: accessory.tint }}
+            >
+              {icon !== null && (
+                <span className="result__accessory-icon" aria-hidden="true">
+                  {icon.src !== undefined ? <IconImage src={icon.src} tint={icon.tint} /> : icon.glyph}
+                </span>
+              )}
+              {accessory.text}
+            </span>
+          )
+        })}
+      </div>
+    </div>
+  )
+})
+
 interface ListBodyProps {
   readonly list: ListModel | null
   readonly selected: Row | null
@@ -722,8 +829,25 @@ const MAX_RENDERED_ROWS = 150
 
 function ListBody({ list, selected, extension, send }: ListBodyProps): React.JSX.Element | null {
   const selectedRef = useRef<HTMLDivElement>(null)
+  /**
+   * Rows drawn past the base window, and the place they were drawn for.
+   *
+   * The window has two axes. The keyboard moves the selection, which slides the
+   * window by moving `start`. A wheel cannot move the selection, so it extends
+   * the window downwards instead — which is the only way a mouse reaches row 200
+   * of a list that draws 150. Tying the count to the rows and the start it was
+   * measured against means a new query, a new tree or a slid window falls back
+   * to the base window without anything having to reset it.
+   */
+  const [revealed, setRevealed] = useState<{ rows: readonly Row[]; from: number; count: number }>({
+    rows: EMPTY_ROWS,
+    from: 0,
+    count: 0
+  })
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    // Before paint: a selection that moved must never be shown off-screen first,
+    // which is what a passive effect here looked like on a long list.
     selectedRef.current?.scrollIntoView({ block: 'nearest' })
   }, [selected?.id])
 
@@ -753,57 +877,41 @@ function ListBody({ list, selected, extension, send }: ListBodyProps): React.JSX
       list.rows.length - MAX_RENDERED_ROWS
     )
   }
-  const windowed =
-    list.rows.length > MAX_RENDERED_ROWS ? list.rows.slice(start, start + MAX_RENDERED_ROWS) : list.rows
+  const extra = revealed.rows === list.rows && revealed.from === start ? revealed.count : 0
+  const count = Math.min(list.rows.length - start, MAX_RENDERED_ROWS + extra)
+  const windowed = list.rows.length > MAX_RENDERED_ROWS ? list.rows.slice(start, start + count) : list.rows
+
+  const onScroll = (event: UIEvent<HTMLDivElement>): void => {
+    if (start + count >= list.rows.length) return
+    const { scrollTop, clientHeight, scrollHeight } = event.currentTarget
+    // A viewport short of the end rather than at it: scrolling stops firing once
+    // the box has nowhere left to go, so the last row drawn has to be the trigger
+    // and not the destination. Appending below the pointer moves nothing above
+    // it, and puts the end far enough away that one gesture is one reveal.
+    if (scrollTop + clientHeight * 2 < scrollHeight) return
+    setRevealed({ rows: list.rows, from: start, count: extra + MAX_RENDERED_ROWS })
+  }
 
   const items = (
-    <div className="results" role="listbox" aria-label="Results">
+    <div className="results" role="listbox" aria-label="Results" onScroll={onScroll}>
       {windowed.map((row, offset) => {
         const index = start + offset
         const isSelected = row.id === selected?.id
+        // Whether this row opens a section is a question about the row before
+        // it, so it is answered here rather than inside the row.
         const showSection =
           row.sectionTitle !== null && row.sectionTitle !== list.rows[index - 1]?.sectionTitle
 
         return (
-          <div key={row.id}>
-            {showSection && <div className="results__section">{row.sectionTitle}</div>}
-            <div
-              ref={isSelected ? selectedRef : undefined}
-              className="result"
-              data-kind="extension"
-              role="option"
-              aria-selected={isSelected}
-              onClick={() => send(readActionPanel(row.actions).primary?.handlerId ?? null)}
-            >
-              <ExtIcon icon={resolveIcon(row.icon, extension)} />
-              <span className="result__text">
-                <span className="result__title">{row.title}</span>
-                {row.subtitle !== null && <span className="result__subtitle">{row.subtitle}</span>}
-              </span>
-              {row.accessories.map((accessory, accessoryIndex) => {
-                const icon = resolveIcon(accessory.icon, extension)
-                if (accessory.text === null && icon === null) return null
-                return (
-                  <span
-                    className="result__accessory"
-                    key={accessoryIndex}
-                    style={accessory.tint === undefined ? undefined : { color: accessory.tint }}
-                  >
-                    {icon !== null && (
-                      <span className="result__accessory-icon" aria-hidden="true">
-                        {icon.src !== undefined ? (
-                          <IconImage src={icon.src} tint={icon.tint} />
-                        ) : (
-                          icon.glyph
-                        )}
-                      </span>
-                    )}
-                    {accessory.text}
-                  </span>
-                )
-              })}
-            </div>
-          </div>
+          <ListRow
+            key={row.id}
+            row={row}
+            isSelected={isSelected}
+            showSection={showSection}
+            extension={extension}
+            send={send}
+            rowRef={isSelected ? selectedRef : undefined}
+          />
         )
       })}
     </div>
@@ -816,7 +924,11 @@ function ListBody({ list, selected, extension, send }: ListBodyProps): React.JSX
   // long document usable next to a long list.
   return (
     <div className="ext-split">
-      <div className="ext-split__list">{items}</div>
+      {/* Whichever of the two is the scroll box: the list scrolls itself when it
+          is alone, and this wrapper scrolls it when a detail pane is beside it. */}
+      <div className="ext-split__list" onScroll={onScroll}>
+        {items}
+      </div>
       <div className="ext-split__detail">
         <DetailBody node={selected.detail} extension={extension} />
       </div>
@@ -834,15 +946,14 @@ interface DetailBodyProps {
 function DetailBody({ node, extension }: DetailBodyProps): React.JSX.Element {
   const markdown = str(node.props['markdown']) ?? ''
   const metadata = slot(node, 'metadata')
+  // Stable, so the document below is parsed once rather than on every render of
+  // the list this pane sits beside.
+  const resolveAsset = useCallback((path: string) => assetUrl(extension, path), [extension])
 
   return (
     <div className="ext-detail">
       {markdown.length > 0 && (
-        <Markdown
-          source={markdown}
-          extension={extension}
-          resolveAsset={(path) => assetUrl(extension, path)}
-        />
+        <Markdown source={markdown} extension={extension} resolveAsset={resolveAsset} />
       )}
       {metadata !== null && <Metadata node={metadata} />}
       {bool(node.props['isLoading']) && <div className="ext-loading">Loading…</div>}

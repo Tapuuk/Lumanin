@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, useMemo, type ReactNode } from 'react'
 
 /**
  * Markdown, rendered to React elements — never to HTML.
@@ -24,12 +24,21 @@ interface MarkdownProps {
   readonly source: string
   /** Images resolve against this extension's assets. */
   readonly extension: string
+  /**
+   * Must be a stable reference. It is half of what decides whether a source is
+   * re-parsed, so a caller that passes a fresh arrow function parses the whole
+   * document again on every render of the view around it.
+   */
   readonly resolveAsset: (path: string) => string
 }
 
 export function Markdown({ source, extension, resolveAsset }: MarkdownProps): React.JSX.Element {
   void extension
-  return <div className="md">{blocks(source, resolveAsset)}</div>
+  // Parsing is a walk over every line of the document, and a detail pane
+  // re-renders for reasons the document knows nothing about: a keystroke in the
+  // search box, a selection moving, a patch arriving elsewhere in the tree.
+  const parsed = useMemo(() => blocks(source, resolveAsset), [source, resolveAsset])
+  return <div className="md">{parsed}</div>
 }
 
 function blocks(source: string, asset: (path: string) => string): ReactNode[] {
