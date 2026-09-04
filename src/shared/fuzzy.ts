@@ -49,8 +49,12 @@
  * transpositions included, **exactly one edit** however long the word — two
  * errors is a different word, not a typo — and
  * heavily penalised so a real match always outranks a repaired one. This is
- * deliberately *not* a general edit-distance search — it only fires when the
- * strict path found nothing, and only against whole words.
+ * deliberately *not* a general edit-distance search: within a candidate it fires
+ * only where the strict path found nothing, and only against whole words. A
+ * caller scoring a whole index can also switch it off with `allowTypos: false`
+ * and run it again as a second pass over the same index, which is what keeps
+ * thousands of candidates from being repaired for rows that any strict match
+ * would have outranked anyway.
  *
  * The algorithm is a greedy forward scan plus a backward tightening pass, not
  * full Smith-Waterman. For strings the length of application names the results
@@ -196,6 +200,26 @@ interface TokenMatch {
   readonly typos: number
 }
 
+/** One whitespace-separated piece of the needle, with its lowered form kept. */
+interface Token {
+  readonly text: string
+  readonly lower: string
+}
+
+/** What a caller may switch off. See {@link fuzzyMatch}. */
+export interface MatchOptions {
+  /**
+   * Whether a token that matched nothing may be repaired by one edit.
+   *
+   * Defaults to `true`. A caller that scores a large index turns it off for the
+   * first pass and back on for a second one, run only when the first found
+   * nothing worth showing — a repaired match loses to every strict one, so
+   * repairing thousands of candidates that a strict match outranks is work
+   * whose result is discarded.
+   */
+  readonly allowTypos?: boolean
+}
+
 /** Contiguous groups of matched positions. */
 function runsOf(positions: readonly number[]): { start: number; end: number }[] {
   const runs: { start: number; end: number }[] = []
@@ -241,9 +265,8 @@ function isAcceptable(positions: readonly number[], haystack: string, token: str
  * pieces eleven characters apart. The caller keeps whichever alignment is both
  * acceptable and scores highest, so neither pass has to be right on its own.
  */
-function alignments(token: string, haystack: string, from: number): number[][] {
-  const lowerToken = token.toLowerCase()
-  const lowerHaystack = haystack.toLowerCase()
+function alignments(token: Token, haystack: string, lowerHaystack: string, from: number): number[][] {
+  const lowerToken = token.lower
 
   const greedy: number[] = []
   let cursor = from
@@ -271,25 +294,36 @@ function alignments(token: string, haystack: string, from: number): number[][] {
 }
 
 /** The first word-anchored contiguous run of `token`, at or after `from`. */
-function wordAnchored(token: string, haystack: string, from: number): number[] | null {
-  const lowerToken = token.toLowerCase()
-  const lowerHaystack = haystack.toLowerCase()
+function wordAnchored(token: Token, haystack: string, lowerHaystack: string, from: number): number[] | null {
+  const lowerToken = token.lower
 
   for (let at = lowerHaystack.indexOf(lowerToken, from); at !== -1; at = lowerHaystack.indexOf(lowerToken, at + 1)) {
     if (!startsWord(haystack, at)) continue
-    return Array.from({ length: token.length }, (_, i) => at + i)
+    return Array.from({ length: token.text.length }, (_, i) => at + i)
   }
   return null
 }
 
-/** Word spans of the haystack, for the typo pass to compare against. */
-function wordsOf(haystack: string): { text: string; at: number }[] {
+/**
+ * Word spans of the haystack, lowered, for the typo pass to compare against.
+ *
+ * The offsets index the original text, because that is what the caller reports
+ * as matched positions. The word itself is sliced out of the lowered copy where
+ * the two line up character for character, and lowered on its own where they do
+ * not — the boundary characters are all case-free, so the spans are the same
+ * either way.
+ */
+function wordsOf(haystack: string, lowerHaystack: string): { text: string; at: number }[] {
+  const aligned = lowerHaystack.length === haystack.length
   const words: { text: string; at: number }[] = []
   let start = 0
   for (let at = 0; at <= haystack.length; at += 1) {
     const boundary = at === haystack.length || BOUNDARY_CHARS.has(haystack[at] ?? '')
     if (!boundary) continue
-    if (at > start) words.push({ text: haystack.slice(start, at), at: start })
+    if (at > start) {
+      const text = aligned ? lowerHaystack.slice(start, at) : haystack.slice(start, at).toLowerCase()
+      words.push({ text, at: start })
+    }
     start = at + 1
   }
   return words
@@ -353,16 +387,16 @@ function typoBudget(length: number): number {
  * *prefix* of a longer word is deliberately allowed — someone typing `libreofic`
  * means `LibreOffice` — but matching a fragment in the middle is not.
  */
-function typoMatch(token: string, haystack: string, from: number): TokenMatch | null {
-  const budget = typoBudget(token.length)
+function typoMatch(token: Token, haystack: string, lowerHaystack: string, from: number): TokenMatch | null {
+  const budget = typoBudget(token.text.length)
   if (budget === 0) return null
 
-  const lowerToken = token.toLowerCase()
+  const lowerToken = token.lower
   let best: TokenMatch | null = null
 
-  for (const word of wordsOf(haystack)) {
+  for (const word of wordsOf(haystack, lowerHaystack)) {
     if (word.at < from) continue
-    const lowerWord = word.text.toLowerCase()
+    const lowerWord = word.text
 
     // Against the whole word, and against its first `token.length` characters so
     // a typo inside a long name is still recognised.
@@ -385,16 +419,23 @@ function typoMatch(token: string, haystack: string, from: number): TokenMatch | 
   return best
 }
 
-function matchToken(token: string, haystack: string, from: number, mode: FieldMode): TokenMatch | null {
+function matchToken(
+  token: Token,
+  haystack: string,
+  lowerHaystack: string,
+  from: number,
+  mode: FieldMode,
+  allowTypos: boolean
+): TokenMatch | null {
   if (mode === 'word') {
-    const anchored = wordAnchored(token, haystack, from)
+    const anchored = wordAnchored(token, haystack, lowerHaystack, from)
     return anchored === null ? null : { positions: anchored, typos: 0 }
   }
 
   let best: number[] | null = null
   let bestScore = -Infinity
-  for (const positions of alignments(token, haystack, from)) {
-    if (!isAcceptable(positions, haystack, token)) continue
+  for (const positions of alignments(token, haystack, lowerHaystack, from)) {
+    if (!isAcceptable(positions, haystack, token.text)) continue
     const score = scorePositions(positions, haystack)
     if (score <= bestScore) continue
     best = positions
@@ -402,7 +443,40 @@ function matchToken(token: string, haystack: string, from: number, mode: FieldMo
   }
   if (best !== null) return { positions: best, typos: 0 }
 
-  return typoMatch(token, haystack, from)
+  return allowTypos ? typoMatch(token, haystack, lowerHaystack, from) : null
+}
+
+/**
+ * The needle, split into tokens and lowered — remembered for the last needle
+ * asked about.
+ *
+ * One keystroke scores the same needle against every field of every candidate,
+ * so splitting and lowering it per call is thousands of repetitions of one
+ * answer. A single slot is enough: the calls arrive in bursts of one needle, and
+ * a cache that holds more would only hold what the next keystroke invalidates.
+ */
+let lastNeedle = ''
+let lastTokens: readonly Token[] = []
+
+function tokensOf(needle: string): readonly Token[] {
+  if (needle === lastNeedle) return lastTokens
+  lastNeedle = needle
+  lastTokens = needle
+    .split(/\s+/)
+    .filter((token) => token.length > 0)
+    .map((text) => ({ text, lower: text.toLowerCase() }))
+  return lastTokens
+}
+
+/**
+ * The haystack, lowered once per call rather than once per token.
+ *
+ * A precomputed copy is trusted only when it lines up character for character
+ * with the original: matched positions index the original text, and lowering is
+ * not length-preserving in every script.
+ */
+function loweredOf(haystack: string, lower: string | undefined): string {
+  return lower !== undefined && lower.length === haystack.length ? lower : haystack.toLowerCase()
 }
 
 /**
@@ -419,8 +493,32 @@ function matchToken(token: string, haystack: string, from: number, mode: FieldMo
  * instead would make the second token's run start mid-word and lose its
  * word-start bonus.
  */
-export function fuzzyMatch(needle: string, haystack: string, mode: FieldMode = 'fuzzy'): FuzzyMatch | null {
-  const tokens = needle.split(/\s+/).filter((token) => token.length > 0)
+export function fuzzyMatch(
+  needle: string,
+  haystack: string,
+  mode: FieldMode = 'fuzzy',
+  options?: MatchOptions
+): FuzzyMatch | null {
+  return scoreTokens(
+    tokensOf(needle),
+    haystack,
+    loweredOf(haystack, undefined),
+    mode,
+    options?.allowTypos !== false
+  )
+}
+
+/**
+ * {@link fuzzyMatch} with the per-needle and per-haystack work already done, so
+ * a caller scoring many fields pays for neither twice.
+ */
+function scoreTokens(
+  tokens: readonly Token[],
+  haystack: string,
+  lowerHaystack: string,
+  mode: FieldMode,
+  allowTypos: boolean
+): FuzzyMatch | null {
   if (tokens.length === 0) {
     return { score: 0, positions: [], typos: 0, tier: TIER.PREFIX, at: 0 }
   }
@@ -431,7 +529,7 @@ export function fuzzyMatch(needle: string, haystack: string, mode: FieldMode = '
   let from = 0
 
   for (const token of tokens) {
-    const match = matchToken(token, haystack, from, mode)
+    const match = matchToken(token, haystack, lowerHaystack, from, mode, allowTypos)
     if (match === null) return null
     positions.push(...match.positions)
     typos += match.typos
@@ -513,6 +611,13 @@ export interface Field {
   readonly name: string
   readonly text: string
   readonly weight: number
+  /**
+   * `text`, lowered, where the caller holds an index it can build this on.
+   *
+   * Purely an optimisation, and ignored unless it is the same length as `text`,
+   * since matched positions index `text` itself.
+   */
+  readonly lower?: string
   /** Defaults to `fuzzy`. See {@link FieldMode}. */
   readonly mode?: FieldMode
   /**
@@ -539,11 +644,23 @@ export interface Field {
  * one — highlighting a keyword match inside the display name would draw ranges
  * that do not correspond to the text on screen.
  */
-export function matchFields(needle: string, fields: readonly Field[]): FieldMatch | null {
+export function matchFields(
+  needle: string,
+  fields: readonly Field[],
+  options?: MatchOptions
+): FieldMatch | null {
+  const tokens = tokensOf(needle)
+  const allowTypos = options?.allowTypos !== false
   let best: FieldMatch | null = null
 
   for (const field of fields) {
-    const match = fuzzyMatch(needle, field.text, field.mode ?? 'fuzzy')
+    const match = scoreTokens(
+      tokens,
+      field.text,
+      loweredOf(field.text, field.lower),
+      field.mode ?? 'fuzzy',
+      allowTypos
+    )
     if (match === null) continue
 
     // A non-name field can only ever be `NOT_NAME` — or `TYPO`, which is worse
