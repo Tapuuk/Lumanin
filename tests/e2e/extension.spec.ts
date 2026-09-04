@@ -689,6 +689,40 @@ test('a huge list draws a bounded window of rows, and search reaches past it', a
   await expect(page.locator('.actionbar')).toHaveCount(0)
 })
 
+/**
+ * The other half of that window, for the hand that is not on the keyboard.
+ *
+ * A wheel cannot move the selection, so it cannot slide the window the way the
+ * arrows do. Without a second rule the mouse reaches the last drawn row and the
+ * rest of the list is simply unreachable. A sibling of the test above rather
+ * than an extension of it, so that one's load flake cannot hide this one.
+ */
+test('scrolling with the wheel reaches rows past the drawn window', async () => {
+  const reply = await askDaemon({ kind: 'open', target: 'extension:fruit/crowd' })
+  expect(reply.ok).toBe(true)
+
+  await expect(page.locator('.result__title').first()).toHaveText('plain Row 1', { timeout: 10_000 })
+  await expect(page.locator('.result')).toHaveCount(150)
+
+  await page.locator('.results').hover()
+  for (
+    let i = 0;
+    i < 12 && (await page.getByText('plain Row 300', { exact: true }).count()) === 0;
+    i++
+  ) {
+    await page.mouse.wheel(0, 4000)
+    await page.waitForTimeout(100)
+  }
+
+  // Reachability, not a growth constant: how many rows one gesture reveals is
+  // free to change, whether the mouse can get there is not.
+  await expect(page.getByText('plain Row 300', { exact: true })).toHaveCount(1)
+  expect(await page.locator('.result').count()).toBeGreaterThan(150)
+
+  await page.locator('.search__input').press('Escape')
+  await expect(page.locator('.actionbar')).toHaveCount(0)
+})
+
 test('cycling the category faster than patches come back settles, never loops', async () => {
   const reply = await askDaemon({ kind: 'open', target: 'extension:fruit/crowd' })
   expect(reply.ok).toBe(true)
