@@ -106,9 +106,19 @@ describe('the reconciler', () => {
     expect(h.handlers.has(`${action.id}:onAction`)).toBe(true)
 
     // A new closure every render is what React actually does. The id must not
-    // change, or every keystroke would produce a patch per handler.
-    const second = h.render(createElement('Action', { title: 'Go', onAction: () => {} }))
-    expect(compare(first, second)).toEqual([])
+    // change, or every keystroke would produce a patch per handler. The title
+    // changes too, so the re-render really does publish a second document to
+    // diff against: that one title is the only operation in it.
+    const second = h.render(createElement('Action', { title: 'Onwards', onAction: () => {} }))
+
+    expect(h.commits()).toBe(2)
+    expect(second).not.toBe(first)
+    expect(compare(first, second)).toEqual([
+      { op: 'replace', path: '/children/0/props/title', value: 'Onwards' }
+    ])
+    expect((second.children[0] as RenderNode).props['onAction']).toEqual({
+      __handler: `${action.id}:onAction`
+    })
   })
 
   it('keeps node ids stable across a re-render so patches stay small', () => {

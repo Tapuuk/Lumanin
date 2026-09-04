@@ -242,7 +242,11 @@ function describe(value: object): string {
  * - everything else is `Object.is`. That makes an array or object prop rebuilt
  *   with equal contents count as different, deliberately: comparing them deeply
  *   would cost about what serializing them costs, which is the work being
- *   avoided.
+ *   avoided. The other half of the same rule: a prop mutated in place behind a
+ *   reference that did not change is *not* seen, so the commit is skipped and
+ *   the mutation never reaches the renderer. React's own props diff answers the
+ *   same way, so a plugin that rebuilds its props — which is what writing them
+ *   inline gets you — is never affected.
  */
 export function samePropsWhenSerialized(
   previous: Record<string, unknown>,

@@ -288,9 +288,11 @@ const config: HostConfig<Instance, TextInstance, Container, HostContext, Instanc
   /**
    * Empty the root.
    *
-   * React calls this on the way into the *first* commit as well as on a real
-   * teardown, so the length check is what keeps a mount that renders nothing
-   * from counting as a change to the tree.
+   * React schedules this whenever the root's previous child was `null` — the
+   * first mount, and any commit that follows a render which produced nothing.
+   * The length check is what keeps a mount that renders nothing from counting
+   * as a change to the tree. It has nothing to do with teardown: unmounting
+   * takes the child out through `removeChildFromContainer` instead.
    */
   clearContainer(container) {
     if (container.root.children.length === 0) return

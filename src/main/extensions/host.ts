@@ -46,8 +46,9 @@ export interface HostDeps {
   /**
    * Where Node keeps its compiled-bytecode cache for the host and its workers.
    *
-   * Node's to create, fill and evict; safe to delete at any time, at the price
-   * of one slower start afterwards.
+   * Node creates it and fills it, and nothing ever evicts from it, so it only
+   * grows. Safe to delete at any time, at the price of one slower start
+   * afterwards.
    */
   readonly compileCacheDir: string
   /** Push an event to the renderer. */
