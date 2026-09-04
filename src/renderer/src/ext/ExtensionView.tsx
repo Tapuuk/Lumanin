@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { matchFields, matchGroup } from '@shared/fuzzy'
+import { filterRows } from '@shared/list-filter'
 import { matchesShortcut } from '@shared/shortcut'
 import { keyActionFor, type KeyMap } from '@shared/keys'
 import { moveSelection } from '@shared/selection'
@@ -51,6 +51,15 @@ const EMPTY_FORM: FormModel = Object.freeze({
   enableDrafts: false
 })
 
+/**
+ * Stands in for the rows of a view that is not a list.
+ *
+ * One frozen array rather than a fresh `[]` per render: the rows are a
+ * dependency of the effects below, and a new empty array every time would run
+ * them on every render of a form or a detail.
+ */
+const EMPTY_ROWS: readonly Row[] = Object.freeze([])
+
 interface ExtensionViewProps {
   readonly state: SessionState
   readonly focusToken: number
@@ -99,27 +108,42 @@ export function ExtensionView({ state, focusToken, keys, onExit }: ExtensionView
    * the user had just re-opened. Raycast resets too, and the top of a
    * freshly-filtered list is the only position that is right regardless of what
    * the filter did.
+   *
+   * This is the only thing that moves the cursor for a changed query, and a null
+   * selection already *means* the top row wherever one is derived. So nothing
+   * writes the derived id back into this state: doing that was a second render
+   * per keystroke, spent reconciling the same rows again to reach a selection the
+   * list had already settled on.
    */
   useEffect(() => {
     setSelectedId(null)
   }, [searchText])
 
-  const list = useMemo(() => (view?.type === 'List' ? readList(view, searchText) : null), [view, searchText])
+  // Reading the tree and narrowing it are separate steps because they change for
+  // separate reasons: a keystroke leaves the tree alone, and a patch from the
+  // extension leaves the query alone. Splitting them means typing re-runs the
+  // filter over rows that are still the objects they were, which is what lets the
+  // rows below skip their own render.
+  const shape = useMemo(() => (view?.type === 'List' ? readListShape(view) : null), [view])
+  const visible = useMemo(
+    () => (shape === null ? EMPTY_ROWS : filterRows(shape.rows, searchText, shape.filtered)),
+    [shape, searchText]
+  )
+  const list = useMemo(
+    () => (shape === null ? null : { ...shape, rows: visible }),
+    [shape, visible]
+  )
   const form = useMemo(() => (isForm && view !== null ? readForm(view) : null), [isForm, view])
   const formState = useFormState(form ?? EMPTY_FORM, send, state.fieldCommand)
 
   // Selection is by *id*, not index: the list re-sorts and re-filters under the
   // cursor constantly, and an index would silently change which row Enter runs.
-  const rows = list?.rows ?? []
+  const rows = list?.rows ?? EMPTY_ROWS
   const selectedIndex = Math.max(
     0,
     rows.findIndex((row) => row.id === selectedId)
   )
   const selected = rows[selectedIndex] ?? rows[0] ?? null
-
-  useEffect(() => {
-    if (selected !== null && selected.id !== selectedId) setSelectedId(selected.id)
-  }, [selected, selectedId])
 
   /**
    * A requested landing spot — a pinned item, or `selectItemWithId` from the
@@ -588,23 +612,20 @@ interface ListModel {
 }
 
 /**
- * Read a `<List>` and decide what is on screen.
+ * Read a `<List>`: every row it holds, and what the view itself says.
  *
- * Filtering happens here because the spec says it does: `<List>` filters
+ * Whether those rows are then narrowed is decided by the spec: `<List>` filters
  * client-side unless the extension takes `onSearchTextChange`, in which case the
  * extension owns the query and filtering defaults **off** — filtering its results
- * again would hide rows it deliberately returned.
+ * again would hide rows it deliberately returned. That answer travels as
+ * `filtered`, and `filterRows` applies it; *how* a query narrows a list is the
+ * launcher's own search, documented there.
  *
- * *How* it filters follows the launcher's own search, not a substring scan:
- * the item's **title**, plus its explicit
- * `keywords`, with the same one forgiven typo as the root list — and **never
- * the subtitle**. A subtitle is a description; matching it made every row
- * whose description contained the query look like a result. Title matches
- * rank above keyword matches above repaired typos, author order within each
- * group. A plugin that wants different rules owns the query with
- * `onSearchTextChange`.
+ * `rows` here is every row in the tree. What the caller hands on as a
+ * `ListModel` carries the visible ones, which is what every consumer means by
+ * `rows`.
  */
-function readList(node: RenderNode, query: string): ListModel {
+function readListShape(node: RenderNode): ListModel {
   const onSearchTextChange = handler(node.props['onSearchTextChange'])
   const explicitFiltering = node.props['filtering']
   const filtering =
@@ -636,23 +657,8 @@ function readList(node: RenderNode, query: string): ListModel {
   }
   collect(node, null)
 
-  const needle = query.trim()
-  let visible: readonly Row[] = rows
-  if (filtering && needle.length > 0) {
-    const matched = rows.flatMap((row) => {
-      const match = matchFields(needle, [
-        { name: 'title', text: row.title, weight: 1, isName: true },
-        { name: 'keywords', text: row.keywords, weight: 0.7, mode: 'word' as const }
-      ])
-      return match === null ? [] : [{ row, group: matchGroup(match.tier) }]
-    })
-    // `sort` is stable, so within a group the extension's own order survives.
-    matched.sort((a, b) => a.group - b.group)
-    visible = matched.map((entry) => entry.row)
-  }
-
   return {
-    rows: visible,
+    rows,
     isLoading: bool(node.props['isLoading']),
     showingDetail: bool(node.props['isShowingDetail']),
     placeholder: str(node.props['searchBarPlaceholder']) ?? 'Search...',
@@ -664,7 +670,27 @@ function readList(node: RenderNode, query: string): ListModel {
   }
 }
 
+/**
+ * One `Row` per tree node, reused while the node is.
+ *
+ * A patch batch copies only the containers on the paths it names, so a node no
+ * operation touched comes back as the very object it was — and a row is a pure
+ * function of its node and the section it sits in. Rebuilding anyway would hand
+ * every row below a new object, which is the one thing that stops a memoized row
+ * from skipping its render when the extension re-renders for its own reasons.
+ */
+const rowCache = new WeakMap<RenderNode, { sectionTitle: string | null; row: Row }>()
+
 function readRow(node: RenderNode, sectionTitle: string | null): Row {
+  const cached = rowCache.get(node)
+  if (cached !== undefined && cached.sectionTitle === sectionTitle) return cached.row
+
+  const row = buildRow(node, sectionTitle)
+  rowCache.set(node, { sectionTitle, row })
+  return row
+}
+
+function buildRow(node: RenderNode, sectionTitle: string | null): Row {
   const title = str(node.props['title']) ?? textOf(node)
   const subtitle = str(node.props['subtitle'])
   const keywords = arrayProp(node.props['keywords'])
@@ -834,15 +860,14 @@ interface DetailBodyProps {
 function DetailBody({ node, extension }: DetailBodyProps): React.JSX.Element {
   const markdown = str(node.props['markdown']) ?? ''
   const metadata = slot(node, 'metadata')
+  // Stable, so the document below is parsed once rather than on every render of
+  // the list this pane sits beside.
+  const resolveAsset = useCallback((path: string) => assetUrl(extension, path), [extension])
 
   return (
     <div className="ext-detail">
       {markdown.length > 0 && (
-        <Markdown
-          source={markdown}
-          extension={extension}
-          resolveAsset={(path) => assetUrl(extension, path)}
-        />
+        <Markdown source={markdown} extension={extension} resolveAsset={resolveAsset} />
       )}
       {metadata !== null && <Metadata node={metadata} />}
       {bool(node.props['isLoading']) && <div className="ext-loading">Loading…</div>}
