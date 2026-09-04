@@ -154,6 +154,19 @@ describe('icon theme resolution', () => {
     expect(resolver.resolve('dialer')).toBe(added)
   })
 
+  it('picks up an icon added under a theme it already had', () => {
+    const root = tree()
+    put(root, 'share/icons/hicolor/48x48/apps/editor.svg')
+
+    const { resolver } = resolverFor(root)
+    resolver.refresh()
+    expect(resolver.resolve('dialer')).toBeNull()
+
+    const added = put(root, 'share/icons/hicolor/scalable/apps/dialer.svg')
+    resolver.refresh()
+    expect(resolver.resolve('dialer')).toBe(added)
+  })
+
   it('keeps what it found when nothing on disk moved', () => {
     const root = tree()
     const file = put(root, 'share/icons/hicolor/48x48/apps/editor.svg')

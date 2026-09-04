@@ -197,6 +197,7 @@ export class SearchService {
   private watchers: FSWatcher[] = []
   private pending: NodeJS.Timeout | null = null
   private warmTimer: NodeJS.Timeout | null = null
+  private disposed = false
   private indexedAt = 0
   private dirMtimes: ReadonlyMap<string, number> = new Map()
 
@@ -526,20 +527,23 @@ export class SearchService {
       const entries = this.entries
 
       const warmFrom = (start: number): void => {
-        if (this.entries !== entries || start >= entries.length) return
+        if (this.disposed || this.entries !== entries || start >= entries.length) return
         for (const entry of entries.slice(start, start + ICON_WARM_CHUNK)) {
           this.icons.resolve(entry.icon)
         }
-        setImmediate(() => warmFrom(start + ICON_WARM_CHUNK)).unref()
+        setImmediate(() => warmFrom(start + ICON_WARM_CHUNK)).unref?.()
       }
 
       warmFrom(0)
     }, ICON_WARM_DELAY_MS)
-    this.warmTimer.unref()
+    this.warmTimer.unref?.()
   }
 
   /** Stop watching. The daemon owns the lifetime; nothing else calls this. */
   dispose(): void {
+    // A warm pass that already started keeps its own snapshot of the entries, so
+    // clearing the timer is not enough to stop one mid-flight.
+    this.disposed = true
     if (this.pending !== null) clearTimeout(this.pending)
     this.pending = null
     if (this.warmTimer !== null) clearTimeout(this.warmTimer)

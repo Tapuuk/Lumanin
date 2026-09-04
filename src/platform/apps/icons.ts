@@ -290,11 +290,16 @@ export function createIconResolver(context: IconContext): IconResolver {
   }
 
   if (fromSettingsFile === null) {
-    void gnomeTheme().then((theme) => {
-      if (theme === null || theme === themes[0]) return
-      themes = themeOrder(theme)
-      invalidate()
-    })
+    void gnomeTheme()
+      .then((theme) => {
+        if (theme === null || theme === themes[0]) return
+        themes = themeOrder(theme)
+        invalidate()
+      })
+      .catch(() => {
+        // An injected reader that rejects means the same as one that answers
+        // nothing: the defaults list stands.
+      })
   }
 
   return {
@@ -305,7 +310,7 @@ export function createIconResolver(context: IconContext): IconResolver {
       // Wine and most AppImages use it.
       if (isAbsolute(icon)) return exists(icon) ? icon : null
 
-      const key = `${categories.join(',')} ${icon}`
+      const key = `${categories.join(',')}\u0000${icon}`
       const cached = cache.get(key)
       if (cached !== undefined) return cached
 
@@ -329,6 +334,13 @@ export function createIconResolver(context: IconContext): IconResolver {
         topology = current
         return
       }
+      // The signature only sees theme roots and flat directories, so an
+      // application installed into a size directory that did not exist when the
+      // groups were built would otherwise be probed against a list that omits
+      // it. Rebuilding the groups is bounded; the resolved names keep their
+      // cache entries.
+      groups.clear()
+      flat = null
       for (const [key, value] of cache) {
         if (value === null) cache.delete(key)
       }

@@ -929,22 +929,22 @@ function sessionIdOf(params: unknown): string {
 
 
 /**
+ * How long the renderer may reuse an icon it already has.
+ *
+ * A URL here names an application id or an icon name, and it keeps naming the
+ * same one when an upgrade replaces the file behind it, so the panel can go on
+ * painting the old bytes until the window reloads. That staleness is accepted
+ * for the price it pays: scrolling a long list twice reads the disk once.
+ */
+const ICON_MAX_AGE_SECONDS = 86_400
+
+/**
  * Serve `lumanin-icon://app/<desktop-file-id>`.
  *
  * The renderer never names a file — it names a result, and main answers with
  * whatever that result's icon resolved to. An id that is not in the current
  * index gets a 404, so a stale URL cannot read anything.
  */
-/**
- * How long the renderer may reuse an icon it already has.
- *
- * A URL here names an application id or an icon name, never a file, so the only
- * thing that can change underneath it is which file the resolver picks — and
- * that is republished with a new list rather than by the same URL changing
- * meaning mid-session. A day means scrolling a list twice reads the disk once.
- */
-const ICON_MAX_AGE_SECONDS = 86_400
-
 function registerIconProtocol(): void {
   protocol.handle(ICON_SCHEME, async (request) => {
     const url = new URL(request.url)

@@ -835,13 +835,15 @@ interface ListBodyProps {
 const MAX_RENDERED_ROWS = 150
 
 /**
- * Rows of the drawn window whose icons load immediately.
+ * Rows below the selected one whose icons load immediately.
  *
  * The rest wait for the browser to decide they are near the viewport, because a
  * plugin's icon can be a remote favicon and a full window of them would be a
  * hundred and fifty network requests fired for rows nobody is about to look at.
- * The panel shows fewer than ten rows at its tallest, so this covers a scroll
- * without covering the whole window.
+ * Counted from the selection rather than from the top of the window, because a
+ * long list draws its window centred on the selection and the rows on screen are
+ * then in the middle of it. The panel shows fewer than ten rows at its tallest,
+ * so this covers a scroll without covering the whole window.
  */
 const EAGER_ROWS = 30
 
@@ -884,12 +886,12 @@ function ListBody({ list, selected, extension, send }: ListBodyProps): React.JSX
     )
   }
 
+  const selectedIndex = Math.max(
+    0,
+    list.rows.findIndex((row) => row.id === selected?.id)
+  )
   let start = 0
   if (list.rows.length > MAX_RENDERED_ROWS) {
-    const selectedIndex = Math.max(
-      0,
-      list.rows.findIndex((row) => row.id === selected?.id)
-    )
     start = Math.min(
       Math.max(0, selectedIndex - Math.floor(MAX_RENDERED_ROWS / 2)),
       list.rows.length - MAX_RENDERED_ROWS
@@ -928,7 +930,7 @@ function ListBody({ list, selected, extension, send }: ListBodyProps): React.JSX
             showSection={showSection}
             extension={extension}
             send={send}
-            lazy={offset >= EAGER_ROWS}
+            lazy={offset >= selectedIndex - start + EAGER_ROWS}
             rowRef={isSelected ? selectedRef : undefined}
           />
         )

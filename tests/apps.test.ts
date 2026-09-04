@@ -739,6 +739,97 @@ describe('keeping the index fresh', () => {
 })
 
 /**
+ * Icons on application rows.
+ *
+ * A row's icon is resolved after the result list is cut to the rows that will be
+ * drawn, so two things are worth pinning: a drawn row still carries the URL that
+ * lets main serve its icon, and an entry that scored but fell outside the limit
+ * was never looked for on disk.
+ */
+describe('icons on application rows', () => {
+  const quiet = {
+    info: () => undefined,
+    warn: () => undefined,
+    debug: () => undefined,
+    error: () => undefined
+  } as unknown as Logger
+
+  function noBinaries(): BinaryMap {
+    const map: Record<string, string | null> = {}
+    for (const name of PROBED_BINARIES) map[name] = null
+    return map as BinaryMap
+  }
+
+  function fixture(): { root: string; search: SearchService } {
+    const root = mkdtempSync(join(tmpdir(), 'lumanin-app-icons-'))
+    mkdirSync(join(root, 'applications'), { recursive: true })
+    mkdirSync(join(root, '.local/share/icons/hicolor/48x48/apps'), { recursive: true })
+    const search = new SearchService({
+      ...APP_ONLY,
+      env: {},
+      home: root,
+      desktops: [],
+      binaries: noBinaries(),
+      frecency: new FrecencyStore(root),
+      logger: quiet,
+      directories: [join(root, 'applications')]
+    })
+    return { root, search }
+  }
+
+  const install = (root: string, id: string, name: string, icon: string): void => {
+    writeFileSync(
+      join(root, 'applications', `${id}.desktop`),
+      `[Desktop Entry]\nType=Application\nName=${name}\nExec=${id}\nIcon=${icon}\n`
+    )
+  }
+
+  const installIcon = (root: string, name: string): void => {
+    writeFileSync(join(root, '.local/share/icons/hicolor/48x48/apps', `${name}.png`), 'icon')
+  }
+
+  const appRows = (search: SearchService, query: string, limit: number) =>
+    search.search(query, limit).filter((row) => row.kind === 'app')
+
+  it('gives a drawn row the URL main answers for that application', () => {
+    const { root, search } = fixture()
+    install(root, 'zeta', 'Zeta', 'lumanin-fixture-zeta')
+    installIcon(root, 'lumanin-fixture-zeta')
+    search.reindex()
+
+    const rows = appRows(search, 'zeta', 50)
+    expect(rows.map((row) => row.id)).toEqual(['app:zeta.desktop'])
+    expect(rows[0]?.icon).toBe('lumanin-icon://app/zeta.desktop')
+
+    search.dispose()
+  })
+
+  it('never looks for the icon of an entry it does not return', () => {
+    const { root, search } = fixture()
+    install(root, 'zeta-one', 'Zeta One', 'lumanin-fixture-one')
+    install(root, 'zeta-two', 'Zeta Two', 'lumanin-fixture-two')
+    search.reindex()
+
+    const shown = appRows(search, 'zeta', 1)
+    expect(shown).toHaveLength(1)
+
+    // A name that was looked for and not found is remembered as missing, so an
+    // icon installed afterwards can only show up on the entry the first search
+    // left out if that entry was never asked about.
+    const left = shown[0]?.id.includes('zeta-one') === true ? 'two' : 'one'
+    installIcon(root, `lumanin-fixture-${left}`)
+
+    const both = appRows(search, 'zeta', 50)
+    expect(both).toHaveLength(2)
+    expect(both.find((row) => row.id === `app:zeta-${left}.desktop`)?.icon).toBe(
+      `lumanin-icon://app/zeta-${left}.desktop`
+    )
+
+    search.dispose()
+  })
+})
+
+/**
  * Opening a file, as opposed to launching an application.
  *
  * The bug this exists for: `xdg-open` — which is what Electron's
