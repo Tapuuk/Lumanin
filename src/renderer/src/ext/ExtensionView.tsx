@@ -749,6 +749,8 @@ interface ListRowProps {
   readonly showSection: boolean
   readonly extension: string
   readonly send: (handlerId: string | null, payload?: unknown) => void
+  /** True for a row drawn well below the viewport, whose icons can wait. */
+  readonly lazy: boolean
   /**
    * Set on the selected row only, so the list can scroll it into view. A named
    * prop rather than `ref` because this one has to take part in the shallow
@@ -771,6 +773,7 @@ const ListRow = memo(function ListRow({
   showSection,
   extension,
   send,
+  lazy,
   rowRef
 }: ListRowProps): React.JSX.Element {
   return (
@@ -784,7 +787,7 @@ const ListRow = memo(function ListRow({
         aria-selected={isSelected}
         onClick={() => send(readActionPanel(row.actions).primary?.handlerId ?? null)}
       >
-        <ExtIcon icon={resolveIcon(row.icon, extension)} />
+        <ExtIcon icon={resolveIcon(row.icon, extension)} lazy={lazy} />
         <span className="result__text">
           <span className="result__title">{row.title}</span>
           {row.subtitle !== null && <span className="result__subtitle">{row.subtitle}</span>}
@@ -800,7 +803,11 @@ const ListRow = memo(function ListRow({
             >
               {icon !== null && (
                 <span className="result__accessory-icon" aria-hidden="true">
-                  {icon.src !== undefined ? <IconImage src={icon.src} tint={icon.tint} /> : icon.glyph}
+                  {icon.src !== undefined ? (
+                    <IconImage src={icon.src} tint={icon.tint} lazy={lazy} />
+                  ) : (
+                    icon.glyph
+                  )}
                 </span>
               )}
               {accessory.text}
@@ -826,6 +833,20 @@ interface ListBodyProps {
  * reach every row.
  */
 const MAX_RENDERED_ROWS = 150
+
+/**
+ * Rows on either side of the selected one whose icons load immediately.
+ *
+ * The rest wait for the browser to decide they are near the viewport, because a
+ * plugin's icon can be a remote favicon and a full window of them would be a
+ * hundred and fifty network requests fired for rows nobody is about to look at.
+ * The band is measured from the selection rather than from the top of the
+ * window, and reaches the same distance in both directions, because a long list
+ * draws its window centred on the selection and the rows on screen are then in
+ * the middle of it. The panel shows fewer than ten rows at its tallest, so this
+ * covers a scroll in either direction without covering the whole window.
+ */
+const EAGER_ROWS = 30
 
 function ListBody({ list, selected, extension, send }: ListBodyProps): React.JSX.Element | null {
   const selectedRef = useRef<HTMLDivElement>(null)
@@ -866,12 +887,12 @@ function ListBody({ list, selected, extension, send }: ListBodyProps): React.JSX
     )
   }
 
+  const selectedIndex = Math.max(
+    0,
+    list.rows.findIndex((row) => row.id === selected?.id)
+  )
   let start = 0
   if (list.rows.length > MAX_RENDERED_ROWS) {
-    const selectedIndex = Math.max(
-      0,
-      list.rows.findIndex((row) => row.id === selected?.id)
-    )
     start = Math.min(
       Math.max(0, selectedIndex - Math.floor(MAX_RENDERED_ROWS / 2)),
       list.rows.length - MAX_RENDERED_ROWS
@@ -910,6 +931,7 @@ function ListBody({ list, selected, extension, send }: ListBodyProps): React.JSX
             showSection={showSection}
             extension={extension}
             send={send}
+            lazy={Math.abs(offset - (selectedIndex - start)) >= EAGER_ROWS}
             rowRef={isSelected ? selectedRef : undefined}
           />
         )

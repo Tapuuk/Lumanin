@@ -929,6 +929,16 @@ function sessionIdOf(params: unknown): string {
 
 
 /**
+ * How long the renderer may reuse an icon it already has.
+ *
+ * A URL here names an application id or an icon name, and it keeps naming the
+ * same one when an upgrade replaces the file behind it, so the panel can go on
+ * painting the old bytes until the window reloads. That staleness is accepted
+ * for the price it pays: scrolling a long list twice reads the disk once.
+ */
+const ICON_MAX_AGE_SECONDS = 86_400
+
+/**
  * Serve `lumanin-icon://app/<desktop-file-id>`.
  *
  * The renderer never names a file — it names a result, and main answers with
@@ -936,7 +946,7 @@ function sessionIdOf(params: unknown): string {
  * index gets a 404, so a stale URL cannot read anything.
  */
 function registerIconProtocol(): void {
-  protocol.handle(ICON_SCHEME, (request) => {
+  protocol.handle(ICON_SCHEME, async (request) => {
     const url = new URL(request.url)
     // `lumanin-icon://app/<id>`, `lumanin-icon://ext/<extension>/<path>`,
     // `lumanin-icon://theme/<names>` and `lumanin-icon://pin/<hash>.<ext>`.
@@ -953,7 +963,21 @@ function registerIconProtocol(): void {
             : appIcon(url.pathname)
 
     if (file === null) return new Response(null, { status: 404 })
-    return net.fetch(pathToFileURL(file).toString())
+
+    try {
+      const response = await net.fetch(pathToFileURL(file).toString())
+      const headers = new Headers(response.headers)
+      headers.set('Cache-Control', `max-age=${ICON_MAX_AGE_SECONDS}`)
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers
+      })
+    } catch {
+      // A file that vanished between resolving and reading is a 404 like any
+      // other missing icon; left to reject, it surfaces as an unhandled promise.
+      return new Response(null, { status: 404 })
+    }
   })
 }
 
