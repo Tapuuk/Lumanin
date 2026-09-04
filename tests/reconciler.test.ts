@@ -18,6 +18,8 @@ import { INTERNAL_TYPES, type RenderNode } from '../src/shared/render-tree'
 interface Harness {
   render(element: ReactNode): RenderNode
   unmount(): void
+  /** How many times the reconciler has asked for the tree to be published. */
+  commits(): number
   readonly handlers: Map<string, (payload: unknown) => void>
   readonly rejected: { node: string; prop: string; reason: string }[]
   readonly errors: unknown[]
@@ -27,6 +29,7 @@ function harness(): Harness {
   const handlers = new Map<string, (payload: unknown) => void>()
   const rejected: { node: string; prop: string; reason: string }[] = []
   const errors: unknown[] = []
+  let commits = 0
 
   const sink: SerializeSink = {
     handler: (id, fn) => {
@@ -36,7 +39,9 @@ function harness(): Harness {
   }
 
   const renderer = createRenderer({
-    onCommit: () => {},
+    onCommit: () => {
+      commits++
+    },
     onError: (error) => errors.push(error)
   })
 
@@ -44,6 +49,7 @@ function harness(): Harness {
     handlers,
     rejected,
     errors,
+    commits: () => commits,
     render(element) {
       renderer.render(element)
       renderer.flush()
@@ -232,5 +238,48 @@ describe('the reconciler', () => {
     h.render(createElement(Boom, null))
     expect(h.errors).toHaveLength(1)
     expect((h.errors[0] as Error).message).toBe('extension exploded')
+  })
+
+  /**
+   * A commit that touched nothing is not published.
+   *
+   * React commits whenever it has work, and a state change that ends up
+   * returning the element already on screen is work that produces no mutation.
+   * Serializing and diffing the tree to discover that is the cost this skips.
+   */
+  it('does not publish a commit that changed nothing', () => {
+    const h = harness()
+    const unchanging = createElement('List', null, createElement('List.Item', { title: 'Alpha' }))
+
+    function Settling(): ReactNode {
+      const [step, setStep] = useState(0)
+      useEffect(() => {
+        if (step === 0) setStep(1)
+      }, [step])
+      return unchanging
+    }
+
+    h.render(createElement(Settling, null))
+    expect(h.commits()).toBe(1)
+  })
+
+  it('never asks for a commit when a command renders nothing', () => {
+    const h = harness()
+
+    function Empty(): ReactNode {
+      return null
+    }
+
+    h.render(createElement(Empty, null))
+    expect(h.commits()).toBe(0)
+  })
+
+  it('publishes the unmount, because removing a node is a change', () => {
+    const h = harness()
+    h.render(createElement('List', null, createElement('List.Item', { title: 'Alpha' })))
+    const mounted = h.commits()
+
+    h.unmount()
+    expect(h.commits()).toBeGreaterThan(mounted)
   })
 })

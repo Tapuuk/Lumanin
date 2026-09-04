@@ -41,6 +41,24 @@ let currentUpdatePriority: number = NoEventPriority
 /** Set by {@link createRenderer} when the caller wants refs to receive a façade. */
 let publicInstanceOf: ((instance: Instance) => unknown) | null = null
 
+/**
+ * Whether anything in the tree actually changed since the last commit.
+ *
+ * React commits whenever it has work, and plenty of that work produces the tree
+ * that is already on screen — a state change in a parent re-renders every child
+ * and hands the host identical props for all of them. The mutation methods below
+ * are the only place that knows better, so each one raises this and
+ * `resetAfterCommit` skips a pass that raised nothing. What it saves is a full
+ * serialize of the tree plus a deep diff against the previous document, which
+ * for a list of a few hundred rows is the largest fixed cost on the path
+ * between a command answering and a row appearing.
+ *
+ * Module-scoped like the two above, and safe for the same reason plus one more:
+ * React's commit phase is synchronous, so no two renderers can be inside one at
+ * the same time.
+ */
+let dirty = false
+
 const nextId = createIdFactory()
 
 /**
@@ -71,6 +89,7 @@ const config: HostConfig<Instance, TextInstance, Container, HostContext, Instanc
 
   appendInitialChild(parent, child) {
     parent.children.push(child)
+    dirty = true
   },
 
   finalizeInitialChildren() {
@@ -132,8 +151,13 @@ const config: HostConfig<Instance, TextInstance, Container, HostContext, Instanc
    * patches are coherent — a single React render can append, reorder and update
    * a dozen nodes, and a diff taken between any two of those is of a tree that
    * never existed on screen.
+   *
+   * Cleared *before* `onCommit()` rather than after, so a render provoked from
+   * inside the commit callback is not swallowed by our own bookkeeping.
    */
   resetAfterCommit(container) {
+    if (!dirty) return
+    dirty = false
     container.onCommit()
   },
 
@@ -242,8 +266,17 @@ const config: HostConfig<Instance, TextInstance, Container, HostContext, Instanc
     return null
   },
 
+  /**
+   * Empty the root.
+   *
+   * React calls this on the way into the *first* commit as well as on a real
+   * teardown, so the length check is what keeps a mount that renders nothing
+   * from counting as a change to the tree.
+   */
   clearContainer(container) {
+    if (container.root.children.length === 0) return
     container.root.children = []
+    dirty = true
   },
 
   resetFormInstance() {},
@@ -277,29 +310,35 @@ const config: HostConfig<Instance, TextInstance, Container, HostContext, Instanc
   appendChild(parent, child) {
     remove(parent.children, child)
     parent.children.push(child)
+    dirty = true
   },
 
   appendChildToContainer(container, child) {
     remove(container.root.children, child)
     container.root.children.push(child)
+    dirty = true
   },
 
   insertBefore(parent, child, before) {
     remove(parent.children, child)
     parent.children.splice(indexOf(parent.children, before), 0, child)
+    dirty = true
   },
 
   insertInContainerBefore(container, child, before) {
     remove(container.root.children, child)
     container.root.children.splice(indexOf(container.root.children, before), 0, child)
+    dirty = true
   },
 
   removeChild(parent, child) {
     remove(parent.children, child)
+    dirty = true
   },
 
   removeChildFromContainer(container, child) {
     remove(container.root.children, child)
+    dirty = true
   },
 
   /**
@@ -312,10 +351,12 @@ const config: HostConfig<Instance, TextInstance, Container, HostContext, Instanc
    */
   commitUpdate(instance, _type, _prevProps, nextProps) {
     instance.props = { ...nextProps }
+    dirty = true
   },
 
   commitTextUpdate(textInstance, _oldText, newText) {
     textInstance.text = newText
+    dirty = true
   },
 
   commitMount() {},
@@ -331,19 +372,23 @@ const config: HostConfig<Instance, TextInstance, Container, HostContext, Instanc
    */
   hideInstance(instance) {
     instance.props = { ...instance.props, __hidden: true }
+    dirty = true
   },
 
   hideTextInstance(textInstance) {
     textInstance.text = ''
+    dirty = true
   },
 
   unhideInstance(instance, props) {
     const { __hidden: _hidden, ...visible } = { ...props, ...instance.props }
     instance.props = visible
+    dirty = true
   },
 
   unhideTextInstance(textInstance, text) {
     textInstance.text = text
+    dirty = true
   }
 }
 
@@ -399,6 +444,7 @@ export function createRenderer(options: {
   publicInstance?: (instance: Instance) => unknown
 }): Renderer {
   publicInstanceOf = options.publicInstance ?? null
+  dirty = false
   const root: Instance = { id: 'root', type: INTERNAL_TYPES.ROOT, props: {}, children: [] }
 
   const container: Container = {
