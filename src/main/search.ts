@@ -4,7 +4,7 @@ import { parseExtensionPin, type ResolvedConfig } from '../shared/config'
 import type { LaunchOutcome, ResultItem } from '../shared/ipc'
 import { isOpenableUrl } from '../shared/websearch'
 import { composeRoot, shellRow, type RootCommand, type ScoredRow } from './root-search'
-import { matchFields, type MatchTier } from '../shared/fuzzy'
+import { matchFields, type Field, type MatchTier } from '../shared/fuzzy'
 import { applicationDirectories, buildAppIndex, type AppIndexStats } from '../platform/apps/index'
 import type { DesktopEntry } from '../platform/apps/desktop-entry'
 import { createIconResolver, type IconResolver } from '../platform/apps/icons'
@@ -189,8 +189,39 @@ export function sameMtimes(a: ReadonlyMap<string, number>, b: ReadonlyMap<string
 /** Built once so the two places that construct a row cannot spell it differently. */
 const ICON_URL_PREFIX = 'lumanin-icon://app/'
 
+/**
+ * The fields of one application, built when the index is.
+ *
+ * Every part of this is fixed for as long as the entry is: the weights, the
+ * modes, the joined keyword line and each field lowered. Building it per
+ * keystroke instead meant four objects and a `join` per application per press,
+ * which is thousands of allocations for values that never differ.
+ */
+function searchFields(entry: DesktopEntry): readonly Field[] {
+  const keywords = entry.keywords.join(' ')
+  const genericName = entry.genericName ?? ''
+  return [
+    { name: 'name', text: entry.name, lower: entry.name.toLowerCase(), weight: FIELD_WEIGHTS.name, isName: true },
+    { name: 'genericName', text: genericName, lower: genericName.toLowerCase(), weight: FIELD_WEIGHTS.genericName },
+    // `word` mode on purpose — see `fuzzy.ts`. A `Keywords=` line is a
+    // hundred characters of semicolon-separated terms and a subsequence rule
+    // finds *something* in one of those for almost any query; that is
+    // precisely how "raycast" found LibreOffice Draw.
+    {
+      name: 'keywords',
+      text: keywords,
+      lower: keywords.toLowerCase(),
+      weight: FIELD_WEIGHTS.keywords,
+      mode: 'word'
+    },
+    { name: 'exec', text: entry.exec, lower: entry.exec.toLowerCase(), weight: FIELD_WEIGHTS.exec, mode: 'word' }
+  ]
+}
+
 export class SearchService {
   private entries: readonly DesktopEntry[] = []
+  /** The same entries with their fields prebuilt — what a query iterates. */
+  private indexed: readonly { entry: DesktopEntry; fields: readonly Field[] }[] = []
   private byId = new Map<string, DesktopEntry>()
   private stats: AppIndexStats | null = null
   private readonly icons: IconResolver
@@ -360,6 +391,7 @@ export class SearchService {
     const changed = stats.found !== this.stats?.found || this.indexedAt === 0
 
     this.entries = entries
+    this.indexed = entries.map((entry) => ({ entry, fields: searchFields(entry) }))
     this.byId = new Map(entries.map((entry) => [entry.id, entry]))
     this.stats = stats
     this.dirMtimes = mtimes
@@ -400,7 +432,8 @@ export class SearchService {
       query,
       config: this.deps.config(),
       commands: this.deps.commands(),
-      apps: this.searchApps(query, limit),
+      apps: this.searchApps(query, limit, false),
+      appsWithTypos: () => this.searchApps(query, limit, true),
       resolveAlias: (target) => this.resolveAlias(target)
     })
   }
@@ -439,7 +472,7 @@ export class SearchService {
     }
   }
 
-  private searchApps(query: string, limit: number): readonly ScoredRow[] {
+  private searchApps(query: string, limit: number, allowTypos: boolean): readonly ScoredRow[] {
     const needle = query.trim()
 
     // An empty query shows nothing. The panel is a bare search bar until you
@@ -457,17 +490,9 @@ export class SearchService {
 
     const scored: { entry: DesktopEntry; item: ResultItem; score: number; tier: MatchTier; at: number }[] = []
 
-    for (const entry of this.entries) {
-      const match = matchFields(needle, [
-        { name: 'name', text: entry.name, weight: FIELD_WEIGHTS.name, isName: true },
-        { name: 'genericName', text: entry.genericName ?? '', weight: FIELD_WEIGHTS.genericName },
-        // `word` mode on purpose — see `fuzzy.ts`. A `Keywords=` line is a
-        // hundred characters of semicolon-separated terms and a subsequence rule
-        // finds *something* in one of those for almost any query; that is
-        // precisely how "raycast" found LibreOffice Draw.
-        { name: 'keywords', text: entry.keywords.join(' '), weight: FIELD_WEIGHTS.keywords, mode: 'word' },
-        { name: 'exec', text: entry.exec, weight: FIELD_WEIGHTS.exec, mode: 'word' }
-      ])
+    const options = { allowTypos }
+    for (const { entry, fields } of this.indexed) {
+      const match = matchFields(needle, fields, options)
       if (match === null) continue
       if (needle.length > 0 && match.score < SCORE_FLOOR) continue
 
