@@ -55,6 +55,7 @@ import { BUILTIN_SEEDS } from '../../themes/index'
 import {
   appearanceSettings,
   BUILTIN_COMMANDS,
+  FILE_SEARCH_HIDE_ON_OPEN,
   GENERAL_SETTINGS,
   GLOBAL_HOTKEY,
   HABIT_SETTING,
@@ -373,7 +374,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     // the way to the settings list. ← undoes one decision, always.
     for (;;) {
       const chosen = await menu.list<string>({
-        title: isFileSearch ? 'File search hotkey' : 'Global hotkey',
+        title: isFileSearch ? 'File search hotkey' : 'Search hotkey',
         subtitle: `Currently ${state.value.length === 0 ? 'not bound' : state.value}${
           state.layer === 'default' ? ' (the default)' : ''
         }`,
@@ -396,7 +397,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
                 }
               ]
             : []),
-          { value: BUILD, label: 'Build one', help: 'Choose the modifiers and the key' }
+          { value: BUILD, label: 'Choose modifiers and a key' }
         ]
       })
       if (chosen.value === null) return
@@ -661,7 +662,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
                   : 'Removes the key, so the default can still improve later'
             },
             ...(setting.freeform === true
-              ? [{ value: TYPE_ONE, label: 'Type one instead', help: 'Anything not listed here' }]
+              ? [{ value: TYPE_ONE, label: 'Type a name' }]
               : []),
             { value: '\u0000separator', label: '', separator: true },
             ...options.map((option) => ({
@@ -827,7 +828,6 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
 
     await menu.list<string>({
       title: 'Web search engines',
-      subtitle: 'Every one enabled here is offered under every query, in this order.',
       hints: ['space toggle', 'ctrl+↑↓ reorder'],
       choices: () => {
         const on = enabled()
@@ -902,7 +902,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
 
     await menu.list<ResultGroup>({
       title,
-      subtitle: 'Which kinds of result appear, and where the unranked ones sit.',
+      subtitle: 'Apps and commands are ranked together by match, so their order here only breaks ties.',
       hints: ['space include', 'ctrl+↑↓ reorder'],
       choices: () => {
         const on = current()
@@ -1114,9 +1114,6 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     for (;;) {
       const chosen = await menu.list<string>({
         title: 'Plugins',
-        // Plain words on purpose: this is the one screen that explains the deal
-        // the root list makes with plugins.
-        subtitle: 'Only pinned things show up in the main search.',
         choices:
           extensions.length === 0
             ? [
@@ -1477,8 +1474,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
    */
   const pinListScreen = async (
     path: readonly string[],
-    title: string,
-    subtitle: string
+    title: string
   ): Promise<void> => {
     const entriesOf = (raw: unknown): PinDraftEntry[] => {
       if (!Array.isArray(raw)) return []
@@ -1531,7 +1527,6 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     for (;;) {
       const result = await menu.list<string>({
         title,
-        subtitle,
         initialIndex: at,
         hints: ['a add', 'd remove', 'ctrl+↑↓ reorder'],
         choices: () => {
@@ -1594,7 +1589,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     let at = 0
     for (;;) {
       const result = await menu.list<number>({
-        title: 'Your own web searches',
+        title: 'Custom web searches',
         initialIndex: at,
         subtitle: 'Anything with a query in its URL. Use {} where the query goes.',
         hints: ['a add', 'd remove'],
@@ -1762,9 +1757,8 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     let at = 0
     for (;;) {
       const result = await menu.list<KeyAction | null>({
-        title: 'Action keys',
+        title: 'Panel keys',
         initialIndex: at,
-        subtitle: 'What the panel answers to while it is open. Applies as soon as you change it.',
         hints: ['enter change', 'd default'],
         choices: () =>
           KEY_ACTIONS.map((action) => {
@@ -1901,7 +1895,6 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
       const result = await menu.list<string>({
         title: 'Aliases',
         initialIndex: at,
-        subtitle: 'Typed exactly - never fuzzily - and always first.',
         hints: ['a add', 'd remove'],
         choices: () => {
           const entries = Object.entries(table())
@@ -2294,7 +2287,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
 
     await menu.list<FileCategory>({
       title: 'File type order',
-      subtitle: 'Which kinds of file come first. Inside each, closest to home first.',
+      subtitle: 'Which kind of file wins when names tie.',
       hints: ['ctrl+↑↓ reorder'],
       choices: () =>
         current().map((category) => ({
@@ -2346,15 +2339,9 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
             },
             {
               value: async () => {
-                await editSetting({
-                  path: ['file_search', 'hide_on_open'],
-                  label: 'Close after opening',
-                  editor: { kind: 'boolean' },
-                  read: (c) => c.fileSearch.hideOnOpen,
-                  envKey: 'FILE_HIDE_ON_OPEN'
-                })
+                await editSetting(FILE_SEARCH_HIDE_ON_OPEN)
               },
-              label: 'Close after opening',
+              label: FILE_SEARCH_HIDE_ON_OPEN.label,
               detail: now.fileSearch.hideOnOpen.value ? 'yes' : 'no - stays open'
             }
           ]
@@ -2370,9 +2357,8 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     let at = 0
     for (;;) {
       const choice = await menu.list<() => Promise<void>>({
-        title: 'Global Search',
+        title: 'Search',
         initialIndex: at,
-        subtitle: 'The panel itself: what opens it, and what answers a query.',
         choices: () => {
           const now = resolved()
           return [
@@ -2398,12 +2384,8 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
             },
             {
               value: () =>
-                pinListScreen(
-                  ['search', 'pins'],
-                  'Pinned rows',
-                  'Hoisted above the ranking the moment what you type matches them.'
-                ),
-              label: 'Pinned rows',
+                pinListScreen(['search', 'pins'], 'Pins'),
+              label: 'Pins',
               detail:
                 now.search.pins.value.length === 0
                   ? 'none'
@@ -2411,7 +2393,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
             },
             {
               value: customSearchesScreen,
-              label: 'Your own web searches',
+              label: 'Custom web searches',
               detail: `${String(
                 (getValue(draft, ['search', 'web_searches']) as unknown[] | undefined)?.length ?? 0
               )} defined`
@@ -2476,11 +2458,11 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         const outOfStep = hotkeySummary()
         const now = resolved()
         return [
-        { value: 'general', label: 'General', detail: 'Window size, what Esc does, blur' },
+        { value: 'general', label: 'General' },
         { value: 'appearance', label: 'Appearance' },
         {
           value: 'search',
-          label: 'Global Search',
+          label: 'Search',
           detail: now.general.hotkey.value
         },
         {
@@ -2491,8 +2473,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         { value: 'aliases', label: 'Aliases' },
         {
           value: 'keys',
-          label: 'Action keys',
-          detail: 'Enter, Esc, the action panel'
+          label: 'Panel keys'
         },
         {
           value: 'hotkeys',

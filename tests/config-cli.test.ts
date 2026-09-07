@@ -608,7 +608,7 @@ describe('the config menu, end to end', () => {
 
     // Search -> Pinned rows -> add -> Plugins (the fourth kind, a row of its own).
     await type(input, [DOWN, DOWN, ENTER, DOWN, DOWN, DOWN, ENTER, 'a', DOWN, DOWN, DOWN, ENTER])
-    expect(frames()).toContain('Only pinned things show up in the main search.')
+    expect(frames()).toContain('Plugins')
     expect(frames()).toContain('Demo')
 
     // Plugin -> its commands, each with its categories under it. One screen, so
@@ -620,7 +620,7 @@ describe('the config menu, end to end', () => {
     await type(input, [DOWN, ' '])
 
     // Back on the pin list the category reads as a name, not a key.
-    await escapeUntil(input, frames, 'Pinned rows')
+    await escapeUntil(input, frames, 'Pins')
     expect(frames()).toContain('Demo: Logins')
     expect(frames()).toContain('extension:demo/search#logins')
 
@@ -641,7 +641,7 @@ describe('the config menu, end to end', () => {
     expect(frames()).not.toContain('Open Search Demo')
 
     await type(input, [' '])
-    await escapeUntil(input, frames, 'Pinned rows')
+    await escapeUntil(input, frames, 'Pins')
     expect(frames()).toContain('extension:demo/search')
 
     await leave(input, pending)
@@ -670,7 +670,7 @@ describe('the config menu, end to end', () => {
     // The category is not a row here - it is the row → was pressed on - so the
     // first item is the first row. Space pins it; Escape backs out of the add.
     await type(input, [' '])
-    await escapeUntil(input, frames, 'Pinned rows')
+    await escapeUntil(input, frames, 'Pins')
     expect(frames()).toContain('GitHub')
 
     // Already written: the item pin lands in the file as an { id, title } table,
@@ -702,7 +702,7 @@ describe('the config menu, end to end', () => {
     expect(frames()).toContain('Super+Shift+R')
     expect(frames()).toContain('File type order')
     // Opening a file is the end of a file search; the panel gets out of the way.
-    expect(frames()).toContain('Close after opening')
+    expect(frames()).toContain('Close the panel when a file opens')
 
     await leave(input, pending)
   })

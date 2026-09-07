@@ -377,8 +377,17 @@ export interface ListResult<T> {
   readonly index: number
 }
 
-/** The rows a list draws at once; the highlight scrolls the viewport. */
-const MAX_ROWS = 14
+/**
+ * The lines a list frame spends on things other than rows: the blank above
+ * the title, the title, the blank under it, the help slot, the overflow line,
+ * the blank above the hints, the hints — and a spare, so the frame never
+ * reaches the last terminal row (a frame taller than the terminal cannot be
+ * redrawn in place, and leaves its top behind on every keypress).
+ */
+const LIST_CHROME = 8
+
+/** The most rows a list draws at once, however tall the terminal. */
+const MAX_ROWS = 20
 
 export class Menu {
   private readonly style: Style
@@ -419,6 +428,11 @@ export class Menu {
 
     const visible = (): readonly Choice<T>[] => all()
 
+    // The first row on screen. Kept between renders and moved only when the
+    // highlight leaves the window, so the list holds still while you move
+    // through it: rows only scroll when they have to, never to recentre.
+    let start = 0
+
     const clamp = (): void => {
       const rows = selectable(visible())
       if (rows.length === 0) {
@@ -445,10 +459,12 @@ export class Menu {
       lines.push('')
 
       // A viewport, so a 500-application picker does not redraw the world.
-      const rows = selectable(shown)
-      const at = Math.max(0, rows.indexOf(cursor))
-      const start = Math.max(0, Math.min(at - Math.floor(MAX_ROWS / 2), shown.length - MAX_ROWS))
-      const window = shown.slice(Math.max(0, start), Math.max(0, start) + MAX_ROWS)
+      const capacity = Math.max(4, Math.min(MAX_ROWS, this.screen.rows - LIST_CHROME - (spec.subtitle === undefined ? 0 : 1)))
+      const at = Math.max(0, cursor)
+      if (at < start) start = at
+      if (at >= start + capacity) start = at - capacity + 1
+      start = Math.max(0, Math.min(start, shown.length - capacity))
+      const window = shown.slice(start, start + capacity)
 
       if (window.length === 0) lines.push(`    ${s.dim('nothing matches')}`)
 
@@ -470,12 +486,21 @@ export class Menu {
           choice.detail === undefined ? label : label.padEnd(labelWidth + (label.length - width(label)))
         const detail = choice.detail === undefined ? '' : `  ${s.dim(choice.detail)}`
         lines.push(`  ${here ? s.accent('❯') : ' '} ${here ? s.bold(padded) : padded}${detail}`)
-        if (choice.help !== undefined && here) lines.push(`      ${s.dim(choice.help)}`)
       }
 
+      // Fixed slots, whatever the highlighted row has to say and wherever the
+      // window sits: a line that comes and goes shifts everything under it.
       if (shown.length > window.length) {
-        lines.push(`    ${s.dim(`… ${String(shown.length - window.length)} more`)}`)
+        const above = start
+        const below = shown.length - start - window.length
+        const parts = [
+          ...(above > 0 ? [`↑ ${String(above)} above`] : []),
+          ...(below > 0 ? [`↓ ${String(below)} below`] : [])
+        ]
+        lines.push(`    ${s.dim(parts.join(' · '))}`)
       }
+      const help = shown[cursor]?.help
+      lines.push(help === undefined ? '' : `    ${s.dim(help)}`)
 
       lines.push('')
       const hints = [

@@ -143,10 +143,10 @@ describe('the plugins screen', () => {
     await quit(input, pending)
 
     expect(frames()).toContain('No plugins installed')
-    expect(frames()).toContain('Plugin Store')
+    expect(frames()).toContain('Official plugins')
   })
 
-  it('always offers the Plugin Store row alongside the installed plugins', async () => {
+  it('always offers the Official plugins row alongside the installed plugins', async () => {
     const { term, input, frames } = fakeTerm()
     const paths = profile()
     const pending = start(term, paths)
@@ -154,7 +154,7 @@ describe('the plugins screen', () => {
     await settle()
     await quit(input, pending)
 
-    expect(frames()).toContain('Plugin Store')
+    expect(frames()).toContain('Official plugins')
     expect(frames()).toContain('official collection')
   })
 

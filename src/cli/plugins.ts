@@ -197,7 +197,7 @@ export async function runPluginsUi(deps: PluginsUiDeps): Promise<number> {
   const commandsScreen = async (row: Row): Promise<void> => {
     await menu.list<string>({
       title: `${row.title} — commands`,
-      subtitle: 'Space turns one off. It stays installed; it just stops appearing.',
+      subtitle: 'Space turns one off. It stays installed.',
       hints: ['space toggle'],
       choices: () => {
         const commands = index.commands.filter((command) => command.extension === row.installed)
@@ -236,7 +236,6 @@ export async function runPluginsUi(deps: PluginsUiDeps): Promise<number> {
       for (;;) {
         const chosen = await menu.list<Slot>({
           title: `${row.title} — preferences`,
-          subtitle: 'Stored per extension, never in config.toml — some of these are secrets.',
           initialIndex: at,
           hints: ['enter edit'],
           choices: () => {
@@ -416,7 +415,6 @@ export async function runPluginsUi(deps: PluginsUiDeps): Promise<number> {
     for (;;) {
       const result = await menu.list<string>({
         title: `${row.title} — alias`,
-        subtitle: 'Typed exactly in the search bar, it opens this plugin first.',
         initialIndex: at,
         hints: ['a add', 'd remove'],
         choices: () => {
@@ -470,8 +468,7 @@ export async function runPluginsUi(deps: PluginsUiDeps): Promise<number> {
           {
             value: 'enabled',
             label: 'Enabled',
-            detail: isEnabled(fresh.name) ? s.good('yes') : s.warn('no'),
-            help: 'Off keeps it installed and stops its commands appearing'
+            detail: isEnabled(fresh.name) ? s.good('yes') : s.warn('no')
           },
           {
             value: 'commands',
@@ -617,7 +614,7 @@ export async function runPluginsUi(deps: PluginsUiDeps): Promise<number> {
       return
     }
     if (official.plugins.length === 0) {
-      await menu.show('Plugin Store', ['The official collection is empty right now.'])
+      await menu.show('Official plugins', ['The official collection is empty right now.'])
       return
     }
 
@@ -625,21 +622,24 @@ export async function runPluginsUi(deps: PluginsUiDeps): Promise<number> {
     for (;;) {
       const installedNames = new Set(index.extensions.map((entry) => entry.manifest.name))
       const chosen = await menu.list<OfficialPlugin>({
-        title: 'Plugin Store',
-        subtitle: 'The official collection. Enter installs, after showing you the facts.',
+        title: 'Official plugins',
         initialIndex: storeAt,
+        hints: ['enter install'],
         choices: () =>
           official.plugins.map((entry) => ({
             value: entry,
-            prefix: installedNames.has(entry.name) ? `${s.good('[x]')} ` : '    ',
+            prefix: installedNames.has(entry.name) ? `${s.good('✓')} ` : '  ',
             label: entry.title,
-            detail: installedNames.has(entry.name) ? 'installed' : `by ${entry.author}`,
+            detail: installedNames.has(entry.name) ? s.good('Installed') : `by ${entry.author}`,
             help: entry.description
           }))
       })
       storeAt = chosen.index
       if (chosen.value === null) return
-      if (installedNames.has(chosen.value.name)) continue
+      if (installedNames.has(chosen.value.name)) {
+        await menu.show(chosen.value.title, ['Already installed. Manage it from the plugins list.'])
+        continue
+      }
       await installFromStore(chosen.value)
     }
   }
@@ -677,9 +677,9 @@ export async function runPluginsUi(deps: PluginsUiDeps): Promise<number> {
         {
           value: STORE as Row | typeof STORE,
           prefix: '    ',
-          label: 'Plugin Store',
-          detail: 'browse the official collection',
-          help: 'Fetches the index from github.com when opened, not before'
+          label: 'Official plugins',
+          detail: 'the official collection',
+          help: 'Fetched from github.com when opened, not before'
         }
       ]
     })
@@ -776,7 +776,7 @@ export const PLUGINS_USAGE = `Usage: ${APP_ID} plugins
 
   Manage the plugins you have installed: remove one, turn one off without
   deleting it, choose which of its commands appear, and set its preferences.
-  The Plugin Store row at the bottom browses the official collection and
+  The Official plugins row at the bottom browses the official collection and
   installs from it.
 
   Installing from anywhere else is \`${APP_ID} plugin-install <repository|directory>\`.

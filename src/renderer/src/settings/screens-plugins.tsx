@@ -465,7 +465,9 @@ function PasswordControl({
  */
 function OfficialTab(): React.JSX.Element {
   const { state } = useSettingsState()
-  const flow = useInstallFlow(() => undefined)
+  // Bumped after an install so the row just installed reads as installed.
+  const [generation, setGeneration] = useState(0)
+  const flow = useInstallFlow(() => setGeneration((current) => current + 1))
   const [plugins, setPlugins] = useState<readonly OfficialPluginDto[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -484,8 +486,7 @@ function OfficialTab(): React.JSX.Element {
     return () => {
       live = false
     }
-    // Re-read after any state change: an install flips a row to "Installed".
-  }, [state])
+  }, [state, generation])
 
   const busy = flow.inspecting || flow.installing
   return (
@@ -504,7 +505,7 @@ function OfficialTab(): React.JSX.Element {
         plugins.map((plugin) => (
           <Row key={plugin.name} label={plugin.title} help={`${plugin.description} · by ${plugin.author}`}>
             {plugin.installed ? (
-              <span className="s-list__detail">Installed</span>
+              <span className="s-badge s-badge--ok">✓ Installed</span>
             ) : (
               <button type="button" className="s-button" disabled={busy} onClick={() => flow.inspect(plugin.source)}>
                 Install…

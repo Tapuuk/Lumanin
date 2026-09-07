@@ -281,7 +281,8 @@ export const FILE_SEARCH_HIDE_ON_OPEN: Setting = {
   path: ['file_search', 'hide_on_open'],
   label: 'Close the panel when a file opens',
   editor: { kind: 'boolean' },
-  read: (c) => c.fileSearch.hideOnOpen
+  read: (c) => c.fileSearch.hideOnOpen,
+  envKey: 'FILE_HIDE_ON_OPEN'
 }
 
 /** Root commands, for the pickers. Ids use the config's `builtin/<name>` form. */
