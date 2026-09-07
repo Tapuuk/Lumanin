@@ -85,7 +85,12 @@ const group = (title: string): ReturnType<Page['locator']> =>
   page.locator('.s-section', { has: page.locator('.s-section__title', { hasText: new RegExp(`^${title}$`) }) })
 
 /** The compositor bind banner: the one line about this desktop's shortcut config. */
-const bindBanner = (): ReturnType<Page['locator']> => page.locator('.s-banner', { hasText: /shortcut/i })
+// Every wording the bind banner can take says one of these: the not-bindable
+// note and the outcome report say "shortcut"; a blocked write quotes the
+// desktop's problem, which names the config it could not edit (on CI's
+// headless sway: no user config exists, so ours would shadow /etc/sway/config).
+const bindBanner = (): ReturnType<Page['locator']> =>
+  page.locator('.s-banner', { hasText: /shortcut|config/i })
 
 test('a fresh home opens the first-run wizard; walking it through writes the marker', async () => {
   // No config.toml has ever existed here, so the wizard fronts the window:
