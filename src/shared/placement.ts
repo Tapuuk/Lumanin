@@ -12,17 +12,17 @@
  *
  * The window is a fixed box with the
  * search bar at the top of it, so this is really "where the search bar lands",
- * and the bar is what the number is chosen for: at 0.32, the bar's centre falls
- * around 65% of the way up the screen from the bottom.
+ * and the bar is what the number is chosen for: at 0.24, the bar's centre falls
+ * around 73% of the way up the screen from the bottom.
  *
  * Centred was wrong for the same reason a centred dialog looks low: the eye
  * weights the thing it is about to type into, not the box around it, so a
  * launcher whose *field* is at the midpoint reads as sitting below centre.
  */
-export const PANEL_TOP_FRACTION = 0.32
+export const PANEL_TOP_FRACTION = 0.24
 
 /** The same default as `[general].top` spells it: a whole percentage. */
-export const DEFAULT_PANEL_TOP_PERCENT = 32
+export const DEFAULT_PANEL_TOP_PERCENT = 24
 
 /** `[general].top` as the fraction the placement code works in. */
 export function panelTopFraction(percent: number): number {

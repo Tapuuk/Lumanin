@@ -95,10 +95,10 @@ test('a fresh home opens the first-run wizard; walking it through writes the mar
   await expect(page.locator('.s-row .s-hotkey')).toHaveCount(2)
   await expect(page.locator('.wiz__skip')).toHaveCount(1)
 
-  // "Follow the desktop" writes nothing, which is the point: an untouched
+  // "Adaptive" writes nothing, which is the point: an untouched
   // wizard leaves an untouched config. The wizard is latched: this click makes
   // config.toml possible, and the wizard must not vanish under it.
-  await page.locator('.wiz__choices .wiz__choice', { hasText: 'Follow the desktop' }).click()
+  await page.locator('.wiz__choices .wiz__choice', { hasText: 'Adaptive' }).click()
   await expect(page.locator('.wiz__title')).toContainText('Set up Lumanin')
 
   // The apply step offers no skip: "Later" or "Next" leaves without writing.
@@ -320,8 +320,8 @@ test('an enum writes its value and the screen redraws from the file', async () =
   await expect.poll(config).toContain('esc_at_root = "clear"')
   await expect(row.locator('.s-pick')).toContainText('Clear query')
 
-  await row.locator('.s-pick').click()
-  await option('').click()
+  // A fixed default has no row of its own in the list: Reset is how it comes back.
+  await row.getByRole('button', { name: 'Reset Escape at the root' }).click()
   await expect.poll(config).not.toContain('esc_at_root')
 })
 
@@ -341,8 +341,8 @@ test('the pick list narrows as you type, Enter picks, Escape leaves it alone', a
   await expect(page.locator('.s-modal')).toHaveCount(0)
   expect(config()).toContain('esc_at_root = "clear"')
 
-  await row.locator('.s-pick').click()
-  await option('').click()
+  // A fixed default has no row of its own in the list: Reset is how it comes back.
+  await row.getByRole('button', { name: 'Reset Escape at the root' }).click()
   await expect.poll(config).not.toContain('esc_at_root')
 })
 
@@ -432,10 +432,10 @@ function firstCategoryId(title: string): string {
 
 test('action keys: a captured chord is added, and removing it restores the default', async () => {
   await section('Keys').click()
-  // `hasText` also matches help prose (Back's help says "action panel"), so
-  // the row is found by its exact label.
+  // The row is found by its exact label, so a help line elsewhere that says
+  // "action panel" cannot match instead.
   const row = page.locator('.s-row', {
-    has: page.locator('.s-row__label', { hasText: /^Action Panel$/ })
+    has: page.locator('.s-row__label', { hasText: /^Action panel$/ })
   })
   await row.locator('.s-hotkey').click()
   await page.keyboard.press('Control+J')

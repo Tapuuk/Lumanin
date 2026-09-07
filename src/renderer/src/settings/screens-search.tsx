@@ -94,13 +94,14 @@ export function SearchScreen(): React.JSX.Element | null {
     guarded(work)
     commitOrder(groups, work)
   }
-  const groupHelp: Readonly<Record<ResultGroup, string>> = {
-    plugins: 'Your plugins’ own commands',
-    apps: 'Installed applications',
-    commands: 'The launcher’s own commands',
+  // Only the two rows whose position means nothing say so.
+  const groupHelp: Readonly<Partial<Record<ResultGroup, string>>> = {
     calculator: 'Nothing. The calculator is always first.',
-    files: 'Nothing. File search is a plugin, listed under plugins.',
-    web: 'The enabled search engines'
+    files: 'Nothing. File search is a plugin, listed under plugins.'
+  }
+  const groupRow = (group: ResultGroup, on: boolean): { id: string; label: string; detail?: string; on: boolean } => {
+    const detail = groupHelp[group]
+    return { id: group, label: RESULT_GROUP_LABELS[group], ...(detail === undefined ? {} : { detail }), on }
   }
 
   // --- pins ------------------------------------------------------------------
@@ -120,24 +121,12 @@ export function SearchScreen(): React.JSX.Element | null {
     <>
       <Section title="Result order" keywords={RESULT_KEYWORDS}>
         <p className="s-help">
-          Which kinds of result take part. Plugin commands and web searches sit where you put them.
-          Applications and commands are ranked together by match quality, so their order here only
-          breaks ties.
+          Apps and commands are ranked together by match, so their order here only breaks ties.
         </p>
         <ReorderList
           rows={[
-            ...order.map((group) => ({
-              id: group,
-              label: RESULT_GROUP_LABELS[group],
-              detail: groupHelp[group],
-              on: true
-            })),
-            ...OFFERED_RESULT_GROUPS.filter((group) => !order.includes(group)).map((group) => ({
-              id: group,
-              label: RESULT_GROUP_LABELS[group],
-              detail: groupHelp[group],
-              on: false
-            }))
+            ...order.map((group) => groupRow(group, true)),
+            ...OFFERED_RESULT_GROUPS.filter((group) => !order.includes(group)).map((group) => groupRow(group, false))
           ]}
           onToggle={(id, next) => {
             writeOrder(next ? [...order, id as ResultGroup] : order.filter((candidate) => candidate !== id))
@@ -151,8 +140,7 @@ export function SearchScreen(): React.JSX.Element | null {
 
       <Section title="Web search engines" keywords={ENGINE_KEYWORDS}>
         <p className="s-help">
-          Every engine enabled here is offered under every query, in this order. Custom engines can
-          be added in <code>lumanin config</code> for now.
+          Custom engines are added in <code>lumanin config</code> for now.
         </p>
         <ReorderList
           rows={[
@@ -180,9 +168,6 @@ export function SearchScreen(): React.JSX.Element | null {
       </Section>
 
       <Section title="Pins" keywords="pinned top of the root">
-        <p className="s-help">
-          Always at the top of the root, in this order, matched by name like everything else.
-        </p>
         {pins.length === 0 && <Empty>Nothing pinned.</Empty>}
         <ReorderList
           rows={pins.map((pin) => ({
@@ -211,7 +196,6 @@ export function SearchScreen(): React.JSX.Element | null {
       </Section>
 
       <Section title="Aliases" keywords="alias short word target">
-        <p className="s-help">Type the word, get the thing: <code>ff</code> for Firefox.</p>
         {aliases.length === 0 && <Empty>No aliases.</Empty>}
         {aliases.map(([alias, entry]) => (
           <div key={alias} className="s-list__row">
@@ -252,9 +236,8 @@ export function SearchScreen(): React.JSX.Element | null {
 
       <Section title="Ranking" keywords="frecency habit recent often closeness match">
         <p className="s-help">
-          Rows are sorted by how closely they match what you typed: a name that starts with it
-          first, then a word inside the name, then keywords. Your habits only decide the order among
-          rows that match equally well.
+          Closest match first: a name starting with what you typed, then a word inside it, then a
+          keyword. Habits only order rows that match equally well.
         </p>
         <SettingControl setting={HABIT_SETTING} />
       </Section>
@@ -345,9 +328,7 @@ export function PluginHotkeysGroup(): React.JSX.Element | null {
     <>
       <Section title="Plugin hotkeys" keywords="global key bind command category row action">
         <p className="s-help">
-          A global key bound to one thing a plugin offers: a command, a category, a row, or one
-          action on a row. The key is written into this desktop&apos;s own shortcut config, with
-          the diff shown first.
+          Written into this desktop&apos;s own shortcut config, with the diff shown first.
         </p>
         {entries.length === 0 && <Empty>No plugin keys yet.</Empty>}
         {entries.map((entry, index) => {

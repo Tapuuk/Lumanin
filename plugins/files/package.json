@@ -22,7 +22,7 @@
       "name": "showHidden",
       "title": "Hidden Files",
       "label": "Include dotfiles and dot-directories",
-      "description": "Off by default: a home directory is mostly .cache and .local, and they drown out what you were looking for.",
+      "description": "Dotfiles and everything under them.",
       "type": "checkbox",
       "required": false,
       "default": false
@@ -31,7 +31,7 @@
       "name": "noIgnore",
       "title": "Ignored Files",
       "label": "Also search files listed in .gitignore, .ignore and .fdignore",
-      "description": "Off by default, which is what keeps node_modules and build output out of the list. Only fd reads those files; plocate and find never did, so this changes nothing under them.",
+      "description": "What a .gitignore lists, such as node_modules. Only fd honours this.",
       "type": "checkbox",
       "required": false,
       "default": false
@@ -39,12 +39,12 @@
     {
       "name": "tool",
       "title": "Search With",
-      "description": "Leave on Automatic unless you have a reason. Automatic prefers fd, then plocate, then a plain find. Only fd skips what a .gitignore, .ignore or .fdignore lists.",
+      "description": "Adaptive prefers fd, then plocate, then find.",
       "type": "dropdown",
       "required": false,
       "default": "auto",
       "data": [
-        { "title": "Automatic", "value": "auto" },
+        { "title": "Adaptive", "value": "auto" },
         { "title": "fd", "value": "fd" },
         { "title": "plocate / locate", "value": "locate" },
         { "title": "find", "value": "find" }

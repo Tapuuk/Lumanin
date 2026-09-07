@@ -614,6 +614,12 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     if (main !== null) await offerBind(main, 'panel')
   }
 
+  /** The prompt's one line: the setting's own note, if any, then what an empty answer does. */
+  const emptyMeans = (setting: Setting): string => {
+    const empty = setting.adaptive === true ? 'empty follows the desktop' : 'empty resets to the default'
+    return setting.help === undefined ? empty : `${setting.help}  ·  ${empty}`
+  }
+
   const editSetting = async (setting: Setting): Promise<void> => {
     const current = getValue(draft, setting.path)
     const state = setting.read(resolved())
@@ -644,12 +650,15 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
       for (;;) {
         const choice = await menu.list<string>({
           title: setting.label,
-          subtitle: setting.help,
+          ...(setting.help === undefined ? {} : { subtitle: setting.help }),
           choices: [
             {
               value: USE_DEFAULT,
-              label: 'Use the default',
-              help: 'Removes the key, so the default can still improve later'
+              label: setting.adaptive === true ? 'Adaptive' : 'Use the default',
+              help:
+                setting.adaptive === true
+                  ? 'Follows the desktop'
+                  : 'Removes the key, so the default can still improve later'
             },
             ...(setting.freeform === true
               ? [{ value: TYPE_ONE, label: 'Type one instead', help: 'Anything not listed here' }]
@@ -672,7 +681,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         if (choice.value === TYPE_ONE) {
           const typed = await menu.prompt({
             title: setting.label,
-            help: setting.help,
+            ...(setting.help === undefined ? {} : { help: setting.help }),
             initial: typeof current === 'string' ? current : '',
             escHint: 'esc back',
             validate: (value) => (value.trim().length === 0 ? 'needs a value' : null)
@@ -697,12 +706,15 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         const TYPE_ONE = '\u0000custom'
         const chosen = await menu.list<string>({
           title: setting.label,
-          subtitle: setting.help,
+          ...(setting.help === undefined ? {} : { subtitle: setting.help }),
           choices: [
             {
               value: USE_DEFAULT,
-              label: 'Use the default',
-              help: 'Removes the key, so the default can still improve later'
+              label: setting.adaptive === true ? 'Adaptive' : 'Use the default',
+              help:
+                setting.adaptive === true
+                  ? 'Follows the desktop'
+                  : 'Removes the key, so the default can still improve later'
             },
             { value: '\u0000separator', label: '', separator: true },
             ...presets.map((preset) => ({
@@ -729,7 +741,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
 
       const typed = await menu.prompt({
         title: setting.label,
-        help: `${setting.help}  ·  empty resets to the default`,
+        help: emptyMeans(setting),
         initial: current === undefined ? '' : String(current),
         validate: (input) => {
           if (input.trim().length === 0) return null
@@ -749,7 +761,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
 
     const typed = await menu.prompt({
       title: setting.label,
-      help: `${setting.help}  ·  empty resets to the default`,
+      help: emptyMeans(setting),
       initial: typeof current === 'string' ? current : '',
       validate: () => null
     })
@@ -775,9 +787,11 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
               detail: overridden
                 ? `${text}  ← ${ENV_PREFIX}${setting.envKey ?? ''}`
                 : text,
-              help: overridden
-                ? `Set by the environment; editing config.toml will not change it.`
-                : setting.help
+              ...(overridden
+                ? { help: 'Set by the environment; editing config.toml will not change it.' }
+                : setting.help === undefined
+                  ? {}
+                  : { help: setting.help })
             }
           }),
         hints: ['enter edit', 'space toggle'],
@@ -2314,7 +2328,6 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
       const choice = await menu.list<() => Promise<void>>({
         title: 'File Search',
         initialIndex: at,
-        subtitle: 'The second search: everything under your home, on a key of its own.',
         choices: () => {
           const now = resolved()
           return [
@@ -2323,7 +2336,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
               label: 'Hotkey',
               detail: now.fileSearch.hotkey.value.length === 0 ? 'none - unreachable' : now.fileSearch.hotkey.value,
               ...(now.fileSearch.hotkey.value.length === 0
-                ? { help: 'Nothing else opens file search, so with no key it cannot be opened' }
+                ? { help: 'Without a key, file search is unreachable' }
                 : {})
             },
             {
@@ -2336,15 +2349,13 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
                 await editSetting({
                   path: ['file_search', 'hide_on_open'],
                   label: 'Close after opening',
-                  help: 'Opening a file is the end of a file search; the program that opens it takes the keyboard.',
                   editor: { kind: 'boolean' },
                   read: (c) => c.fileSearch.hideOnOpen,
                   envKey: 'FILE_HIDE_ON_OPEN'
                 })
               },
               label: 'Close after opening',
-              detail: now.fileSearch.hideOnOpen.value ? 'yes' : 'no - stays open',
-              help: 'Applies to opening a file, a containing folder, or a folder in your file manager'
+              detail: now.fileSearch.hideOnOpen.value ? 'yes' : 'no - stays open'
             }
           ]
         }
@@ -2466,33 +2477,32 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         const now = resolved()
         return [
         { value: 'general', label: 'General', detail: 'Window size, what Esc does, blur' },
-        { value: 'appearance', label: 'Appearance', detail: 'Theme, light/dark, animations' },
+        { value: 'appearance', label: 'Appearance' },
         {
           value: 'search',
           label: 'Global Search',
-          detail: `${now.general.hotkey.value} · engines, order, pins`
+          detail: now.general.hotkey.value
         },
         {
           value: 'file-search',
           label: 'File Search',
-          detail: 'Its own key, and what kind of file comes first'
+          detail: now.fileSearch.hotkey.value.length === 0 ? 'no key' : now.fileSearch.hotkey.value
         },
-        { value: 'aliases', label: 'Aliases', detail: 'Exact shortcuts you type' },
+        { value: 'aliases', label: 'Aliases' },
         {
           value: 'keys',
           label: 'Action keys',
-          detail: 'What the panel itself answers to - Enter, Esc, the action panel'
+          detail: 'Enter, Esc, the action panel'
         },
         {
           value: 'hotkeys',
           label: 'Plugin hotkeys',
-          detail: outOfStep ?? 'A key straight into one of your plugins',
           ...(outOfStep === null
             ? {}
-            : { help: 'Your config and your desktop disagree - open this and press w' })
+            : { detail: outOfStep, help: 'Your config and your desktop disagree - open this and press w' })
         },
         { value: '', label: '', separator: true },
-        { value: 'review', label: 'Show config.toml', detail: 'What is on disk now' },
+        { value: 'review', label: 'Show config.toml' },
         { value: 'quit', label: 'Quit' }
         ]
       }

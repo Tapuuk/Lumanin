@@ -31,7 +31,7 @@ export function matchesFilter(filter: string, ...texts: readonly (string | undef
 const settingTexts = (settings: readonly Setting[]): string[] =>
   settings.flatMap((setting) => [
     setting.label,
-    setting.help,
+    ...(setting.help === undefined ? [] : [setting.help]),
     ...(setting.editor.kind === 'enum' ? setting.editor.options.map((option) => option.label) : [])
   ])
 
@@ -77,7 +77,7 @@ export function sectionIndex(
       'shortcut',
       'bind',
       ...settingTexts([GLOBAL_HOTKEY]),
-      ...Object.values(KEY_ACTION_INFO).flatMap((info) => [info.title, info.help])
+      ...Object.values(KEY_ACTION_INFO).flatMap((info) => (info.help === undefined ? [info.title] : [info.title, info.help]))
     ],
     plugins: ['Install a plugin', 'plugin', 'repository', 'preferences', 'remove', 'export']
   }

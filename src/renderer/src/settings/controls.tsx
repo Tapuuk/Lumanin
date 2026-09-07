@@ -79,7 +79,7 @@ export function Row({
   children
 }: {
   label: string
-  help?: string
+  help?: string | undefined
   /** Offered as a "Reset" button beside the control when the value comes from the file. */
   onReset?: (() => void) | undefined
   children: ReactNode
@@ -106,10 +106,12 @@ export function Row({
     <div className="s-row" hidden={!matched && section?.own !== true}>
       <div className="s-row__text">
         <div className="s-row__label">{label}</div>
-        {help !== undefined && <div className="s-row__help">{help}</div>}
       </div>
       <RowSavedContext.Provider value={stampSaved}>
-        <div className="s-row__control">{children}</div>
+        <div className="s-row__control">
+          {children}
+          {help !== undefined && <div className="s-row__help">{help}</div>}
+        </div>
       </RowSavedContext.Provider>
       <div className="s-row__aside">
         {onReset !== undefined && (
@@ -218,6 +220,7 @@ function editorFor(
           label={setting.label}
           options={editor.options}
           freeform={setting.freeform === true}
+          adaptive={setting.adaptive === true}
           value={value === null || value === undefined ? '' : String(value)}
           disabled={disabled}
           onSave={(next) => save(next === '' ? null : next)}
@@ -232,6 +235,7 @@ function editorFor(
           max={editor.max}
           integer={editor.integer}
           presets={editor.presets ?? []}
+          adaptive={setting.adaptive === true}
           disabled={disabled}
           onSave={save}
         />
@@ -480,6 +484,7 @@ function EnumControl({
   label,
   options,
   freeform,
+  adaptive,
   value: truth,
   disabled,
   onSave
@@ -487,6 +492,8 @@ function EnumControl({
   label: string
   options: readonly { value: string; label: string }[]
   freeform: boolean
+  /** Unset follows the desktop, offered as a row of its own called Adaptive. */
+  adaptive: boolean
   value: string
   disabled: boolean
   onSave: (next: string) => void | Promise<unknown>
@@ -497,15 +504,17 @@ function EnumControl({
   const [custom, setCustom] = useState<string | null>(freeform && !listed && value !== '' ? value : null)
   // The value can change under us — the CLI or an editor writing the same
   // file. Re-derive the custom state when it does, so the button never claims
-  // "Default" while a custom theme is actually set.
+  // "Adaptive" while a custom theme is actually set.
   const [seen, setSeen] = useState(value)
   if (seen !== value) {
     setSeen(value)
     setCustom(freeform && !listed && value !== '' ? value : null)
   }
 
+  // A fixed default needs no row: the resolved value is always one of the
+  // options, and Reset beside the row is how it comes back.
   const rows: PickOption[] = [
-    { value: '', label: 'Default' },
+    ...(adaptive ? [{ value: '', label: 'Adaptive' }] : []),
     ...options,
     ...(freeform ? [{ value: CUSTOM, label: 'Custom name…' }] : [])
   ]
@@ -550,6 +559,7 @@ function NumberControl({
   max,
   integer,
   presets,
+  adaptive,
   disabled,
   onSave
 }: {
@@ -559,6 +569,8 @@ function NumberControl({
   max: number
   integer: boolean
   presets: readonly { value: number; label: string; detail?: string }[]
+  /** An empty field follows the desktop rather than a fixed number. */
+  adaptive: boolean
   disabled: boolean
   onSave: (next: number | null) => void | Promise<unknown>
 }): React.JSX.Element {
@@ -612,7 +624,7 @@ function NumberControl({
       max={max}
       step={integer ? 1 : 0.1}
       value={text}
-      placeholder={presets.length > 0 ? 'Default' : ''}
+      placeholder={adaptive ? 'Adaptive' : presets.length > 0 ? 'Default' : ''}
       aria-label={presets.length > 0 ? 'Custom value' : label}
       disabled={disabled}
       onChange={(event) => setText(event.target.value)}
@@ -666,6 +678,7 @@ function NumberControl({
               role="radio"
               aria-checked={checked}
               className="s-segments__pill"
+              title={candidate.detail}
               disabled={disabled}
               tabIndex={checked || (preset === undefined && candidate === presets[0]) ? 0 : -1}
               onClick={() => pick(candidate.value)}
@@ -677,7 +690,6 @@ function NumberControl({
       </div>
       {field}
       {problem !== null && <div className="s-error">{problem}</div>}
-      {preset?.detail !== undefined && <div className="s-segments__detail">{preset.detail}</div>}
     </div>
   )
 }

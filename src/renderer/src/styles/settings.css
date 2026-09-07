@@ -159,13 +159,13 @@ body:has(.settings) {
 .settings__content {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 18px 22px;
+  padding: 14px 22px;
   overflow-y: auto;
   container-type: inline-size;
 }
 
 .settings__heading {
-  margin: 0 0 18px;
+  margin: 0 0 14px;
   font-size: 15px;
   font-weight: 600;
 }
@@ -196,8 +196,38 @@ body:has(.settings) {
 
 /* ------------------------------------------------------------- screen pieces */
 
+/* A row of tabs under the heading, styled like the sidebar's section buttons. */
+.s-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--lumanin-border);
+}
+
+.s-tabs__tab {
+  padding: 5px 12px;
+  border: none;
+  border-radius: var(--s-radius-large);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text-muted);
+  cursor: pointer;
+}
+
+.s-tabs__tab:hover {
+  background: var(--lumanin-bg-hover);
+  color: var(--lumanin-text);
+}
+
+.s-tabs__tab[aria-selected='true'] {
+  background: color-mix(in srgb, var(--lumanin-accent) 18%, var(--lumanin-bg-selected));
+  color: var(--lumanin-accent);
+}
+
 .s-section {
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 
 /* Filtered out. Stated here because .s-row sets its own display. */
@@ -207,7 +237,7 @@ body:has(.settings) {
 }
 
 .s-section__title {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -216,10 +246,10 @@ body:has(.settings) {
 
 .s-row {
   display: grid;
-  grid-template-columns: minmax(150px, 200px) 1fr auto;
+  grid-template-columns: minmax(180px, 240px) 1fr auto;
   column-gap: 16px;
   align-items: start;
-  padding: 6px 0;
+  padding: 4px 0;
 }
 
 /* Sits the label level with the first line of a 28px control. */
@@ -305,7 +335,6 @@ body:has(.settings) {
 }
 
 .s-row__help {
-  margin-top: 2px;
   user-select: text;
   cursor: auto;
   font-size: 12px;
@@ -321,7 +350,7 @@ body:has(.settings) {
 }
 
 .s-help {
-  margin: 0 0 10px;
+  margin: 0 0 6px;
   user-select: text;
   cursor: auto;
   font-size: 12.5px;
@@ -329,7 +358,7 @@ body:has(.settings) {
 }
 
 .s-empty {
-  margin: 0 0 10px;
+  margin: 0 0 6px;
   user-select: text;
   cursor: auto;
   font-size: 12.5px;
@@ -475,7 +504,7 @@ body:has(.settings) {
 }
 
 .s-input--number {
-  width: 90px;
+  width: 104px;
 }
 
 .s-input--fill {
@@ -565,12 +594,6 @@ body:has(.settings) {
 .s-segments__pill:disabled {
   opacity: 0.5;
   cursor: default;
-}
-
-.s-segments__detail {
-  flex-basis: 100%;
-  font-size: 12px;
-  color: var(--lumanin-text-muted);
 }
 
 .s-button {
@@ -674,15 +697,16 @@ body:has(.settings) {
 .s-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin-bottom: 8px;
+  gap: 0;
+  margin-bottom: 6px;
 }
 
+/* The same 36px as a setting row: a 28px control and 4px above and below. */
 .s-list__row {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 10px;
+  padding: 4px 10px;
   border-radius: var(--s-radius);
 }
 
@@ -698,7 +722,8 @@ body:has(.settings) {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .s-list__label {
@@ -709,6 +734,8 @@ body:has(.settings) {
 }
 
 .s-list__detail {
+  flex: 1 1 auto;
+  min-width: 0;
   user-select: text;
   cursor: auto;
   font-size: 12px;
@@ -749,7 +776,7 @@ body:has(.settings) {
   align-items: center;
   gap: 12px;
   justify-content: space-between;
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   padding: 10px 14px;
   border: 1px solid var(--lumanin-accent);
   border-radius: var(--s-radius-large);
@@ -1032,7 +1059,7 @@ body:has(.settings) {
 }
 
 .s-plugin__body {
-  margin-top: 8px;
+  margin-top: 4px;
   padding-left: 48px;
 }
 

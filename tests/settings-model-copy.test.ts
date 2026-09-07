@@ -20,7 +20,7 @@ describe('settings copy', () => {
     for (const setting of settings) {
       const where = setting.path.join('.')
       expectClean(setting.label, `${where} label`)
-      expectClean(setting.help, `${where} help`)
+      if (setting.help !== undefined) expectClean(setting.help, `${where} help`)
     }
     for (const level of HABIT_LEVELS) {
       expectClean(level.label, `habit ${level.label} label`)
@@ -28,7 +28,7 @@ describe('settings copy', () => {
     }
     for (const [action, info] of Object.entries(KEY_ACTION_INFO)) {
       expectClean(info.title, `key ${action} title`)
-      expectClean(info.help, `key ${action} help`)
+      if (info.help !== undefined) expectClean(info.help, `key ${action} help`)
     }
   })
 
@@ -37,8 +37,12 @@ describe('settings copy', () => {
       expect(help, where).toMatch(/\.$/)
       expect(help.split(/\.\s+/).length, where).toBeLessThanOrEqual(2)
     }
-    for (const setting of settings) expectHelp(setting.help, setting.path.join('.'))
-    for (const info of Object.values(KEY_ACTION_INFO)) expectHelp(info.help, info.title)
+    for (const setting of settings) {
+      if (setting.help !== undefined) expectHelp(setting.help, setting.path.join('.'))
+    }
+    for (const info of Object.values(KEY_ACTION_INFO)) {
+      if (info.help !== undefined) expectHelp(info.help, info.title)
+    }
   })
 
   it('enum options and presets are sentence case and clean', () => {
@@ -63,9 +67,11 @@ describe('settings copy', () => {
   it('help never names a config key', () => {
     for (const setting of settings) {
       const where = setting.path.join('.')
-      expect(setting.help, where).not.toContain(setting.path.join('.'))
+      const help = setting.help
+      if (help === undefined) continue
+      expect(help, where).not.toContain(setting.path.join('.'))
       for (const segment of setting.path) {
-        if (segment.includes('_')) expect(setting.help, where).not.toContain(segment)
+        if (segment.includes('_')) expect(help, where).not.toContain(segment)
       }
     }
   })

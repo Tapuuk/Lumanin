@@ -92,11 +92,7 @@ function UpdatesSection(): React.JSX.Element {
     <Section title="Updates">
       <Row
         label="Launcher version"
-        help={
-          check === null
-            ? 'Checks where this copy was installed from, a git checkout or a package, and reports what is newer. Nothing is downloaded until you confirm.'
-            : `${check.current}${check.kind === 'git' ? `, checkout at ${check.root}` : ''}`
-        }
+        help={check === null ? undefined : `${check.current}${check.kind === 'git' ? `, checkout at ${check.root}` : ''}`}
       >
         <button
           type="button"
@@ -217,7 +213,7 @@ function FileSearchKeyRow(): React.JSX.Element | null {
     <>
       <Row
         label="Hotkey"
-        help="The only way into file search. It is not a row at the root. Backspace while capturing removes the key."
+        help="The only way into file search. Backspace while capturing removes the key."
       >
         <div className="s-inline">
           <HotkeyCapture
@@ -283,9 +279,7 @@ export function FileSearchGroup(): React.JSX.Element | null {
           />
         ))
       )}
-      <p className="s-help">
-        Category order: which kind of file wins when names tie. The first matching category ranks first.
-      </p>
+      <p className="s-help">Category order: which kind of file wins when names tie.</p>
       <ReorderList
         rows={order.map((category: FileCategory) => ({
           id: category,
@@ -319,10 +313,7 @@ export function KeysScreen(): React.JSX.Element | null {
         <FileSearchKeyRow />
       </Section>
       <Section title="Panel keys">
-        <p className="s-help">
-          The panel&apos;s own keys, answered while the launcher has focus. Nothing is written into
-          the desktop. A bare key also types, so it fires only while the search box is empty.
-        </p>
+        <p className="s-help">A bare key also types, so it fires only while the search box is empty.</p>
         {KEY_ACTIONS.map((action) => (
           <KeyActionRow key={action} action={action} chords={keys[action].map(formatKeyChord)} />
         ))}

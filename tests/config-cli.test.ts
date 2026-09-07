@@ -698,7 +698,7 @@ describe('the config menu, end to end', () => {
 
     // General, Appearance, Search, then this.
     await type(input, [DOWN, DOWN, DOWN, ENTER])
-    expect(frames()).toContain('The second search')
+    expect(frames()).toContain('File Search')
     expect(frames()).toContain('Super+Shift+R')
     expect(frames()).toContain('File type order')
     // Opening a file is the end of a file search; the panel gets out of the way.
@@ -772,7 +772,7 @@ describe('the config menu, end to end', () => {
 
     // General, Appearance, Search, File Search, Aliases, Action keys, then this.
     await type(input, [DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, ENTER])
-    expect(frames()).toContain('A key straight into one of your plugins')
+    expect(frames()).toContain('Plugin hotkeys')
     expect(frames()).toContain('None yet')
 
     await leave(input, pending)
@@ -863,9 +863,9 @@ describe('the config menu, end to end', () => {
             {
               path: '/home/x/.config/hypr/lumanin.lua',
               state: 'will-update',
-              before: 'monitor_h*0.32',
+              before: 'monitor_h*0.24',
               after: 'monitor_h*0.45',
-              diff: '-  move = { "(monitor_w-window_w)/2", "monitor_h*0.32" },\n+  move = { "(monitor_w-window_w)/2", "monitor_h*0.45" },',
+              diff: '-  move = { "(monitor_w-window_w)/2", "monitor_h*0.24" },\n+  move = { "(monitor_w-window_w)/2", "monitor_h*0.45" },',
               actions: [
                 {
                   id: 'hyprland-lua-rules',

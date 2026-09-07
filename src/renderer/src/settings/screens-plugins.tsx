@@ -10,12 +10,43 @@ import { Busy, Empty, Modal, PickButton, Row, Section, TextControl, Toggle, useF
 import { guarded, invokeChecked, useSettingsState } from './useSettings'
 
 /**
- * Installed plugins: turn one off without deleting it, choose which of its
- * commands appear, set its preferences, remove it — and install a new one from
- * any public repository, behind the same facts-first consent the CLI shows.
+ * Two tabs. Installed: turn a plugin off without deleting it, choose which of
+ * its commands appear, set its preferences, remove it, or install one from any
+ * public repository. Official: the curated index, one Install button per row.
+ * Both installs go through the same facts-first consent the CLI shows.
  */
 
+const PLUGIN_TABS = [
+  { id: 'installed', title: 'Installed plugins' },
+  { id: 'official', title: 'Official plugins' }
+] as const
+
+type PluginTab = (typeof PLUGIN_TABS)[number]['id']
+
 export function PluginsScreen(): React.JSX.Element {
+  const [tab, setTab] = useState<PluginTab>('installed')
+  return (
+    <>
+      <div className="s-tabs" role="tablist" aria-label="Plugins">
+        {PLUGIN_TABS.map((candidate) => (
+          <button
+            key={candidate.id}
+            type="button"
+            role="tab"
+            className="s-tabs__tab"
+            aria-selected={candidate.id === tab}
+            onClick={() => setTab(candidate.id)}
+          >
+            {candidate.title}
+          </button>
+        ))}
+      </div>
+      {tab === 'installed' ? <InstalledTab /> : <OfficialTab />}
+    </>
+  )
+}
+
+function InstalledTab(): React.JSX.Element {
   const { state } = useSettingsState()
   const filter = useFilter()
   const [plugins, setPlugins] = useState<readonly PluginDto[] | null>(null)
@@ -139,8 +170,7 @@ function PluginCard({ plugin, onChanged }: { plugin: PluginDto; onChanged: () =>
           </div>
           {plugin.bundled && (
             <p className="s-help">
-              Ships inside the app, so it can be turned off but not removed. An upgrade would
-              bring it back. A plugin you install under the same name replaces it.
+              Can be turned off but not removed. A plugin you install under the same name replaces it.
             </p>
           )}
         </div>
@@ -428,80 +458,83 @@ function PasswordControl({
 }
 
 /**
- * The official index (the Lumanin-Plugins repository), fetched on an explicit
- * click and never before — the launcher's no-requests rule holds until the
+ * The official index (the Lumanin-Plugins repository), fetched when its tab is
+ * opened and never before — the launcher's no-requests rule holds until the
  * user asks to browse. Picking one feeds the same inspect-and-consent flow a
  * pasted URL takes; this list is discovery, not a separate install path.
  */
-function OfficialList({
-  onPick,
-  busy
-}: {
-  onPick: (source: string) => void
-  busy: boolean
-}): React.JSX.Element {
+function OfficialTab(): React.JSX.Element {
+  const { state } = useSettingsState()
+  const flow = useInstallFlow(() => undefined)
   const [plugins, setPlugins] = useState<readonly OfficialPluginDto[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
 
-  const browse = (): void => {
-    setLoading(true)
-    setError(null)
+  useEffect(() => {
+    let live = true
     window.lumanin
       .invoke('settings.officialPlugins')
       .then((result) => {
-        setLoading(false)
+        if (!live) return
         if (result.ok) setPlugins(result.plugins)
         else setError(result.error ?? 'The plugin index could not be loaded')
       })
       .catch((cause: unknown) => {
-        setLoading(false)
-        setError(cause instanceof Error ? cause.message : String(cause))
+        if (live) setError(cause instanceof Error ? cause.message : String(cause))
       })
-  }
+    return () => {
+      live = false
+    }
+    // Re-read after any state change: an install flips a row to "Installed".
+  }, [state])
 
+  const busy = flow.inspecting || flow.installing
   return (
-    <div className="s-official">
-      {plugins === null && (
-        <div className="s-inline">
-          <button type="button" className="s-button" disabled={loading} aria-busy={loading} onClick={browse}>
-            Browse official plugins
-            {loading && <Busy />}
-          </button>
-          {error !== null && <div className="s-error">{error}</div>}
-        </div>
+    <Section>
+      {plugins === null && error === null && (
+        <p className="s-help">
+          Loading the official list
+          <Busy />
+        </p>
       )}
+      {error !== null && <div className="s-error">{error}</div>}
       {plugins !== null && plugins.length === 0 && (
         <p className="s-help">The official collection is empty right now.</p>
       )}
       {plugins !== null &&
         plugins.map((plugin) => (
-          <Row
-            key={plugin.name}
-            label={plugin.title}
-            help={`${plugin.description} · by ${plugin.author}`}
-          >
+          <Row key={plugin.name} label={plugin.title} help={`${plugin.description} · by ${plugin.author}`}>
             {plugin.installed ? (
               <span className="s-list__detail">Installed</span>
             ) : (
-              <button
-                type="button"
-                className="s-button"
-                disabled={busy}
-                onClick={() => onPick(plugin.source)}
-              >
+              <button type="button" className="s-button" disabled={busy} onClick={() => flow.inspect(plugin.source)}>
                 Install…
               </button>
             )}
           </Row>
         ))}
-    </div>
+      {flow.outcome !== null && <p className="s-help">{flow.outcome}</p>}
+      {flow.modal}
+    </Section>
   )
 }
 
 // ---------------------------------------------------------------------------
 
-function InstallSection({ onInstalled }: { onInstalled: () => void }): React.JSX.Element {
+interface InstallFlow {
+  readonly source: string
+  readonly setSource: (source: string) => void
+  readonly inspecting: boolean
+  readonly installing: boolean
+  readonly progress: readonly string[]
+  readonly outcome: string | null
+  /** Fetch and show the consent modal for a source; without one, the typed source. */
+  readonly inspect: (from?: string) => void
+  /** The consent modal and the fetch error, rendered by whichever tab owns the flow. */
+  readonly modal: React.JSX.Element
+}
+
+/** Fetch, review, install: one flow, shared by the URL field and the official list. */
+function useInstallFlow(onInstalled: () => void): InstallFlow {
   const [source, setSource] = useState('')
   const [inspecting, setInspecting] = useState(false)
   const [inspection, setInspection] = useState<PluginInspectionDto | null>(null)
@@ -557,37 +590,8 @@ function InstallSection({ onInstalled }: { onInstalled: () => void }): React.JSX
       })
   }
 
-  return (
-    <Section title="Install a plugin" keywords="repository url directory fetch">
-      <p className="s-help">
-        From any public git repository over https: <code>owner/name</code>, a GitHub URL, or a
-        directory path on this machine.
-      </p>
-      <div className="s-inline">
-        <TextControl
-          value={source}
-          placeholder="owner/name or https://…"
-          onSave={setSource}
-          onLiveChange={setSource}
-        />
-        <button
-          type="button"
-          className="s-button"
-          disabled={source.trim().length === 0 || inspecting}
-          aria-busy={inspecting}
-          onClick={() => inspect()}
-        >
-          Fetch & review
-          {inspecting && <Busy />}
-        </button>
-      </div>
-      {inspecting && progress.length > 0 && (
-        <pre className="s-progress">{progress.join('\n')}</pre>
-      )}
-      {outcome !== null && <p className="s-help">{outcome}</p>}
-
-      <OfficialList onPick={(source) => inspect(source)} busy={inspecting || installing} />
-
+  const modal = (
+    <>
       {inspection !== null && !inspection.ok && (
         <div className="s-error">{inspection.error ?? 'That could not be fetched'}</div>
       )}
@@ -652,6 +656,36 @@ function InstallSection({ onInstalled }: { onInstalled: () => void }): React.JSX
           </div>
         </Modal>
       )}
+    </>
+  )
+  return { source, setSource, inspecting, installing, progress, outcome, inspect, modal }
+}
+
+function InstallSection({ onInstalled }: { onInstalled: () => void }): React.JSX.Element {
+  const flow = useInstallFlow(onInstalled)
+  return (
+    <Section title="Install a plugin" keywords="repository url directory fetch">
+      <div className="s-inline">
+        <TextControl
+          value={flow.source}
+          placeholder="owner/name, https://…, or a directory on this machine"
+          onSave={flow.setSource}
+          onLiveChange={flow.setSource}
+        />
+        <button
+          type="button"
+          className="s-button"
+          disabled={flow.source.trim().length === 0 || flow.inspecting}
+          aria-busy={flow.inspecting}
+          onClick={() => flow.inspect()}
+        >
+          Fetch & review
+          {flow.inspecting && <Busy />}
+        </button>
+      </div>
+      {flow.inspecting && flow.progress.length > 0 && <pre className="s-progress">{flow.progress.join('\n')}</pre>}
+      {flow.outcome !== null && <p className="s-help">{flow.outcome}</p>}
+      {flow.modal}
     </Section>
   )
 }

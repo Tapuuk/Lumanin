@@ -43,8 +43,14 @@ export type Editor =
 export interface Setting {
   readonly path: readonly string[]
   readonly label: string
-  readonly help: string
+  /** Only for what the label cannot say: a side effect, a caveat, a rule. */
+  readonly help?: string
   readonly editor: Editor
+  /**
+   * Unset means "follow the desktop", and the frontends name that choice
+   * "Adaptive". Without it, unset is a fixed default and needs no row of its own.
+   */
+  readonly adaptive?: true
   /** The resolved value and where it came from, for the value column. */
   readonly read: (config: ResolvedConfig) => { value: unknown; layer: string; origin: string }
   /** The env var that would override this, so an override can be called out. */
@@ -65,7 +71,7 @@ export interface Setting {
 export const GLOBAL_HOTKEY: Setting = {
   path: ['general', 'hotkey'],
   label: 'Hotkey',
-  help: 'The key that opens the panel. Written into this desktop’s shortcut settings where Lumanin can reach them.',
+  help: 'Written into this desktop’s shortcut settings.',
   // Not a plain text field: a hotkey typed as prose is a hotkey that silently
   // does not work. Each frontend owns its capture flow — the terminal builds
   // one from lists, the GUI can capture a chord — and both end in the same
@@ -83,7 +89,6 @@ export const GENERAL_SETTINGS: readonly Setting[] = [
   {
     path: ['general', 'hide_on_blur'],
     label: 'Hide when focus is lost',
-    help: 'Off keeps the panel open when another window takes focus.',
     editor: { kind: 'boolean' },
     read: (c) => c.general.hideOnBlur,
     envKey: 'HIDE_ON_BLUR'
@@ -91,7 +96,6 @@ export const GENERAL_SETTINGS: readonly Setting[] = [
   {
     path: ['general', 'esc_at_root'],
     label: 'Escape at the root',
-    help: 'What Esc does with nothing left to back out of.',
     editor: {
       kind: 'enum',
       options: ESC_AT_ROOT_VALUES.map((value) => ({
@@ -125,7 +129,6 @@ export const GENERAL_SETTINGS: readonly Setting[] = [
   {
     path: ['general', 'width'],
     label: 'Panel width',
-    help: 'Width at the design text size. Applied the next time the panel opens and clamped to the screen.',
     editor: {
       kind: 'number',
       min: 320,
@@ -144,7 +147,6 @@ export const GENERAL_SETTINGS: readonly Setting[] = [
   {
     path: ['general', 'height'],
     label: 'Panel length',
-    help: 'How far down the list can grow, in pixels. Applied the next time the panel opens and clamped to the screen.',
     editor: {
       kind: 'number',
       min: 240,
@@ -163,7 +165,6 @@ export const GENERAL_SETTINGS: readonly Setting[] = [
   {
     path: ['general', 'top'],
     label: 'Panel height',
-    help: 'How far down the screen the panel sits, as a percentage of the screen height. On Hyprland the managed window rule is rewritten with it.',
     editor: {
       kind: 'number',
       min: 0,
@@ -171,7 +172,7 @@ export const GENERAL_SETTINGS: readonly Setting[] = [
       integer: true,
       presets: [
         { value: 10, label: 'Top', detail: '10%' },
-        { value: 32, label: 'Default', detail: '32%' },
+        { value: 24, label: 'Default', detail: '24%' },
         { value: 45, label: 'Centre', detail: '45%' },
         { value: 60, label: 'Low', detail: '60%' }
       ]
@@ -193,8 +194,8 @@ export function appearanceSettings(
     {
       path: ['appearance', 'theme'],
       label: 'Theme',
-      help: 'Default follows the desktop theme.',
       editor: { kind: 'enum', options: themes },
+      adaptive: true,
       // The listed packs are suggestions; an Omarchy theme or a pack under
       // `~/.config/lumanin/themes/` is named the same way and is equally valid.
       freeform: true,
@@ -203,8 +204,7 @@ export function appearanceSettings(
     },
     {
       path: ['appearance', 'follow_system'],
-      label: 'Follow the desktop light or dark mode',
-      help: 'Tracks the desktop’s light or dark setting and its accent colour.',
+      label: 'Follow light or dark mode',
       editor: { kind: 'boolean' },
       read: (c) => c.appearance.followSystem,
       envKey: 'FOLLOW_SYSTEM'
@@ -212,7 +212,6 @@ export function appearanceSettings(
     {
       path: ['appearance', 'animations'],
       label: 'Animations',
-      help: 'Off also when the desktop asks for reduced motion.',
       editor: { kind: 'boolean' },
       read: (c) => c.appearance.animations,
       envKey: 'ANIMATIONS'
@@ -220,7 +219,7 @@ export function appearanceSettings(
     {
       path: ['appearance', 'text_scale'],
       label: 'Text size',
-      help: 'Default follows the desktop text size. A number fixes it.',
+      adaptive: true,
       editor: {
         kind: 'number',
         min: 0.5,
@@ -262,8 +261,7 @@ export const HABIT_LEVELS: readonly { readonly value: number; readonly label: st
 
 export const HABIT_SETTING: Setting = {
   path: ['search', 'frecency_weight'],
-  label: 'Favour what you open',
-  help: 'How much the things you open often and recently climb above equally close matches. Never lifts a weaker match above a better one.',
+  label: 'Favour what you open often',
   editor: { kind: 'number', min: 0, max: 1, integer: false, presets: HABIT_LEVELS },
   read: (c) => c.search.frecencyWeight,
   envKey: 'FRECENCY_WEIGHT'
@@ -282,7 +280,6 @@ export function habitLabel(weight: number): string {
 export const FILE_SEARCH_HIDE_ON_OPEN: Setting = {
   path: ['file_search', 'hide_on_open'],
   label: 'Close the panel when a file opens',
-  help: 'The opened file takes the keyboard, so the panel closes with it.',
   editor: { kind: 'boolean' },
   read: (c) => c.fileSearch.hideOnOpen
 }

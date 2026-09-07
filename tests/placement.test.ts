@@ -29,8 +29,8 @@ describe("panel placement", () => {
   it("measures from the top of the work area, not the screen", () => {
     // A panel that ignores the work area sits under the bar on a desktop with a
     // top panel — which is most of them.
-    expect(panelTop(0, 1000)).toBe(320);
-    expect(panelTop(40, 1000)).toBe(360);
+    expect(panelTop(0, 1000)).toBe(240);
+    expect(panelTop(40, 1000)).toBe(280);
   });
 
   it("carries the configured top into both Hyprland rule formats", () => {
@@ -65,7 +65,7 @@ describe("panel placement", () => {
   });
 
   it("writes the move rule as an expression, never as a percentage", () => {
-    // Hyprland 0.56 parses `move 50%- 32%` without complaint and then ignores
+    // Hyprland 0.56 parses `move 50%- 24%` without complaint and then ignores
     // it, leaving the window centred: a rule that looks installed and does
     // nothing. Only the expression form actually moves the window.
     const rules = FIX_ACTIONS.find((action) => action.id === "hyprland-rules");

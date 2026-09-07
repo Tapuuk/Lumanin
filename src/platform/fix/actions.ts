@@ -144,7 +144,7 @@ export function usesHyprlandLua(configDir: string, exists: (path: string) => boo
  * Hyprland already centres a floating window by default, and centred is not
  * where a launcher's search field belongs (see `PANEL_TOP_FRACTION`).
  *
- * It has to be written as an *expression*, `monitor_h*0.32`, and not as `32%`.
+ * It has to be written as an *expression*, `monitor_h*0.24`, and not as `24%`.
  * Percentage arguments to `move` are accepted by the parser without complaint
  * and then silently ignored, leaving the window at the default centre — a rule
  * that looks installed, reports no error, and does nothing. Verified against

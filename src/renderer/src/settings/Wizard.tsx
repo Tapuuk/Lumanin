@@ -103,8 +103,8 @@ function SetupChoicesStep({ onLeave, onNext }: { onLeave: () => void; onNext: ()
           className={`wiz__choice${current === null ? ' wiz__choice--picked' : ''}`}
           onClick={() => guarded(setConfig(['appearance', 'theme'], null))}
         >
-          <span className="wiz__choice-name">Follow the desktop</span>
-          <span className="wiz__choice-note">Recommended</span>
+          <span className="wiz__choice-name">Adaptive</span>
+          <span className="wiz__choice-note">Follows the desktop</span>
         </button>
         {state.themes.map((theme) => (
           <button
@@ -117,7 +117,7 @@ function SetupChoicesStep({ onLeave, onNext }: { onLeave: () => void; onNext: ()
           </button>
         ))}
       </div>
-      <Row label={GLOBAL_HOTKEY.label} help="The key that opens the launcher from anywhere. Super+R is the default.">
+      <Row label={GLOBAL_HOTKEY.label}>
         <HotkeyCapture
           value={state.resolved.general.hotkey.value}
           onPick={(next) => {
@@ -127,7 +127,7 @@ function SetupChoicesStep({ onLeave, onNext }: { onLeave: () => void; onNext: ()
       </Row>
       <Row
         label="File search key"
-        help="File search has its own key. Super+Shift+R is the default. Backspace while capturing removes the key."
+        help="Backspace while capturing removes the key."
       >
         <HotkeyCapture
           value={state.resolved.fileSearch.hotkey.value}

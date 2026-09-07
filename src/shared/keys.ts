@@ -42,36 +42,32 @@ export interface KeyActionInfo {
   /** The key under `[keys]` in `config.toml`. */
   readonly setting: string
   readonly title: string
-  readonly help: string
+  readonly help?: string
 }
 
 export const KEY_ACTION_INFO: Readonly<Record<KeyAction, KeyActionInfo>> = {
   actionPanel: {
     setting: 'action_panel',
-    title: 'Action Panel',
-    help: 'Everything the selected row can do.'
+    title: 'Action panel'
   },
   open: {
     setting: 'open',
-    title: 'Open',
-    help: 'Run the first action: launch the app, open the file, enter the folder.'
+    title: 'Open'
   },
   secondary: {
     setting: 'secondary',
-    title: 'Open (secondary)',
-    help: 'Run the second action. In file search that opens the folder in the file manager where Enter enters it.'
+    title: 'Open with the second action',
+    help: 'In file search that is the file manager where Open enters the folder.'
   },
-  next: { setting: 'next', title: 'Next result', help: 'Move down the list.' },
-  previous: { setting: 'previous', title: 'Previous result', help: 'Move up the list.' },
+  next: { setting: 'next', title: 'Next result' },
+  previous: { setting: 'previous', title: 'Previous result' },
   category: {
     setting: 'category',
-    title: 'Next category',
-    help: 'Switch the category dropdown to its next entry, in views that have one.'
+    title: 'Next category'
   },
   back: {
     setting: 'back',
-    title: 'Back',
-    help: 'Close the action panel, leave a folder, go back a view, then dismiss the panel.'
+    title: 'Back'
   }
 }
 
