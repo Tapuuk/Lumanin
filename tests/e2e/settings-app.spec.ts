@@ -823,7 +823,11 @@ test('a slash typed in a text field is a character, not the filter key', async (
 
 test('closing the window remembers its size and position, and quits the app', async () => {
   const closed = app.waitForEvent('close')
-  await page.locator('.settings__close').click()
+  // The click is what closes the page, and on a fast compositor (sway in CI)
+  // the page is gone before Playwright finishes bookkeeping the click - which
+  // it reports as "Target page ... has been closed". The `close` event below
+  // is the assertion; the click only has to land.
+  await page.locator('.settings__close').click({ noWaitAfter: true }).catch(() => undefined)
   await closed
 
   const saved = JSON.parse(readFileSync(join(root, 'state', 'lumanin', 'settings-window.json'), 'utf8')) as Record<
