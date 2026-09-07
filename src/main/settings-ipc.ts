@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { basename, join, resolve } from 'node:path'
-import { ipcMain, type IpcMainInvokeEvent } from 'electron'
+import { ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import { BUILTIN_SEEDS } from '../../themes/index'
 import { readVersion, repoRoot, request, startDaemon } from '../cli/client'
 import { applyUpdate, checkForUpdates, detectInstall, managerHint } from '../node/update'
@@ -39,7 +39,7 @@ import {
   type UpdateCheckDto
 } from '../shared/ipc'
 import { allSettings, type Setting } from '../shared/settings-model'
-import { THEME_FILE_BASENAME } from '../shared/identity'
+import { THEME_FILE_BASENAME, ISSUES_URL } from '../shared/identity'
 import type { EnumerateData } from '../shared/protocol'
 import { getValue, readConfigDocument, setValue, writeConfigDocument } from '../node/config-file'
 import { type LumaninPaths } from '../node/paths'
@@ -165,6 +165,9 @@ export class SettingsIpc {
           return this.deps.theme.payloadNow
         case 'settings.close':
           this.deps.close()
+          return undefined
+        case 'settings.openIssues':
+          await shell.openExternal(ISSUES_URL)
           return undefined
         case 'settings.state':
           return await this.state()

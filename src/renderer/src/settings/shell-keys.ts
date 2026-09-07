@@ -1,12 +1,12 @@
 import { useEffect, type RefObject } from 'react'
 import { isCaptureActive } from './controls'
-import { SECTIONS, type SectionId } from './sections'
+import { SECTIONS, SIDEBAR_LINKS, type SectionId } from './sections'
 
 /**
  * The shell's own keys, one window listener in the bubble phase so anything
  * that stops propagation (a chord capture, a modal) wins:
  *
- * - Ctrl+1..4 switch sections, from anywhere.
+ * - Ctrl+1..4 switch sections, from anywhere; Ctrl+5 onwards open the sidebar's links.
  * - Ctrl+F anywhere, or / outside a text field, focuses the sidebar filter.
  * - Up and Down outside a text field move focus between the rows of the pane,
  *   landing on the row's own control so Space and Enter act on it.
@@ -69,11 +69,19 @@ export function useShellKeyboard({
       if (!enabled || isCaptureActive() || document.querySelector('[role="dialog"]') !== null) return
 
       if (event.ctrlKey && !event.altKey && !event.metaKey && /^[1-9]$/.test(event.key)) {
-        const section = SECTIONS[Number(event.key) - 1]
-        if (section === undefined) return
+        const index = Number(event.key) - 1
+        const section = SECTIONS[index]
+        if (section !== undefined) {
+          event.preventDefault()
+          if (isEditable(document.activeElement)) (document.activeElement as HTMLElement).blur()
+          setActive(section.id)
+          return
+        }
+        // Past the sections the numbers continue into the sidebar's links.
+        const link = SIDEBAR_LINKS[index - SECTIONS.length]
+        if (link === undefined) return
         event.preventDefault()
-        if (isEditable(document.activeElement)) (document.activeElement as HTMLElement).blur()
-        setActive(section.id)
+        void window.lumanin.invoke(link.invoke)
         return
       }
 

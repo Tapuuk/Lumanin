@@ -246,6 +246,11 @@ export interface InvokeMap extends SettingsInvokeMap {
    */
   'settings.close': { params: undefined; result: void }
   /**
+   * Open the issue tracker in the browser. No parameter on purpose: the URL is
+   * main's (`ISSUES_URL`), so the renderer cannot ask for any other page.
+   */
+  'settings.openIssues': { params: undefined; result: void }
+  /**
    * `Form.FilePicker` — the desktop's own open dialog.
    *
    * It has to be main's: a renderer with `nodeIntegration` off cannot open one,
@@ -586,6 +591,7 @@ export const INVOKE_METHODS = [
 export const SETTINGS_INVOKE_METHODS = [
   'theme.current',
   'settings.close',
+  'settings.openIssues',
   'settings.state',
   'settings.set',
   'settings.setHotkeys',

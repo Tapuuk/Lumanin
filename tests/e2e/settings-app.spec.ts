@@ -137,6 +137,11 @@ test('opens themed, on the Panel screen, with every section listed', async () =>
   for (const title of ['Panel', 'Search', 'Keys', 'Plugins']) {
     await expect(section(title)).toBeVisible()
   }
+  // After the sections, the link out: it opens the issue tracker instead of
+  // a screen, and takes the next number.
+  const issues = page.locator('.settings__section--link', { hasText: 'Report an issue' })
+  await expect(issues).toBeVisible()
+  await expect(issues.locator('.settings__section-key')).toHaveText('Ctrl+5')
 })
 
 test('the visual system holds: one typeface, grid rows, muted help, a focus ring, 24px targets', async () => {

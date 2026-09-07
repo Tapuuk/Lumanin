@@ -21,6 +21,16 @@ export const SECTIONS = [
 
 export type SectionId = (typeof SECTIONS)[number]['id']
 
+/**
+ * What follows the sections in the sidebar: entries that open something
+ * outside the window instead of a screen inside it. They take the next
+ * `Ctrl+N` numbers after the sections (`Ctrl+5` for the first), and each one
+ * is an invoke the main process answers, so the renderer names no URL.
+ */
+export const SIDEBAR_LINKS = [{ id: 'issues', title: 'Report an issue', invoke: 'settings.openIssues' }] as const
+
+export type SidebarLinkId = (typeof SIDEBAR_LINKS)[number]['id']
+
 /** Case-insensitive substring over any of the texts. An empty filter matches everything. */
 export function matchesFilter(filter: string, ...texts: readonly (string | undefined)[]): boolean {
   const needle = filter.trim().toLowerCase()

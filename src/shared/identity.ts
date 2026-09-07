@@ -76,3 +76,6 @@ export const ICON_SCHEME = `${APP_ID}-icon`
  * version number here would answer a question nobody asked.
  */
 export const RAYCAST_API_VERSION = '1.104.24'
+/** Where the code lives, and where a bug goes. Both settings front doors link the second. */
+export const REPOSITORY_URL = 'https://github.com/Tapuuk/Lumanin'
+export const ISSUES_URL = `${REPOSITORY_URL}/issues`

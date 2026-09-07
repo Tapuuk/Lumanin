@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process'
 import { BUILTIN_ENGINES } from '../shared/engines'
 import { panelTopFraction } from '../shared/placement'
 import {
@@ -15,7 +16,7 @@ import {
   FILE_CATEGORY_TITLES,
   type FileCategory
 } from '../shared/files'
-import { APP_DISPLAY_NAME, APP_ID, ENV_PREFIX } from '../shared/identity'
+import { APP_DISPLAY_NAME, APP_ID, ENV_PREFIX, ISSUES_URL } from '../shared/identity'
 import { normalizeSearchTemplate, suggestSearchIdentity } from '../shared/websearch'
 import {
   formatHotkey,
@@ -2484,7 +2485,8 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         },
         { value: '', label: '', separator: true },
         { value: 'review', label: 'Show config.toml' },
-        { value: 'quit', label: 'Quit' }
+        { value: 'quit', label: 'Quit' },
+        { value: 'issues', label: 'Report an issue', detail: ISSUES_URL }
         ]
       }
     })
@@ -2505,7 +2507,21 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     else if (picked === 'aliases') await aliasesScreen()
     else if (picked === 'keys') await keysScreen()
     else if (picked === 'hotkeys') await hotkeysScreen()
-    else if (picked === 'review') {
+    else if (picked === 'issues') {
+      // xdg-open is what every desktop has; the URL is on the row either way,
+      // so a machine without a browser handler still gets somewhere to paste.
+      const opened = await new Promise<boolean>((settle) => {
+        try {
+          const child = spawn('xdg-open', [ISSUES_URL], { detached: true, stdio: 'ignore' })
+          child.on('error', () => settle(false))
+          child.on('exit', (code) => settle(code === 0))
+          child.unref()
+        } catch {
+          settle(false)
+        }
+      })
+      menu.say(opened ? `Opened ${ISSUES_URL}` : `Could not open a browser. The issues are at ${ISSUES_URL}`)
+    } else if (picked === 'review') {
       const text = render(draft)
       await menu.show(
         'config.toml',

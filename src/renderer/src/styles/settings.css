@@ -151,6 +151,11 @@ body:has(.settings) {
   color: var(--lumanin-accent);
 }
 
+/* Sits below the sections with a breath of space: it leaves the window rather than changing it. */
+.settings__section--link {
+  margin-top: 6px;
+}
+
 .settings__section-key {
   font-size: 11px;
   color: var(--lumanin-text-faint);

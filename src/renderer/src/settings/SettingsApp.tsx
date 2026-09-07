@@ -7,7 +7,7 @@ import { Logo } from './Logo'
 import { KeysScreen, PanelScreen } from './screens-basic'
 import { PluginsScreen } from './screens-plugins'
 import { SearchScreen } from './screens-search'
-import { firstSectionMatching, matchesFilter, SECTIONS, sectionIndex, type SectionId } from './sections'
+import { firstSectionMatching, matchesFilter, SECTIONS, SIDEBAR_LINKS, sectionIndex, type SectionId } from './sections'
 import { focusRow, useShellKeyboard } from './shell-keys'
 import { SettingsProvider, useSettingsState } from './useSettings'
 import { Wizard } from './Wizard'
@@ -147,6 +147,17 @@ function Shell(): React.JSX.Element {
             >
               {candidate.title}
               <span className="settings__section-key">Ctrl+{String(index + 1)}</span>
+            </button>
+          ))}
+          {SIDEBAR_LINKS.map((link, index) => (
+            <button
+              key={link.id}
+              type="button"
+              className="settings__section settings__section--link"
+              onClick={() => void window.lumanin.invoke(link.invoke)}
+            >
+              {link.title} ↗
+              <span className="settings__section-key">Ctrl+{String(SECTIONS.length + index + 1)}</span>
             </button>
           ))}
         </nav>
