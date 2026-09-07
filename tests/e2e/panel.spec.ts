@@ -109,7 +109,12 @@ test.beforeAll(async () => {
       // and dies before Playwright can attach. An absolute WAYLAND_DISPLAY is
       // resolved directly, bypassing XDG_RUNTIME_DIR, so both can be true.
       ...absoluteWaylandDisplay(),
-      LUMANIN_HIDE_ON_BLUR: 'false'
+      LUMANIN_HIDE_ON_BLUR: 'false',
+      // The ceiling test measures the panel in CSS pixels against the configured
+      // height, which only agree at text scale 1. A runner's desktop can report
+      // another scale (CI's sway box has answered 1.333), and then the window
+      // is scaled with it - correctly, and not what this suite is about.
+      LUMANIN_TEXT_SCALE: '1'
     }
   })
 
