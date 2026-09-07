@@ -1,0 +1,61 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": [
+      "ES2023"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "types": [
+      "node",
+      "electron-vite/node"
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@shared/*": [
+        "src/shared/*"
+      ],
+      // The compat spec, used as *types only* — `spec/` is dev-only and never
+      // shipped. Mapping it here is what makes
+      // "never implement from memory" structural rather than a habit: the shim's
+      // exports are declared with the spec's own types, so a shape that drifts is
+      // a compile error in `npm run typecheck`, not something an audit has to
+      // notice later.
+      "@raycast/api": [
+        "spec/node_modules/@raycast/api/types/index.d.ts"
+      ],
+      "@raycast/utils": [
+        "spec/node_modules/@raycast/utils/dist/types.d.ts"
+      ],
+      // One `ReactNode`, not two. `spec/` installs `@raycast/api`, which pins
+      // `@types/react@19.0.10`, so the spec's `.d.ts` resolves React's types out
+      // of `spec/node_modules/` while ours come from the root — and 19.2 narrowed
+      // `ReactNode` enough that the two are mutually unassignable. The symptom is
+      // a `ReactElement` that "is not assignable to ReactNode", which is as
+      // baffling as it sounds. Pinning both to the root copy is what makes the
+      // spec's types usable as *our* types rather than as a parallel universe.
+      "react": [
+        "node_modules/@types/react"
+      ],
+      "react/*": [
+        "node_modules/@types/react/*"
+      ]
+    }
+  },
+  "include": [
+    "src/main/**/*",
+    "src/preload/**/*",
+    "src/host/**/*",
+    "src/api-shim/**/*",
+    "src/platform/**/*",
+    "src/store/**/*",
+    "src/cli/**/*",
+    "src/node/**/*",
+    "src/shared/**/*",
+    "themes/**/*.ts",
+    "electron.vite.config.ts",
+    "vitest.config.ts",
+    "tests/*.ts"
+  ]
+}

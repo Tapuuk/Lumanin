@@ -1,0 +1,1273 @@
+/*
+ * Base styles.
+ *
+ * Every colour, radius, font and duration here is a semantic token set by the
+ * theme runtime. There are no hex values in this file and
+ * there must never be one: components may only use tokens, and a raw colour here
+ * is a colour that no theme can change.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: transparent;
+  color: var(--lumanin-text);
+  font-family: var(--lumanin-font, system-ui, sans-serif);
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  /* The panel is not a document: nothing here scrolls the window itself, and
+     text selection on chrome makes drags feel broken. */
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+}
+
+/* The system signal ORs with the theme's `animations = false` flag — a user
+   who asked for less motion is authoritative over a theme. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --lumanin-motion-duration: 0ms;
+  }
+}
+
+/* The window is a fixed box the size of the panel at its fullest, and it never
+   resizes, so the search field never moves as results appear. The panel sits at the
+   top of that box and the rest of it is the backdrop: genuinely transparent, and
+   a click there dismisses.
+
+   Sized against the real surface rather than the CSS viewport: under fractional
+   scaling Chromium rounds the viewport up by a pixel, and a full-bleed panel
+   loses its right border off the edge of the surface. Measured on a 1.2× monitor
+   — see `useSurfaceSize`. The fallbacks apply only before the first sync. */
+.root {
+  display: flex;
+  flex-direction: column;
+  /* The HUD is positioned against the whole surface — `showHUD` closes the panel
+     and draws over the desktop, so it cannot be laid out inside the panel's box. */
+  position: relative;
+  width: var(--lumanin-surface-width, 100%);
+  height: var(--lumanin-surface-height, 100%);
+  overflow: hidden;
+}
+
+/* `flex-grow: 0` keeps the panel at its content height; `flex-shrink: 1` with
+   `min-height: 0` caps it at the window and hands the overflow to `.results`,
+   which scrolls. Between them, `[general].height` is the ceiling and the content
+   is everything below it — with no measurement round-trip to get there.
+
+   The panel hugs its content and grows and shrinks with the results. "Fill the
+   window once there is anything to show" was tried and reverted on
+   the user's call: on a theme with any translucency the filled
+   region reads as a washed-out slab over the desktop, and the resizing panel is
+   the look the launcher is wanted to have. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+  /* The action overlay and the alert are positioned against the panel, so they
+     cover the extension's view and nothing else. */
+  position: relative;
+  /* Translucency belongs to the *surface*, not to the panel. `opacity` here
+     faded the text, the border and every result row along with the background,
+     so a theme with `opacity = 0.7` produced washed-out grey text over the
+     wallpaper instead of solid text on a translucent panel — the theme contract
+     is "bg at theme opacity", which is a background colour, not a layer alpha.
+     Verified in Chromium 150: the calc'd percentage resolves to a real alpha. */
+  background: color-mix(
+    in srgb,
+    var(--lumanin-bg) calc(var(--lumanin-surface-opacity, 1) * 100%),
+    transparent
+  );
+  border: 1px solid var(--lumanin-accent);
+  /* We round the panel; the compositor is asked not to round the window.
+
+     This reverses an earlier "square, deliberately" — that decision assumed the
+     compositor's radius lands on the panel's corners. It does not. The window is
+     a fixed box and the panel is the strip at the top of it, so a compositor
+     radius rounds the *box*: the panel's top corners get the curve and its
+     bottom corners get nothing, 380px lower in empty space. Reported from a real
+     session on Hyprland at `decoration:rounding = 16` — a bar rounded along the
+     top, square along the bottom, with this border sliced off at both clipped
+     corners.
+
+     One element carries both the background and the border, so a single radius
+     rounds them together and there is no seam between two curves. The matching
+     `windowrule = rounding 0` is in `platform/fix/actions.ts`. */
+  border-radius: var(--lumanin-radius-outer, 6px);
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------- search bar */
+
+/* Monospace throughout. A launcher is a command surface, not a document: fixed
+   advance widths make a list of names scan as a column rather than as prose. */
+.search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  flex: 0 0 auto;
+}
+
+.search__icon {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  color: var(--lumanin-text-faint);
+}
+
+.search__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--lumanin-text);
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 17px;
+  letter-spacing: 0.01em;
+  user-select: text;
+  cursor: text;
+}
+
+.search__input::placeholder {
+  color: var(--lumanin-text-faint);
+}
+
+/* ------------------------------------------------------------------- results */
+
+/* `flex-grow: 0` keeps the list at its content height so the panel is only ever
+   as tall as what is in it; `min-height: 0` lets it shrink below that content
+   once the panel has hit the window, so it scrolls instead of overflowing. */
+.results {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 8px 8px;
+}
+
+/* --------------------------------------------------------------- scrollbars */
+
+/* Every pane that can scroll wears the same thin bar.
+ *
+ * Chromium's default is a light slab with stepper arrows at both ends — on a
+ * flat dark panel it reads as a piece of some other application, and it was
+ * showing up on the action panel, the detail view and the split list, because
+ * only `.results` had ever been styled. Written once, as a list, so the next
+ * scrollable pane is one selector away from being right rather than one
+ * forgotten copy away from being wrong.
+ *
+ * A scrollbar only appears once a pane has stopped growing, so it doubles as
+ * the affordance that says "there is more below".
+ */
+/* Deliberately *not* `scrollbar-width`/`scrollbar-color`: since Chrome 121,
+   setting either standard property makes Chromium ignore every
+   `::-webkit-scrollbar` rule on that element, and its own "thin" bar is a
+   12px gutter we cannot theme past a thumb colour. The renderer is Chromium
+   and only Chromium, so the pseudo-elements are the better deal — 8px, no
+   steppers, thumb inset from the panel edge. */
+.results::-webkit-scrollbar,
+.overlay__panel::-webkit-scrollbar,
+.ext-detail::-webkit-scrollbar,
+.ext-split__list::-webkit-scrollbar,
+.ext-split__detail::-webkit-scrollbar,
+.md__code::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.results::-webkit-scrollbar-track,
+.overlay__panel::-webkit-scrollbar-track,
+.ext-detail::-webkit-scrollbar-track,
+.ext-split__list::-webkit-scrollbar-track,
+.ext-split__detail::-webkit-scrollbar-track,
+.md__code::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.results::-webkit-scrollbar-thumb,
+.overlay__panel::-webkit-scrollbar-thumb,
+.ext-detail::-webkit-scrollbar-thumb,
+.ext-split__list::-webkit-scrollbar-thumb,
+.ext-split__detail::-webkit-scrollbar-thumb,
+.md__code::-webkit-scrollbar-thumb {
+  background: var(--lumanin-border);
+  border-radius: 4px;
+  /* Inset the thumb from the panel edge without a wrapper element. */
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.results::-webkit-scrollbar-thumb:hover,
+.overlay__panel::-webkit-scrollbar-thumb:hover,
+.ext-detail::-webkit-scrollbar-thumb:hover,
+.ext-split__list::-webkit-scrollbar-thumb:hover,
+.ext-split__detail::-webkit-scrollbar-thumb:hover,
+.md__code::-webkit-scrollbar-thumb:hover {
+  background: var(--lumanin-text-muted);
+}
+
+/* The stepper arrows. `display: none` is the only thing that removes them;
+   sizing them to zero leaves two clickable dead squares behind. */
+.results::-webkit-scrollbar-button,
+.overlay__panel::-webkit-scrollbar-button,
+.ext-detail::-webkit-scrollbar-button,
+.ext-split__list::-webkit-scrollbar-button,
+.ext-split__detail::-webkit-scrollbar-button,
+.md__code::-webkit-scrollbar-button {
+  display: none;
+}
+
+/* Where the two bars meet in a pane that scrolls both ways. */
+.results::-webkit-scrollbar-corner,
+.overlay__panel::-webkit-scrollbar-corner,
+.ext-detail::-webkit-scrollbar-corner,
+.ext-split__list::-webkit-scrollbar-corner,
+.ext-split__detail::-webkit-scrollbar-corner,
+.md__code::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* One line per result: icon, name. Nothing else — a second column of grey text
+   competes with the thing being looked for. */
+.result {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 12px;
+  border-radius: var(--lumanin-radius-inner);
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 15px;
+  color: var(--lumanin-text);
+}
+
+/* Each kind gets its own tint, mixed from semantic tokens rather than named as a
+   colour — so it follows whatever the desktop or theme decided, exactly like
+   everything else here. The four are already distinct in every built-in pack and
+   in every palette derived from a desktop, because a theme that made its accent
+   and its error colour the same colour would be unreadable long before it got
+   here.
+
+   Deliberately a *tint*, not a colour-coding scheme to memorise: at 7% the row
+   backgrounds differ just enough that the eye groups them into runs, which is
+   what makes a mixed list of apps, commands and searches scannable. The action
+   label on the right carries the same hue at full strength, so there is one
+   saturated cue per row and it is the one that says what Enter does. */
+.result {
+  --result-tint: var(--lumanin-accent);
+}
+
+.result[data-kind='command'] {
+  --result-tint: var(--lumanin-info);
+}
+
+.result[data-kind='calculator'] {
+  --result-tint: var(--lumanin-ok);
+}
+
+.result[data-kind='web'] {
+  --result-tint: var(--lumanin-text-muted);
+}
+
+.result {
+  background: color-mix(in srgb, var(--result-tint) 7%, transparent);
+}
+
+.result:hover {
+  background: color-mix(in srgb, var(--result-tint) 14%, var(--lumanin-bg-hover));
+}
+
+/* Selection is carried by colour as much as by fill: the tinted text is legible
+   at a glance even where a subtle background is not, which matters on the light
+   themes and for anyone with a dim panel. */
+.result[aria-selected='true'] {
+  background: color-mix(in srgb, var(--result-tint) 22%, var(--lumanin-bg-selected));
+  color: var(--result-tint);
+}
+
+/* Fixed box whether or not an icon resolved, so names stay in one column. A
+   ragged left edge is the thing that makes a list feel unfinished. */
+.result__icon {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Anchors the search mark, which sits over the icon rather than beside it. */
+  position: relative;
+}
+
+/* The three-dot search mark over an app-connected plugin's icon. Text-coloured
+   with a panel-background outline: legible on any logo, recolours with the
+   theme, and identical on every row because it is one SVG, not per-plugin art. */
+.result__badge {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.result__badge rect {
+  fill: var(--lumanin-text);
+  stroke: var(--lumanin-bg);
+  stroke-width: 1.5;
+  paint-order: stroke;
+}
+
+.result__icon img {
+  max-width: 100%;
+  max-height: 100%;
+  /* Icons are square by convention and lie about it often enough to matter. */
+  object-fit: contain;
+}
+
+/* Takes the remaining width so the action label can sit hard against the right
+   edge, and so a long title truncates instead of pushing it off. */
+.result__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.result__title,
+.result__subtitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Present only on rows that would be meaningless without it — a calculation's
+   expression, what a search will search. Deliberately not inherited from the
+   row's selected colour: on a selected row the answer is the accent and the
+   expression under it should stay recessive. */
+.result__subtitle {
+  font-size: 12px;
+  color: var(--lumanin-text-faint);
+}
+
+/* Only ever on the selected row. Says what Enter is about to do, which stopped
+   being obvious once a row could copy or open a URL instead of launching — and
+   carries the kind's tint at full strength, so the one saturated thing on the
+   row is the one that names the action. */
+.result__action {
+  flex: 0 0 auto;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--result-tint, var(--lumanin-text-faint));
+}
+
+/* Stands in for an application icon on the kinds that have none. Recessive: it
+   is a placeholder holding the column open, not a thing to look at. */
+.result__glyph {
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 14px;
+  line-height: 1;
+  color: var(--result-tint, var(--lumanin-text-faint));
+  opacity: 0.65;
+}
+
+.result__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------------------- notice */
+
+/* A launch that failed. It replaces nothing — the results stay — because the
+   user's next action is usually to pick something else. */
+.notice {
+  padding: 10px 18px;
+  color: var(--lumanin-err);
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  flex: 0 0 auto;
+}
+
+/* Focus is never removed, only restyled — a keyboard-first app that hides focus
+   is unusable by exactly the people it is built for.
+   The search field is the exception: it holds focus for the entire lifetime of
+   the panel, so a ring around it marks nothing and reads as a rendering bug. */
+:focus-visible {
+  outline: 2px solid var(--lumanin-border-focus);
+  outline-offset: 1px;
+}
+
+.search__input:focus,
+.search__input:focus-visible {
+  outline: none;
+}
+
+/* ---------------------------------------------------------------- extensions */
+
+/* Everything below is the panel while an extension is showing. It reuses the
+   root list's classes wherever the thing being drawn *is* the same thing — a row
+   is a row — so an extension's list and the launcher's own list line up to the
+   pixel and share every theme token. What is new here is only what has no
+   equivalent at the root: sections, accessories, the action bar, the overlay,
+   markdown, and the two failure states. */
+
+/* Section headers inside an extension's list. Recessive by a wide margin: they
+   are structure, and a heading that competes with the rows makes a list of
+   fifteen items read as three lists of five. */
+.results__section {
+  padding: 10px 12px 4px;
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lumanin-text-faint);
+}
+
+/* An extension's rows carry the accent tint — they are the launcher's own accent
+   colour rather than a per-extension one, because a list whose hue depends on
+   which extension you opened would make the panel feel like a different app. */
+.result[data-kind='extension'] {
+  --result-tint: var(--lumanin-accent);
+}
+
+/* Right-aligned metadata: a count, a date, a tag. Several may sit on one row, so
+   they never grow and never wrap — a long accessory truncates rather than
+   pushing the title out of its column. */
+.result__accessory {
+  flex: 0 0 auto;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
+}
+
+/* -------------------------------------------------------------- split detail */
+
+/* `isShowingDetail`: the list narrows and the selected item's detail fills the
+   rest. Both sides scroll on their own, which is what makes a long document
+   usable beside a long list. */
+.ext-split {
+  display: flex;
+  flex: 0 1 auto;
+  min-height: 0;
+  gap: 0;
+}
+
+.ext-split__list {
+  flex: 0 0 40%;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ext-split__detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-left: 1px solid var(--lumanin-border);
+}
+
+/* ------------------------------------------------------------------- detail */
+
+.ext-detail {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 18px 16px;
+  user-select: text;
+  cursor: auto;
+}
+
+.ext-metadata {
+  margin-top: 14px;
+  border-top: 1px solid var(--lumanin-border);
+  padding-top: 10px;
+}
+
+.ext-metadata__row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.ext-metadata__label {
+  flex: 0 0 34%;
+  color: var(--lumanin-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ext-metadata__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ext-metadata__separator {
+  border: none;
+  border-top: 1px solid var(--lumanin-border);
+  margin: 8px 0;
+}
+
+.ext-metadata__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ext-metadata__tag {
+  padding: 1px 7px;
+  border-radius: var(--lumanin-radius-inner);
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  font-size: 12px;
+}
+
+/* ----------------------------------------------------------------- markdown */
+
+/* Rendered to React elements, never to HTML — see `ext/markdown.tsx`. The
+   styling stays close to the panel's own type so a `Detail` reads as part of the
+   launcher rather than as an embedded web page. */
+.md {
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.md__heading {
+  margin: 14px 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.md__paragraph {
+  margin: 0 0 10px;
+}
+
+.md__list {
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+
+.md__quote {
+  margin: 0 0 10px;
+  padding-left: 12px;
+  border-left: 2px solid var(--lumanin-border);
+  color: var(--lumanin-text-muted);
+}
+
+.md__rule {
+  border: none;
+  border-top: 1px solid var(--lumanin-border);
+  margin: 12px 0;
+}
+
+.md__code {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: var(--lumanin-radius-inner);
+  background: var(--lumanin-bg-hover);
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 12.5px;
+  overflow-x: auto;
+}
+
+.md__inline-code {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--lumanin-bg-hover);
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 0.92em;
+}
+
+.md__image {
+  max-width: 100%;
+  border-radius: var(--lumanin-radius-inner);
+}
+
+/* A button, not an anchor: in-page navigation is blocked in the renderer, so a
+   real link would either do nothing or need an exception carved for it. */
+.md__link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--lumanin-accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------- action bar */
+
+/* Always the last row of the panel, and the only place that says what Enter
+   does. It is drawn from the same action set the overlay lists, so the two
+   cannot disagree about which action is primary. */
+.actionbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 12px;
+  border-top: 1px solid var(--lumanin-border);
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.actionbar__spacer {
+  flex: 1 1 auto;
+}
+
+/* The hint list is one line, always. `display: block` rather than flex on
+   purpose: text-overflow ellipsis only applies to inline content, so the
+   hints are inline-flex children of a block — a long action set fades out with
+   an ellipsis instead of wrapping and pushing the list up. */
+.actionbar__hints {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.actionbar__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  vertical-align: middle;
+  color: var(--lumanin-text-muted);
+}
+
+.actionbar__item-title {
+  color: var(--lumanin-text-muted);
+}
+
+.actionbar__dot {
+  margin-right: 3px;
+  color: var(--lumanin-text-faint);
+}
+
+.actionbar__primary,
+.actionbar__more {
+  display: inline-flex;
+  vertical-align: middle;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  border-radius: var(--lumanin-radius-inner);
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.actionbar__primary {
+  color: var(--lumanin-text);
+}
+
+.actionbar__primary:hover,
+.actionbar__more:hover {
+  background: var(--lumanin-bg-hover);
+}
+
+.actionbar__hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.actionbar__key {
+  padding: 1px 5px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: 3px;
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--lumanin-text-faint);
+}
+
+/* ------------------------------------------------------------------ overlay */
+
+/* Ctrl+K. Anchored to the bottom right, over the panel, because that is where
+   the bar that opened it is — a menu that appears somewhere else costs a glance
+   every time. */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 44px 12px;
+  background: color-mix(in srgb, var(--lumanin-bg) 45%, transparent);
+  z-index: 20;
+}
+
+.overlay__panel {
+  width: min(340px, 80%);
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--lumanin-radius-outer, 6px);
+  background: var(--lumanin-bg);
+  outline: none;
+}
+
+.overlay__title,
+.overlay__section {
+  padding: 6px 10px 4px;
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lumanin-text-faint);
+}
+
+.overlay__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--lumanin-radius-inner);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.overlay__row[aria-selected='true'] {
+  background: var(--lumanin-bg-selected);
+}
+
+.overlay__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A destructive action is coloured in the list as well as in the confirmation
+   that follows it — by the time the alert appears the choice has been made. */
+.overlay__label--destructive {
+  color: var(--lumanin-err);
+}
+
+.overlay__key,
+.overlay__chevron {
+  flex: 0 0 auto;
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--lumanin-text-faint);
+}
+
+/* -------------------------------------------------------------------- toast */
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  border-top: 1px solid var(--lumanin-border);
+  font-size: 13px;
+}
+
+.toast__title {
+  color: var(--lumanin-text);
+}
+
+.toast__message {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--lumanin-text-muted);
+}
+
+/* The style is the whole of a toast's meaning — an animated one is work in
+   progress, a failure is a stop. Carried by a border rather than a fill so it
+   does not compete with the selected row above it. */
+.toast--success {
+  border-top-color: var(--lumanin-ok);
+}
+
+.toast--failure {
+  border-top-color: var(--lumanin-err);
+}
+
+.toast--animated {
+  border-top-color: var(--lumanin-info);
+}
+
+.toast__action {
+  flex: 0 0 auto;
+  background: none;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--lumanin-radius-inner);
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--lumanin-text);
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------------- HUD */
+
+/* `showHUD` closes the panel, so this is drawn on the backdrop — outside the
+   panel's box, which is why it is positioned rather than laid out. */
+.hud {
+  position: absolute;
+  left: 50%;
+  bottom: 12%;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  border: 1px solid var(--lumanin-accent);
+  border-radius: var(--lumanin-radius-outer, 6px);
+  background: var(--lumanin-bg);
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 14px;
+  color: var(--lumanin-text);
+  z-index: 30;
+}
+
+/* -------------------------------------------------------------------- alert */
+
+.alert {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--lumanin-bg) 55%, transparent);
+  z-index: 40;
+}
+
+.alert__box {
+  width: min(360px, 84%);
+  padding: 16px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--lumanin-radius-outer, 6px);
+  background: var(--lumanin-bg);
+}
+
+.alert__title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.alert__message {
+  font-size: 13px;
+  color: var(--lumanin-text-muted);
+  margin-bottom: 14px;
+}
+
+.alert__buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.alert__buttons button {
+  padding: 5px 14px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--lumanin-radius-inner);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text);
+  cursor: pointer;
+}
+
+.alert__primary {
+  border-color: var(--lumanin-accent);
+  color: var(--lumanin-accent);
+}
+
+/* A destructive confirmation is coloured as the danger it is. This is the last
+   point at which the user can decline, so it is the one place where being
+   emphatic is correct. */
+.alert__primary--destructive {
+  border-color: var(--lumanin-err);
+  color: var(--lumanin-err);
+}
+
+/* -------------------------------------------------------- states and errors */
+
+.ext-loading,
+.ext-empty,
+.ext-unsupported,
+.ext-error {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 18px 18px;
+  font-size: 13px;
+}
+
+.ext-loading {
+  color: var(--lumanin-text-faint);
+}
+
+.ext-empty__title,
+.ext-unsupported__title,
+.ext-error__title {
+  font-size: 14px;
+  color: var(--lumanin-text);
+  margin-bottom: 4px;
+}
+
+.ext-empty__description,
+.ext-unsupported__detail {
+  color: var(--lumanin-text-muted);
+}
+
+.ext-error__title {
+  color: var(--lumanin-err);
+}
+
+.ext-error__message {
+  color: var(--lumanin-text);
+  margin-bottom: 10px;
+  overflow-wrap: anywhere;
+}
+
+/* The stack is the whole point of an error card — it is what a bug report needs
+   — so it is shown rather than hidden behind a disclosure nobody opens. */
+.ext-error__stack {
+  max-height: 160px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: var(--lumanin-radius-inner);
+  background: var(--lumanin-bg-hover);
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  color: var(--lumanin-text-muted);
+  user-select: text;
+  cursor: auto;
+}
+
+.ext-error__reload {
+  margin-top: 10px;
+  padding: 5px 14px;
+  border: 1px solid var(--lumanin-accent);
+  border-radius: var(--lumanin-radius-inner);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-accent);
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------ search accessory */
+
+/* The search field and its dropdown share a row. The field keeps its own padding
+   so an extension with no accessory looks identical to the root. */
+.searchrow {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.searchrow .search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dropdown {
+  flex: 0 0 auto;
+  padding-right: 14px;
+}
+
+.dropdown__button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 180px;
+  padding: 4px 8px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--lumanin-radius-inner);
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
+  cursor: pointer;
+}
+
+.dropdown__button:hover {
+  background: var(--lumanin-bg-hover);
+}
+
+.dropdown__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdown__chevron {
+  flex: 0 0 auto;
+  font-size: 10px;
+}
+
+/* Anchored top-right rather than bottom-right: this menu belongs to the control
+   that opened it, and the control is beside the search field.
+
+   `position: fixed`, not the .overlay default of absolute-in-panel: the panel
+   hugs its content, so over a short list an in-panel overlay left the menu a
+   few rows of space. The window box is fixed-height, so the menu escapes to it
+   and uses the room below the panel. The backdrop goes transparent for the
+   same reason - the region below the panel is desktop showing through, and a
+   45% tint there reads as a slab that is not the panel. */
+.overlay:has(> .dropdown__menu) {
+  position: fixed;
+  background: transparent;
+  align-items: flex-start;
+  padding-top: 52px;
+}
+
+.dropdown__menu {
+  max-height: min(340px, calc(var(--lumanin-surface-height, 100vh) - 64px));
+}
+
+/* An accessory may carry an icon, a text, or both. The icon is small and sits
+   tight against its text — they are one accessory, not two columns. */
+.result__accessory {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.result__accessory-icon {
+  display: inline-flex;
+  width: 13px;
+  height: 13px;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.8;
+}
+
+.result__accessory-icon img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* ------------------------------------------------------------------- Form */
+
+/* A form replaces the search field with its navigation title: there is no query
+   to type, and a text box that does nothing would still hold the focus every
+   control below it needs. The row keeps the search field's metrics so the panel
+   does not change height when a command pushes a form. */
+.searchrow--title {
+  padding: 16px 18px;
+}
+
+.ext-title {
+  font-size: 15px;
+  color: var(--lumanin-text);
+}
+
+.form {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 18px 14px;
+}
+
+.form__empty {
+  padding: 8px 0;
+  font-size: 13px;
+  color: var(--lumanin-text-faint);
+}
+
+.form__loading {
+  height: 2px;
+  margin-bottom: 8px;
+  border-radius: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--lumanin-accent),
+    transparent
+  );
+}
+
+/* Label beside control, the way Raycast's form reads. The label column is fixed
+   so every control starts at the same x — a form whose fields each began
+   somewhere different would be much harder to scan than it is to build. */
+.form__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 7px 0;
+}
+
+.form__label {
+  flex: 0 0 132px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-top: 5px;
+  font-size: 13px;
+  color: var(--lumanin-text-muted);
+  text-align: right;
+  justify-content: flex-end;
+}
+
+.form__info {
+  color: var(--lumanin-text-faint);
+  cursor: help;
+}
+
+.form__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.form__control {
+  width: 100%;
+  padding: 6px 9px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--lumanin-radius-inner);
+  background: var(--lumanin-bg-hover);
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text);
+  outline: none;
+}
+
+.form__control:focus-visible,
+.form__control:focus {
+  border-color: var(--lumanin-accent);
+}
+
+textarea.form__control {
+  resize: vertical;
+  min-height: 62px;
+  font-family: inherit;
+}
+
+/* An error is drawn on the field, not only under it: the message says what is
+   wrong and the border says where. */
+.form__row--error .form__control {
+  border-color: var(--lumanin-err);
+}
+
+.form__error {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--lumanin-err);
+}
+
+.form__description {
+  padding: 5px 0;
+  font-size: 13px;
+  color: var(--lumanin-text-muted);
+  white-space: pre-wrap;
+}
+
+.form__separator {
+  height: 1px;
+  margin: 9px 0;
+  background: var(--lumanin-border);
+}
+
+.form__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--lumanin-text);
+}
+
+.form__checkbox .form__control {
+  width: auto;
+  flex: 0 0 auto;
+  accent-color: var(--lumanin-accent);
+}
+
+.form__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.form__tag {
+  padding: 4px 10px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
+  cursor: pointer;
+}
+
+.form__tag--on {
+  border-color: var(--lumanin-accent);
+  color: var(--lumanin-accent);
+}
+
+.form__tags .form__control {
+  width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+.form__files {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.form__file-button {
+  width: auto;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.form__file {
+  max-width: 220px;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.form__file-clear {
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--lumanin-text-faint);
+  cursor: pointer;
+}

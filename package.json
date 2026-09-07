@@ -1,0 +1,55 @@
+{
+  "name": "lumanin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A keyboard-first command palette and launcher for Linux, with a plugin API and a generator skill for Claude Code.",
+  "license": "MIT",
+  "comment:type": "CommonJS deliberately: the renderer runs with sandbox:true, and a sandboxed Electron preload cannot be an ES module. Renderer code is bundled by Vite and unaffected.",
+  "comment:react": "react and react-dom are RUNTIME dependencies, not dev ones, and that is load-bearing rather than tidiness. electron-vite externalizes `dependencies` only, so a devDependency gets inlined into the main build's chunks — while react-reconciler, being a real dependency, stays external and requires the copy in node_modules. That is two Reacts in one worker, which fails as 'Invalid hook call' from inside the extension's own component and sends its author looking at their hooks. That is the single-React-copy rule.",
+  "main": "./out/main/index.js",
+  "bin": {
+    "lumanin": "./bin/lumanin.js"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "npm run typecheck && electron-vite build && npm run build:plugins",
+    "start": "electron-vite preview",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web && npm run typecheck:e2e",
+    "typecheck:node": "tsc -p tsconfig.node.json --noEmit",
+    "typecheck:web": "tsc -p tsconfig.web.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lumanin": "node ./bin/lumanin.js",
+    "test:e2e": "playwright test",
+    "typecheck:e2e": "tsc -p tsconfig.e2e.json --noEmit",
+    "build:plugins": "node scripts/build-plugins.mjs",
+    "check:refs": "node scripts/check-private-refs.mjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "esbuild": "^0.28.2",
+    "fast-json-patch": "^3.1.1",
+    "mathjs": "^15.2.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-reconciler": "^0.33.0",
+    "smol-toml": "1.7.1"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.0",
+    "@playwright/test": "^1.62.1",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "24.13.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitejs/plugin-react": "5.2.0",
+    "electron": "43.3.0",
+    "electron-vite": "5.0.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.6",
+    "vitest": "4.1.10"
+  }
+}

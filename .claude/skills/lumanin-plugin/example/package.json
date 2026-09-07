@@ -1,0 +1,22 @@
+{
+  "name": "systemd-units",
+  "title": "Systemd Units",
+  "description": "Browse your user services and timers, read their recent logs, restart or stop them.",
+  "author": "lumanin",
+  "license": "MIT",
+  "categories": ["System"],
+  "commands": [
+    {
+      "name": "units",
+      "title": "Search Systemd",
+      "description": "List user services and timers with their state; Enter shows recent logs.",
+      "mode": "view",
+      "lumanin": {
+        "categories": [
+          { "id": "services", "title": "Services" },
+          { "id": "timers", "title": "Timers" }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    // Playwright specs run in Node, but `page.evaluate` bodies are serialised
+    // and executed in the *browser*, so they need DOM types. Keeping them in the
+    // node config instead would mean either type errors on every `window.` or
+    // handing DOM globals to main-process code that must never have them.
+    "lib": ["ES2023", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": { "@shared/*": ["src/shared/*"] }
+  },
+  "include": ["tests/e2e/**/*", "playwright.config.ts"]
+}

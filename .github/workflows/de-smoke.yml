@@ -1,0 +1,93 @@
+# The desktop-environment smoke test: the same Playwright real-window flows CI
+# runs under Xvfb, but on a real Wayland compositor (sway, headless backend), so
+# the daemon's Wayland path — ozone auto-selection, the app_id, hide-on-blur —
+# is exercised by a machine and not only by the dev desktop. sway is the one
+# compositor that runs headless on a stock runner with no session, no GPU and no
+# seat; KDE (kwin_wayland --virtual) is a possible later addition, GNOME does
+# not fit a runner. This does not replace the human VM round —
+# a headless compositor proves the code path, not the desktop.
+name: DE smoke
+
+# Manual by choice, same as ci.yml: `gh workflow run "DE smoke"`.
+on:
+  workflow_dispatch:
+
+jobs:
+  sway:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+
+      - run: npm ci
+
+      # The pinned compat spec is its own npm tree — tsconfig paths point into
+      # spec/node_modules, so nothing typechecks without it.
+      - run: npm ci --prefix spec
+
+      - run: npm run build
+
+      - name: Install sway
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sway xwayland
+
+      - name: Start headless sway
+        run: |
+          export XDG_RUNTIME_DIR=/tmp/xdg-runtime
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+
+          # A minimal config; what must NOT happen is sway picking up
+          # /etc/sway/config and spawning a bar and a terminal. The headless
+          # output defaults to 1280x720, smaller than the settings window, and
+          # tiling a window whose size Electron treats as fixed leaves its
+          # elements permanently "unstable" to Playwright — so the output gets
+          # room and the settings window floats, which is also what sway does
+          # for fixed-size windows on a real desktop.
+          {
+            echo 'output * resolution 1920x1080'
+            echo 'for_window [app_id="lumanin-settings"] floating enable'
+          } > /tmp/sway-ci.conf
+
+          # Headless backend, software renderer: no GPU, no seat, no inputs on
+          # a runner. sway prints nothing useful on success, so the socket in
+          # the runtime dir is the readiness signal.
+          WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman \
+            sway -c /tmp/sway-ci.conf >/tmp/sway.log 2>&1 &
+
+          for i in $(seq 1 50); do
+            socket=$(ls "$XDG_RUNTIME_DIR"/wayland-* 2>/dev/null | grep -v '\.lock$' | head -1 || true)
+            [ -n "$socket" ] && break
+            sleep 0.2
+          done
+          if [ -z "$socket" ]; then
+            echo 'sway never created a Wayland socket:'
+            cat /tmp/sway.log
+            exit 1
+          fi
+          echo "WAYLAND_DISPLAY=$(basename "$socket")" >> "$GITHUB_ENV"
+          echo "XDG_SESSION_TYPE=wayland" >> "$GITHUB_ENV"
+          echo "XDG_CURRENT_DESKTOP=sway" >> "$GITHUB_ENV"
+
+      - name: Real-window flows on sway (Playwright + Electron, native Wayland)
+        env:
+          ELECTRON_DISABLE_SANDBOX: '1'
+        run: npx playwright test --trace retain-on-failure
+
+      - name: sway log on failure
+        if: failure()
+        run: cat /tmp/sway.log || true
+
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sway-traces
+          path: test-results/
+          retention-days: 3

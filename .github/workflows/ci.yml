@@ -1,0 +1,106 @@
+# The gate every push runs: types, the unit suite, a full build, and the
+# Playwright real-window flows under Xvfb (the X11 path — the Wayland path is
+# de-smoke.yml). A repository with no green check reads as abandoned.
+name: CI
+
+# Manual by choice: a run always tests the newest commit, so one run covers
+# every commit since the last — trigger with `gh workflow run CI` (or the
+# Actions tab) when a batch is worth checking.
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+
+      - run: npm ci
+
+      # The pinned compat spec is its own npm tree — tsconfig paths point into
+      # spec/node_modules, so nothing typechecks without it.
+      - run: npm ci --prefix spec
+
+      - run: npm run typecheck
+
+      - run: npm run check:refs
+
+      - name: Unit suite (Vitest)
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Electron needs a display and a handful of shared libraries the runner
+      # image mostly ships already; xvfb-run provides the display. The SUID
+      # sandbox helper cannot get its bit set inside npm's node_modules on the
+      # runner, so the sandbox is disabled — CI runs our own code, not web
+      # content.
+      - name: Real-window flows (Playwright + Electron under Xvfb)
+        env:
+          ELECTRON_DISABLE_SANDBOX: '1'
+        # xvfb-run's default screen is 640x480 at 8-bit depth, which Chromium
+        # cannot paint on; ask for a real one.
+        run: xvfb-run -a -s '-screen 0 1280x800x24' npm run test:e2e
+
+  # What a stranger's first ten minutes look like: a fresh clone, the install
+  # script, then the daemon actually starting. Nothing else in this file runs
+  # install.sh, which is how a launcher that built fine and started nothing
+  # (Electron 43 stopped fetching its binary in `npm ci`) shipped for a day.
+  #
+  # Also the one arm64 run: nothing in the tree keys on the architecture, and
+  # the two native pieces (the Electron binary, better-sqlite3's Node-API
+  # prebuild) are fetched per arch by the same script - so the install path on
+  # an arm64 runner is the whole proof that ARM works, unit suite included.
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: clone
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+
+      - name: Run the installer from the clone
+        run: ./clone/scripts/install.sh </dev/null
+
+      - name: What it left behind
+        run: |
+          set -x
+          readlink -f ~/.local/bin/lumanin
+          test -x clone/node_modules/electron/dist/electron
+          test -f ~/.local/share/applications/lumanin-settings.desktop
+          test -f ~/.local/share/icons/hicolor/scalable/apps/lumanin.svg
+          test -f "clone/node_modules/better-sqlite3/prebuilds/linux-$(node -p process.arch).node"
+          ~/.local/bin/lumanin --version
+
+      - name: Unit suite on this architecture (Vitest)
+        run: npm test --prefix clone
+
+      # The daemon has to come up from the CLI, the way a hotkey or the settings
+      # entry starts it - not just build. Then a plugin's own path: what the
+      # `lumanin-settings.desktop` Exec runs.
+      - name: The daemon starts and answers
+        env:
+          ELECTRON_DISABLE_SANDBOX: '1'
+        run: |
+          set -x
+          xvfb-run -a -s '-screen 0 1280x800x24' bash -c '
+            ~/.local/bin/lumanin show
+            sleep 3
+            ~/.local/bin/lumanin ping
+            ~/.local/bin/lumanin doctor || true
+            ~/.local/bin/lumanin quit
+          '

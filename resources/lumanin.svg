@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="100 100 312 312" width="512" height="512" style="color:#4a9eda">
+  <!-- Recolor entire logo: change the `color` value above (or set via CSS). Everything inherits currentColor. -->
+  <!-- The viewBox crops to the artwork (drawn on a 512 grid, rays span 113..399) so the mark fills the canvas edge to edge like any app icon. -->
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="currentColor" stop-opacity="0.55"/>
+      <stop offset="55%" stop-color="currentColor" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="currentColor" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- soft halo -->
+  <circle cx="256" cy="256" r="170" fill="url(#glow)"/>
+
+  <!-- rays (bottom-left one removed — handle lives there) -->
+  <g stroke="currentColor" stroke-width="10" stroke-linecap="round">
+    <line x1="256" y1="113" x2="256" y2="153"/>
+    <line x1="256" y1="359" x2="256" y2="399"/>
+    <line x1="113" y1="256" x2="153" y2="256"/>
+    <line x1="359" y1="256" x2="399" y2="256"/>
+    <line x1="155" y1="155" x2="183" y2="183"/>
+    <line x1="329" y1="329" x2="357" y2="357"/>
+    <line x1="329" y1="183" x2="357" y2="155"/>
+  </g>
+
+  <!-- search glass: ring + handle to bottom-left -->
+  <circle cx="256" cy="256" r="72" fill="none" stroke="currentColor" stroke-width="12"/>
+  <line x1="203" y1="309" x2="142" y2="370" stroke="currentColor" stroke-width="16" stroke-linecap="round"/>
+
+  <!-- bright core -->
+  <circle cx="256" cy="256" r="24" fill="currentColor"/>
+</svg>
