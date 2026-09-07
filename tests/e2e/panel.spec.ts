@@ -279,7 +279,10 @@ test('the panel stops growing at the configured ceiling and scrolls', async () =
   await page.locator('.search__input').fill('e')
   await expect(page.locator('.result').first()).toBeVisible()
 
-  expect((await panelBox(page)).height).toBeLessThanOrEqual(480)
+  // Polled: the ceiling is applied by a window resize, and on a compositor
+  // that has its own say in window sizes (sway in CI tiles the panel first)
+  // the settled size lands a few frames after the results do.
+  await expect.poll(async () => (await panelBox(page)).height).toBeLessThanOrEqual(480)
 
   const scrolls = await page.locator('.results').evaluate((el) => el.scrollHeight > el.clientHeight)
   expect(scrolls).toBe(true)
