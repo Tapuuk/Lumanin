@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { accessSync, constants, existsSync } from 'node:fs'
 import { connect } from 'node:net'
 import { dirname, join, resolve as resolvePath } from 'node:path'
@@ -70,10 +70,14 @@ export function request(
 }
 
 /**
- * Find the daemon executable. Three layers, most specific first:
+ * Find the daemon executable. Four layers, most specific first:
  *   1. `$LUMANIN_ELECTRON` — an explicit override, used by tests and packagers.
  *   2. A packaged `lumanin` binary sitting beside this script.
- *   3. The dev-tree Electron in `node_modules`, launched against the repo root.
+ *   3. The Electron a distro package ships at `<root>/electron/` — the AUR,
+ *      `.deb` and `.rpm` layout (`scripts/package.sh`): the same unmodified
+ *      Electron the dev tree uses, launched against the app directory, so the
+ *      dev shape and the packaged shape are one shape.
+ *   4. The dev-tree Electron in `node_modules`, launched against the repo root.
  */
 export function resolveDaemonCommand(): { command: string; args: string[] } | null {
   const override = process.env['LUMANIN_ELECTRON']
@@ -85,12 +89,77 @@ export function resolveDaemonCommand(): { command: string; args: string[] } | nu
   if (isExecutable(packaged)) return { command: packaged, args: [] }
 
   const root = repoRoot()
-  const electronBinary = join(root, 'node_modules', 'electron', 'dist', 'electron')
-  if (isExecutable(electronBinary)) {
-    return { command: electronBinary, args: [root] }
+  for (const electronBinary of [
+    join(root, 'electron', 'electron'),
+    join(root, 'node_modules', 'electron', 'dist', 'electron')
+  ]) {
+    if (isExecutable(electronBinary)) {
+      return { command: electronBinary, args: [root] }
+    }
   }
 
   return null
+}
+
+/**
+ * After an upgrade the daemon that answered is still the old code: a package
+ * manager replaced the files under it, and a long-lived process notices
+ * nothing. Left alone, the user reports bugs that were fixed an hour ago. So
+ * when a reply carries a version other than this CLI's, the daemon is asked to
+ * quit and started again — through its systemd unit where one is active, so
+ * the unit keeps owning it, otherwise the way a first press starts it.
+ *
+ * Returns whether the daemon came back. A daemon with no version (older than
+ * this check) is left alone; it will be restarted by the next login.
+ *
+ * The moving parts are injectable so the decision can be tested without a
+ * daemon, a socket or this machine's own unit being touched.
+ */
+export interface RestartDeps {
+  readonly ownVersion: () => string
+  readonly request: (socketPath: string, verb: Verb) => Promise<Response | null>
+  readonly unitActive: () => boolean
+  readonly restartUnit: () => boolean
+  readonly startDaemon: (socketPath: string) => Promise<boolean>
+  readonly retryMs: number
+  readonly timeoutMs: number
+}
+
+const defaultRestartDeps: RestartDeps = {
+  ownVersion: readVersion,
+  request,
+  unitActive: () => systemctl(['is-active', '--quiet']),
+  restartUnit: () => systemctl(['restart']),
+  startDaemon,
+  retryMs: RETRY_INTERVAL_MS,
+  timeoutMs: DAEMON_START_TIMEOUT_MS
+}
+
+export async function restartIfStale(
+  socketPath: string,
+  reply: Response,
+  deps: RestartDeps = defaultRestartDeps
+): Promise<boolean> {
+  if (!reply.ok || reply.version === undefined || reply.version === deps.ownVersion()) return false
+  const sleep = (): Promise<void> => new Promise((r) => setTimeout(r, deps.retryMs))
+  await deps.request(socketPath, { kind: 'quit' })
+  const gone = Date.now() + deps.timeoutMs
+  while (Date.now() < gone && (await deps.request(socketPath, { kind: 'ping' })) !== null) {
+    await sleep()
+  }
+  if (deps.unitActive() && deps.restartUnit()) {
+    const deadline = Date.now() + deps.timeoutMs
+    while (Date.now() < deadline) {
+      if ((await deps.request(socketPath, { kind: 'ping' })) !== null) return true
+      await sleep()
+    }
+  }
+  return deps.startDaemon(socketPath)
+}
+
+function systemctl(args: readonly string[]): boolean {
+  const run = spawnSync('systemctl', ['--user', ...args, `${APP_ID}.service`], { stdio: 'ignore' })
+  return run.status === 0
 }
 
 /**
@@ -105,9 +174,10 @@ export function resolveDaemonCommand(): { command: string; args: string[] } | nu
  */
 export function missingDaemonHint(): string {
   const root = repoRoot()
-  const binary = join(root, 'node_modules', 'electron', 'dist', 'electron')
-  if (existsSync(binary)) {
-    return `it exited while starting; run \`${binary} ${root}\` in a terminal to see why`
+  for (const binary of [join(root, 'electron', 'electron'), join(root, 'node_modules', 'electron', 'dist', 'electron')]) {
+    if (existsSync(binary)) {
+      return `it exited while starting; run \`${binary} ${root}\` in a terminal to see why`
+    }
   }
   if (existsSync(join(root, 'node_modules', 'electron', 'install.js'))) {
     return `the Electron binary was never downloaded; run \`node node_modules/electron/install.js\` in ${root}`

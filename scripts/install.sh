@@ -20,8 +20,8 @@
 # it would touch and asks first - an installer that edits your window manager
 # config unasked is not one you should be piping into bash.
 #
-# Distro packages (AUR, AppImage, .deb, .rpm) come later; until then this is
-# the supported path.
+# The distro packages (AUR, .deb, .rpm - see scripts/package.sh) are the other
+# path; this one builds the newest commit and needs no root.
 
 set -euo pipefail
 

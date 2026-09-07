@@ -51,6 +51,7 @@ async function startServer(): Promise<void> {
     socketPath,
     logger: silent,
     uid,
+    version: '9.9.9',
     handle: (request: Request): Response => {
       seen.push(request)
       return { id: request.id, ok: true }
@@ -98,7 +99,7 @@ describe('ControlSocket', () => {
     await startServer()
     const reply = await send(socketPath, '{"id":7,"verb":{"kind":"toggle"}}\n')
 
-    expect(JSON.parse(reply)).toEqual({ id: 7, ok: true })
+    expect(JSON.parse(reply)).toEqual({ id: 7, ok: true, version: '9.9.9' })
     expect(seen).toEqual([{ id: 7, verb: { kind: 'toggle' } }])
   })
 
@@ -192,6 +193,7 @@ describe('ControlSocket', () => {
       socketPath,
       logger: silent,
       uid,
+      version: '9.9.9',
       handle: (request) => ({ id: request.id, ok: true })
     })
 

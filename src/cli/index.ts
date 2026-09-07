@@ -2,7 +2,7 @@ import { APP_DISPLAY_NAME, APP_ID } from '../shared/identity'
 import { firstRunPending, markFirstRunOffered } from '../node/first-run'
 import { resolvePaths } from '../node/paths'
 import { CLIENT_COMMANDS, parseArgs, VERB_KINDS } from '../shared/protocol'
-import { fail, launchSettings, missingDaemonHint, readVersion, request, startDaemon } from './client'
+import { fail, launchSettings, missingDaemonHint, readVersion, request, restartIfStale, startDaemon } from './client'
 
 /**
  * The `lumanin` CLI.
@@ -240,6 +240,16 @@ async function main(): Promise<void> {
 
   if (reply === null) fail('daemon did not respond')
   if (!reply.ok) fail(reply.error)
+
+  // A daemon older than this CLI is one a package upgrade left running. It
+  // answered, so the press is not lost — it is replayed against the new code
+  // once that is up. `quit` and `ping` are exempt: quitting a stale daemon is
+  // the point, and `ping` promises never to start one.
+  if (verb.kind !== 'quit' && verb.kind !== 'ping' && (await restartIfStale(socketPath, reply))) {
+    reply = await request(socketPath, verb)
+    if (reply === null) fail('the daemon was restarted for the new version but did not respond')
+    if (!reply.ok) fail(reply.error)
+  }
 
   if (reply.data !== undefined) {
     process.stdout.write(`${JSON.stringify(reply.data, null, 2)}\n`)

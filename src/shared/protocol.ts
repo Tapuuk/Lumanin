@@ -88,7 +88,18 @@ export interface DaemonStatus {
 }
 
 export type Response =
-  | { id: number; ok: true; data?: DaemonStatus | EnumerateData | undefined }
+  | {
+      id: number
+      ok: true
+      data?: DaemonStatus | EnumerateData | undefined
+      /**
+       * The version of the daemon that answered, on every successful reply.
+       * The CLI compares it with its own: after a package upgrade the old
+       * daemon keeps running the old code until something restarts it, and
+       * the CLI is the something.
+       */
+      version?: string
+    }
   | { id: number; ok: false; error: string }
 
 export function isVerbKind(value: unknown): value is VerbKind {

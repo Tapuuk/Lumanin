@@ -16,7 +16,22 @@ It runs everywhere (Hyprland, KDE, GNOME, COSMIC, Sway, X11 desktops) and looks 
 
 ## Install
 
-One command. No sudo required, in your home directory:
+Packages for x86_64 and aarch64 (ARM) are on the [Releases](https://github.com/Tapuuk/Lumanin/releases) page. Each one carries its own Electron, so nothing else needs installing.
+
+```bash
+# Arch Linux (and Arch Linux ARM), from the AUR
+yay -S lumanin
+
+# Debian, Ubuntu and derivatives
+sudo apt install ./lumanin_*.deb
+
+# Fedora and derivatives
+sudo dnf install ./lumanin-*.rpm
+```
+
+There is also a `.tar.gz` of the same tree: extract it anywhere and put its `usr/bin` on your PATH.
+
+Or build from source, with one command and no sudo, into your home directory:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Tapuuk/Lumanin/main/scripts/install.sh | bash
@@ -36,9 +51,9 @@ Or, if you prefer to clone the repo, run this from the directory you cloned into
 
 Then run `lumanin` once. The first-run screen lets you pick a hotkey and sets up your desktop. It shows you every file it wants to touch and asks before writing.
 
-Update: `lumanin update`, or Settings > General > Check for updates. It pulls the checkout, rebuilds in place and restarts the launcher; nothing runs until you say yes.
+Update: from a package, your package manager does it, and the launcher restarts itself on the next press of the hotkey. From source, `lumanin update` or Settings > General > Check for updates pulls the checkout, rebuilds in place and restarts the launcher; nothing runs until you say yes.
 
-Uninstall: `~/.local/share/lumanin/src/scripts/uninstall.sh`. It runs `lumanin doctor --unfix` (unwriting the keybind and autostart entry, asking first), stops the daemon and removes the symlink, icon, settings entry and checkout. Your config and plugins stay unless you add `--purge`.
+Uninstall: from a package, run `lumanin doctor --unfix` first (it unwrites the keybind and autostart entry, asking first), then remove the package. From source, `~/.local/share/lumanin/src/scripts/uninstall.sh` does both and removes the symlink, icon, settings entry and checkout. Your config and plugins stay either way, unless you add `--purge` to the script.
 
 ## Using it
 

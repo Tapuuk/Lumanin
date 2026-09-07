@@ -16,6 +16,19 @@ npm run build
 
 Run it with `npm run dev` for a hot-reloading window, or start the built daemon with `node bin/lumanin.js`. `scripts/install.sh` is the same build wired into a systemd user service.
 
+## Packages
+
+`scripts/package.sh` builds the distro packages from a built tree: one staged layout (`usr/lib/lumanin` with the app, its runtime `node_modules` and an unmodified Electron beside it; `usr/bin/lumanin` a shell wrapper running the CLI on that Electron's Node), then `.deb` and `.rpm` through `fpm`, and a `.tar.gz` of the same tree. `packaging/aur/PKGBUILD` stages the same layout for Arch. Electron is bundled rather than taken from a distro package because Debian, Fedora and Arch Linux ARM have none; the zip's checksum is pinned in the script per version and architecture.
+
+`.github/workflows/release.yml` runs it on an x86_64 and an aarch64 runner for every pushed `v*` tag, installs the `.deb` it built and starts the daemon from it, then attaches all six files to the tag's GitHub Release (created as a draft if it does not exist).
+
+### Cutting a release
+
+1. Set the version in `package.json`, `packaging/aur/PKGBUILD` (`pkgver`) and the `CHANGELOG.md` heading. Commit.
+2. Tag `vX.Y.Z` and push the tag. The Release workflow builds and attaches the packages.
+3. Read the draft release, paste the changelog entry into it, publish.
+4. AUR: in `packaging/aur`, run `updpkgsums` (the tarball sum is per tag), `makepkg --printsrcinfo > .SRCINFO`, and push both files plus `lumanin.install` to the `lumanin` AUR repository. This is by hand and needs an AUR account with an SSH key; the workflow does not do it.
+
 ## Tests
 
 Two suites, different jobs:

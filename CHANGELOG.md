@@ -53,6 +53,10 @@ First release.
 
 ### Install and operate
 
+- Packages: `.deb`, `.rpm` and a `.tar.gz` for x86_64 and aarch64 on every release, and
+  an AUR `PKGBUILD`. Each bundles its own Electron. After a package upgrade, the daemon
+  still running the previous version restarts itself on the next press of the hotkey.
+
 - `scripts/install.sh`: build from source into your home directory, no root.
   `scripts/uninstall.sh` reverses it and unwrites the desktop integration first.
 - `lumanin update` pulls, rebuilds in place and restarts, with your say-so.

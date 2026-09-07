@@ -1,0 +1,52 @@
+# Maintainer: Tapuuk <https://github.com/Tapuuk>
+#
+# Built from the release tarball. Electron is bundled rather than taken from
+# the electronNN packages: Arch Linux ARM (aarch64, a supported target) has no
+# Electron package at all, and one layout for every distro is what
+# scripts/package.sh in the source tree defines - this PKGBUILD only stages it.
+# `npm ci` in build() and package() reads the lockfile and the npm cache; it
+# needs the network on a machine that has never installed these packages.
+
+pkgname=lumanin
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Keyboard-first launcher for Linux with a plugin API"
+arch=(x86_64 aarch64)
+url="https://github.com/Tapuuk/Lumanin"
+license=(MIT)
+depends=(gtk3 nss libxss libnotify alsa-lib libxkbcommon at-spi2-core libdrm mesa libcups)
+makedepends=(nodejs npm unzip)
+optdepends=(
+  'fd: file search, the fastest backend'
+  'plocate: file search over an index'
+  'wl-clipboard: clipboard on Wayland'
+  'ydotool: paste into the focused window on Wayland'
+  'xdotool: paste into the focused window on X11'
+)
+install=lumanin.install
+_electron=43.3.0
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+source_x86_64=("electron-v$_electron-linux-x64.zip::https://github.com/electron/electron/releases/download/v$_electron/electron-v$_electron-linux-x64.zip")
+source_aarch64=("electron-v$_electron-linux-arm64.zip::https://github.com/electron/electron/releases/download/v$_electron/electron-v$_electron-linux-arm64.zip")
+noextract=("electron-v$_electron-linux-x64.zip" "electron-v$_electron-linux-arm64.zip")
+# The tarball sum is per tag: run `updpkgsums` after cutting the release.
+sha256sums=('SKIP')
+sha256sums_x86_64=('f4987e9f045e46b117f0805d6ba4dc524e2abb2c2e33660f175bb39564bd3dae')
+sha256sums_aarch64=('3e89a62c345d8171bf54f77df5b3d8216c492847eed00ae59cadd78d6f5535f7')
+
+build() {
+  cd "Lumanin-$pkgver"
+  npm ci --no-audit --no-fund
+  npm run build:app
+}
+
+package() {
+  cd "Lumanin-$pkgver"
+  case "$CARCH" in
+    x86_64)  _zip="$srcdir/electron-v$_electron-linux-x64.zip" ;;
+    aarch64) _zip="$srcdir/electron-v$_electron-linux-arm64.zip" ;;
+  esac
+  bash scripts/package.sh stage --no-build --dest "$pkgdir" --electron-zip "$_zip"
+  # Chromium's SUID sandbox helper, as the electron packages ship it.
+  chmod 4755 "$pkgdir/usr/lib/lumanin/electron/chrome-sandbox"
+}

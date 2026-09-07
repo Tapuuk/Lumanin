@@ -1311,6 +1311,7 @@ app.whenReady().then(async () => {
     socketPath: paths.socket,
     logger,
     uid: process.getuid?.() ?? 0,
+    version: app.getVersion(),
     handle: handleVerb
   })
 

@@ -1,0 +1,19 @@
+post_install() {
+  cat <<'MSG'
+As your user, `lumanin doctor --fix` writes the hotkey, the compositor rule
+and autostart (every diff is shown first), or open "Lumanin Settings" from the
+app grid.
+MSG
+}
+
+post_upgrade() {
+  echo "A daemon still running the previous version restarts itself on the next press of the hotkey."
+}
+
+pre_remove() {
+  cat <<'MSG'
+Lumanin's hotkey, compositor rule and autostart entry are in your user config
+and are not removed by the package. Run `lumanin doctor --unfix` as your user
+first if you want them gone; ~/.config/lumanin is left alone either way.
+MSG
+}

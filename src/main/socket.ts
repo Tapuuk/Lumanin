@@ -32,6 +32,8 @@ export interface SocketServerDeps {
   readonly logger: Logger
   readonly handle: VerbHandler
   readonly uid: number
+  /** Stamped on every successful reply so a newer CLI can tell this daemon is stale. */
+  readonly version: string
 }
 
 /**
@@ -176,7 +178,8 @@ export class ControlSocket {
 
   private reply(socket: Socket, response: Response): void {
     if (socket.destroyed) return
-    socket.write(`${JSON.stringify(response)}\n`)
+    const stamped = response.ok ? { ...response, version: this.deps.version } : response
+    socket.write(`${JSON.stringify(stamped)}\n`)
   }
 
   close(): void {

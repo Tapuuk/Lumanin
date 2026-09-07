@@ -26,6 +26,8 @@
     "test:e2e": "playwright test",
     "typecheck:e2e": "tsc -p tsconfig.e2e.json --noEmit",
     "build:plugins": "node scripts/build-plugins.mjs",
+    "build:app": "electron-vite build && npm run build:plugins",
+    "package": "bash scripts/package.sh",
     "check:refs": "node scripts/check-private-refs.mjs"
   },
   "dependencies": {
