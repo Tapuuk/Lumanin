@@ -50,9 +50,14 @@ jobs:
           # elements permanently "unstable" to Playwright — so the output gets
           # room and the settings window floats, which is also what sway does
           # for fixed-size windows on a real desktop.
+          # The panel floats too: that rule is what `doctor --fix` writes on
+          # a real sway, and without it sway tiles the panel to the whole
+          # output, so the configured height caps nothing and the ceiling
+          # test measures a full-screen list.
           {
             echo 'output * resolution 1920x1080'
             echo 'for_window [app_id="lumanin-settings"] floating enable'
+            echo 'for_window [app_id="lumanin"] floating enable'
           } > /tmp/sway-ci.conf
 
           # Headless backend, software renderer: no GPU, no seat, no inputs on

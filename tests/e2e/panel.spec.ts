@@ -111,9 +111,8 @@ test.beforeAll(async () => {
       ...absoluteWaylandDisplay(),
       LUMANIN_HIDE_ON_BLUR: 'false',
       // The ceiling test measures the panel in CSS pixels against the configured
-      // height, which only agree at text scale 1. A runner's desktop can report
-      // another scale (CI's sway box has answered 1.333), and then the window
-      // is scaled with it - correctly, and not what this suite is about.
+      // height, which only agree at text scale 1. Pinned so a runner's desktop
+      // text size cannot scale the window and move the number.
       LUMANIN_TEXT_SCALE: '1'
     }
   })
