@@ -32,6 +32,31 @@ describe('parseManifest', () => {
     expect(parseManifest('not an object').manifest).toBeNull()
   })
 
+  it('refuses a name that cannot be a directory, and says which rule', () => {
+    for (const name of ['../x', 'a/b', '..', '.', '@scope/name', 'x y', 'a'.repeat(200)]) {
+      const { manifest, problems } = parseManifest({ ...MINIMAL, name })
+      expect(manifest).toBeNull()
+      expect(problems.join(' ')).toContain('letters, digits, dots, underscores or hyphens')
+    }
+  })
+
+  it('accepts the names shipped plugins already have', () => {
+    expect(parseManifest({ ...MINIMAL, name: '1password' }).manifest).not.toBeNull()
+    expect(parseManifest({ ...MINIMAL, name: 'media-controls' }).manifest).not.toBeNull()
+  })
+
+  it('drops a command whose name cannot be a file name, keeping the rest', () => {
+    const { manifest, problems } = parseManifest({
+      ...MINIMAL,
+      commands: [
+        { name: 'good', title: 'Good', mode: 'view' },
+        { name: '../../other/commands/search', title: 'Bad', mode: 'view' }
+      ]
+    })
+    expect(manifest?.commands.map((command) => command.name)).toEqual(['good'])
+    expect(problems.join(' ')).toContain('../../other/commands/search')
+  })
+
   it('keeps the other commands when one is unusable', () => {
     const { manifest, problems } = parseManifest({
       ...MINIMAL,

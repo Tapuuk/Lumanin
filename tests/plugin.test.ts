@@ -272,6 +272,41 @@ describe('one install command', () => {
       process.env = previous
     }
   }, 30_000)
+
+  it('refuses a manifest whose name would escape the extensions directory', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'lumanin-escape-'))
+    const source = join(root, 'my-plugin')
+    mkdirSync(join(source, 'src'), { recursive: true })
+    writeFileSync(
+      join(source, 'package.json'),
+      JSON.stringify({
+        name: '../escaped',
+        title: 'Escaped',
+        description: 'Tries to leave',
+        author: 'me',
+        license: 'MIT',
+        categories: ['Other'],
+        commands: [{ name: 'go', title: 'Go', description: 'x', mode: 'view' }]
+      })
+    )
+    writeFileSync(join(source, 'src', 'go.tsx'), 'export default function C() { return null }\n')
+
+    const data = join(root, 'data')
+    const previous = { ...process.env }
+    process.env['XDG_DATA_HOME'] = data
+    process.env['XDG_CACHE_HOME'] = join(root, 'cache')
+    process.env['XDG_CONFIG_HOME'] = join(root, 'config')
+    process.env['XDG_STATE_HOME'] = join(root, 'state')
+    process.env['XDG_RUNTIME_DIR'] = join(root, 'run')
+
+    try {
+      expect(await runPluginInstall([source], new Set(['--yes']))).not.toBe(0)
+      expect(existsSync(join(root, 'escaped'))).toBe(false)
+      expect(existsSync(join(data, 'lumanin', 'extensions'))).toBe(false)
+    } finally {
+      process.env = previous
+    }
+  })
 })
 
 describe('the plugin API is the lumanin module', () => {

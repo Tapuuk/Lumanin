@@ -140,6 +140,17 @@ export interface ManifestParse {
  * commands); anything softer is repaired with a documented default. An extension
  * with one malformed command still offers its other five.
  */
+/**
+ * Whether a plugin or command name can be a path segment. The string becomes
+ * a directory under `extensionsDir` and a file under `commands/`, on a path
+ * built before any of the plugin's code runs, so it must not carry a slash, a
+ * backslash, a control character, a leading dot or an npm scope.
+ */
+export function isUsableName(name: string): boolean {
+  if (name === '.' || name === '..') return false
+  return /^[a-z0-9][a-z0-9._-]{0,99}$/i.test(name)
+}
+
 export function parseManifest(raw: unknown): ManifestParse {
   const problems: string[] = []
   if (typeof raw !== 'object' || raw === null) {
@@ -149,6 +160,14 @@ export function parseManifest(raw: unknown): ManifestParse {
 
   const name = str(pkg['name'])
   if (name === null) return { manifest: null, problems: ['package.json has no "name"'] }
+  if (!isUsableName(name)) {
+    return {
+      manifest: null,
+      problems: [
+        `package.json "name" must be letters, digits, dots, underscores or hyphens - "${name}" is not a directory name, and scoped names are not accepted`
+      ]
+    }
+  }
 
   const rawCommands = Array.isArray(pkg['commands']) ? pkg['commands'] : []
   const commands: CommandSpec[] = []
@@ -194,6 +213,10 @@ function parseCommand(raw: unknown, problems: string[], index: number): CommandS
   const name = str(entry['name'])
   if (name === null) {
     problems.push(`commands[${index}] has no "name"`)
+    return null
+  }
+  if (!isUsableName(name)) {
+    problems.push(`command "${name}" has a name that cannot be a file name and was dropped`)
     return null
   }
 
