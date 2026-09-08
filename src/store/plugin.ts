@@ -145,6 +145,9 @@ export async function fetchPlugin(request: PluginFetchRequest): Promise<PluginCh
       '1',
       ...(request.source.subdirectory === null ? [] : ['--filter=blob:none']),
       'origin',
+      // The URL parser refuses an option-shaped ref, but a source rebuilt from
+      // provenance on disk never went through it; `--` holds either way.
+      '--',
       ref
     ],
     checkout

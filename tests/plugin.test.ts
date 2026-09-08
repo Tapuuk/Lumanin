@@ -123,6 +123,37 @@ describe('parsePluginSource', () => {
     expect(() => parsePluginSource('example.com/thing')).toThrow(PluginSourceError)
   })
 
+  it('refuses a ref git itself could not name', () => {
+    for (const ref of ['--upload-pack=x', '-oProxyCommand', 'a b', 're..f', 'x^']) {
+      expect(() => parsePluginSource(`https://github.com/o/r/tree/${ref}/plug`)).toThrow(PluginSourceError)
+      expect(() => parsePluginSource(`https://github.com/o/r/tree/${ref}/plug`)).toThrow(
+        /not a branch or tag name/
+      )
+    }
+  })
+
+  it('still takes an ordinary ref and subdirectory', () => {
+    expect(parsePluginSource('https://github.com/o/r/tree/main/plugins/thing')).toMatchObject({
+      ref: 'main',
+      subdirectory: 'plugins/thing'
+    })
+    expect(parsePluginSource('https://github.com/o/r/tree/release/2.0')).toMatchObject({
+      ref: 'release',
+      subdirectory: '2.0'
+    })
+  })
+
+  it('shows and clones the same host when the URL carries a port', () => {
+    const ported = parsePluginSource('https://github.com:8443/o/r')
+    expect(ported.label).toBe('github.com:8443/o/r')
+    expect(ported.remote).toBe('https://github.com:8443/o/r.git')
+    expect(checkoutName(ported)).not.toBe(checkoutName(parsePluginSource('https://github.com/o/r')))
+    // A forge on another port is not assumed to lay its web UI out like github.com.
+    expect(() => parsePluginSource('https://github.com:8443/o/r/tree/main')).toThrow(
+      /has a path this does not understand/
+    )
+  })
+
   it('gives every repository a distinct cache directory', () => {
     const a = checkoutName(parsePluginSource('https://github.com/o/r'))
     const b = checkoutName(parsePluginSource('https://gitlab.com/o/r'))
@@ -177,6 +208,7 @@ describe('fetchPlugin', () => {
       // down: blobless, and the sparse patterns take one directory.
       '--filter=blob:none',
       'origin',
+      '--',
       'main'
     ])
   })
@@ -202,6 +234,7 @@ describe('fetchPlugin', () => {
     expect(fetch).not.toContain('--filter=blob:none')
     // No ref was given, so the repository's own default branch.
     expect(fetch?.at(-1)).toBe('HEAD')
+    expect(fetch?.slice(-3)).toEqual(['origin', '--', 'HEAD'])
   })
 })
 

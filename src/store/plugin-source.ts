@@ -119,7 +119,7 @@ export function parsePluginSource(input: string): PluginSource {
   let ref: string | null = null
   let subdirectory: string | null = null
 
-  const markers = BROWSE_URL_HOSTS[url.hostname]
+  const markers = BROWSE_URL_HOSTS[url.host]
   if (markers !== undefined && rest.length > 0) {
     const joined = rest.join('/')
     for (const marker of markers) {
@@ -139,15 +139,17 @@ export function parsePluginSource(input: string): PluginSource {
   if (ref === null && rest.length > 0) {
     throw new PluginSourceError(
       `${url.href} has a path this does not understand.\n` +
-        `Give the repository URL (https://${url.hostname}/${owner}/${repo}), or a\n` +
+        `Give the repository URL (https://${url.host}/${owner}/${repo}), or a\n` +
         'browse URL from GitHub, GitLab or Codeberg pointing at the plugin directory.'
     )
   }
 
   return {
     remote: `https://${url.host}/${owner}/${repo}.git`,
-    label: `${url.hostname}/${owner}/${repo}`,
-    ref,
+    // `host` keeps a non-default port: the label is what the user consents to
+    // and what names the cache directory, so it must be the host that is cloned.
+    label: `${url.host}/${owner}/${repo}`,
+    ref: normalizeRef(ref),
     subdirectory: normalizeSubdirectory(subdirectory)
   }
 }
@@ -165,6 +167,40 @@ export function parsePluginSource(input: string): PluginSource {
  * check that still holds if a caller ever hands us a path that did not come
  * through the URL parser, and `pluginDirectory` in `plugin.ts` is the third.
  */
+/**
+ * A ref must be something git could name a branch or tag with.
+ *
+ * The segment after `tree/` goes into `git fetch`'s argv, and a segment that
+ * begins with `-` would be read as an option there. Git's own refname rules
+ * (`git check-ref-format`) are the authority: anything they reject cannot name
+ * a real ref, so refusing it costs the user nothing.
+ */
+function normalizeRef(encoded: string | null): string | null {
+  if (encoded === null) return null
+  // A browse URL percent-encodes what it cannot carry; git sees the decoded name.
+  let ref: string
+  try {
+    ref = decodeURIComponent(encoded)
+  } catch {
+    ref = ''
+  }
+  const bad =
+    ref.length === 0 ||
+    ref.startsWith('-') ||
+    /[\s\x00-\x1f\x7f~^:?*[\\]/.test(ref) ||
+    ref.includes('..') ||
+    ref.includes('@{') ||
+    ref.endsWith('.lock') ||
+    ref.endsWith('.')
+  if (bad) {
+    throw new PluginSourceError(
+      `${JSON.stringify(ref.length === 0 ? encoded : ref)} is not a branch or tag name.\n` +
+        'A ref may not begin with "-" or contain whitespace, "..", "~", "^", ":", "?", "*" or "[".'
+    )
+  }
+  return ref
+}
+
 function normalizeSubdirectory(subdirectory: string | null): string | null {
   if (subdirectory === null) return null
   const parts = subdirectory.split('/').filter((part) => part.length > 0)
