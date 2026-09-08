@@ -134,6 +134,14 @@ export function reloadNotes(
     // command. A written bind with no note here is a dead key.
     notes.push('Sway does not re-read its config on save - run: swaymsg reload')
   }
+  for (const edit of plan.edits) {
+    if (edit.seededFrom === undefined) continue
+    notes.push(
+      `${edit.path} did not exist, so sway was reading ${edit.seededFrom}. It was created as a copy of ` +
+        "that file with Lumanin's block appended, so your defaults are kept - edit the copy from now on. " +
+        '`lumanin doctor --unfix` removes our block and leaves the copy, which behaves exactly as the system config did.'
+    )
+  }
   if (profile.isGnome && plan.commands.length > 0) {
     notes.push('GNOME applies shortcut changes immediately.')
   }

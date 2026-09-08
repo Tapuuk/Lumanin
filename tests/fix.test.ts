@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { detectPlatform, type PlatformProfile } from '../src/platform/detect'
 import { applyPlan, planFixes, planRevert, readManagedBinds, type FixDirs } from '../src/platform/fix/index'
-import { planBind } from '../src/platform/fix/bind'
+import { planBind, reloadNotes } from '../src/platform/fix/bind'
 import {
   BLOCK_END,
   BLOCK_START,
@@ -34,8 +34,8 @@ const roots: string[] = []
  * planner takes both and a test that passed one would be testing a different
  * layout from the one that ships.
  */
-function dirs(root: string): FixDirs {
-  return { config: root, data: join(root, 'data') }
+function dirs(root: string, system?: string): FixDirs {
+  return { config: root, data: join(root, 'data'), ...(system === undefined ? {} : { system }) }
 }
 
 function tempConfig(): string {
@@ -561,6 +561,49 @@ describe('planFixes', () => {
     )
     expect(written?.state).toBe('will-add')
     expect(written?.after).toContain('for_window [app_id="^lumanin$"]')
+  })
+
+  it('seeds a missing sway config from the system one, byte for byte, then appends the block', () => {
+    // sway's own docs say `cp /etc/sway/config ~/.config/sway/config`; that copy
+    // is what our block goes onto, so the defaults are kept and the key works.
+    const dir = tempConfig()
+    const system = join(dir, 'etc')
+    mkdirSync(join(system, 'sway'), { recursive: true })
+    const original = '# Default config\nset $mod Mod4\nbindsym $mod+Return exec foot\ninclude /etc/sway/config.d/*\n'
+    writeFileSync(join(system, 'sway', 'config'), original)
+
+    const plan = planFixes(profile(SWAY), dirs(dir, system))
+    const edit = plan.edits.find((e) => e.actions.some((a) => a.id === 'sway-rules'))
+    expect(edit?.state).toBe('will-add')
+    expect(edit?.after.startsWith(original)).toBe(true)
+    expect(edit?.after).toContain('bindsym')
+    expect(edit?.after).toContain('for_window [app_id="^lumanin$"]')
+    expect(edit?.seededFrom).toBe(join(system, 'sway', 'config'))
+    expect(reloadNotes(profile(SWAY), plan).join('\n')).toContain('was created as a copy')
+
+    // Idempotent: the second plan sees the copy and touches only our block.
+    applyPlan(plan.edits, 'test-seed')
+    const first = readFileSync(join(dir, 'sway', 'config'), 'utf8')
+    const again = planFixes(profile(SWAY), dirs(dir, system))
+    expect(again.edits.find((e) => e.actions.some((a) => a.id === 'sway-rules'))?.state).toBe('up-to-date')
+    applyPlan(again.edits, 'test-seed-2')
+    expect(readFileSync(join(dir, 'sway', 'config'), 'utf8')).toBe(first)
+
+    // --unfix removes our block and leaves the copy: byte-exact system config.
+    applyPlan(planRevert(dirs(dir, system)), 'test-seed-revert')
+    expect(readFileSync(join(dir, 'sway', 'config'), 'utf8')).toBe(original)
+  })
+
+  it('still refuses when the system config has a relative include', () => {
+    const dir = tempConfig()
+    const system = join(dir, 'etc')
+    mkdirSync(join(system, 'sway'), { recursive: true })
+    writeFileSync(join(system, 'sway', 'config'), 'set $mod Mod4\ninclude config.d/*\n')
+    const edit = planFixes(profile(SWAY), dirs(dir, system)).edits.find((e) =>
+      e.actions.some((a) => a.id === 'sway-rules')
+    )
+    expect(edit?.state).toBe('blocked')
+    expect(edit?.problem).toContain('relative include')
   })
 
   it('offers no unit when it does not know what command to put in it', () => {

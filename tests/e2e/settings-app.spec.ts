@@ -84,13 +84,21 @@ const section = (title: string): ReturnType<Page['locator']> =>
 const group = (title: string): ReturnType<Page['locator']> =>
   page.locator('.s-section', { has: page.locator('.s-section__title', { hasText: new RegExp(`^${title}$`) }) })
 
-/** The compositor bind banner: the one line about this desktop's shortcut config. */
-// Every wording the bind banner can take says one of these: the not-bindable
-// note and the outcome report say "shortcut"; a blocked write quotes the
-// desktop's problem, which names the config it could not edit (on CI's
-// headless sway: no user config exists, so ours would shadow /etc/sway/config).
-const bindBanner = (): ReturnType<Page['locator']> =>
-  page.locator('.s-banner', { hasText: /shortcut|config/i })
+/**
+ * The compositor bind banner: the one line about this desktop's shortcut config.
+ *
+ * Its three wordings are three different outcomes, and each assertion below
+ * names the one it expects. A matcher that accepted every wording is what let
+ * a stock sway's "could not bind" pass as "bound".
+ */
+// The bind banner's two honest wordings both say "shortcut"; the file-search
+// info banner on the Keys screen does not, and must not satisfy this.
+const bindBanner = (): ReturnType<Page['locator']> => page.locator('.s-banner', { hasText: /shortcut/i })
+const bindNotBindable = (): ReturnType<Page['locator']> =>
+  page.locator('.s-banner', { hasText: 'binds shortcuts through its own settings' })
+const bindApplied = (): ReturnType<Page['locator']> =>
+  page.locator('.s-banner', { hasText: 'Shortcut config updated' })
+const bindBlocked = (): ReturnType<Page['locator']> => page.locator('.s-banner .s-error')
 
 test('a fresh home opens the first-run wizard; walking it through writes the marker', async () => {
   // No config.toml has ever existed here, so the wizard fronts the window:
@@ -472,8 +480,11 @@ test('keys: the launcher hotkey writes general.hotkey and raises the bind banner
   // config.toml and the desktop's shortcut config are never assumed to agree:
   // on a bindable desktop the change is applied automatically and the banner
   // reports what happened; anywhere else the "bind it yourself" wording shows.
-  // Either way, something says so.
-  await expect(bindBanner()).toBeVisible()
+  // A blocked write is neither, and is a failure here.
+  await expect
+    .poll(async () => (await bindApplied().count()) + (await bindNotBindable().count()))
+    .toBe(1)
+  await expect(bindBlocked()).toHaveCount(0)
 })
 
 test('keys: the bind banner lives on the Keys screen, reports on Panel, and survives leaving', async () => {
@@ -496,6 +507,7 @@ test('keys: the bind banner lives on the Keys screen, reports on Panel, and surv
   await expect(bindBanner().getByRole('button', { name: 'Apply' })).toHaveCount(0)
   await section('Keys').click()
   await expect(bindBanner()).toBeVisible()
+  await expect(bindBlocked()).toHaveCount(0)
 })
 
 test('search: engines toggle and reorder as [search].engines', async () => {

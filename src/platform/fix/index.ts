@@ -45,6 +45,8 @@ export interface PlannedEdit {
   readonly diff: string
   /** Set when `state` is `blocked`. */
   readonly problem?: string
+  /** The system file a new user config was copied from before our block was added. */
+  readonly seededFrom?: string
 }
 
 export interface FixPlan {
@@ -83,6 +85,8 @@ export interface BindPlan {
 export interface FixDirs {
   readonly config: string
   readonly data: string
+  /** Where the distro's own compositor configs live (`/etc`); only tests set it. */
+  readonly system?: string
 }
 
 function read(path: string): string {
@@ -181,7 +185,23 @@ export function planFixes(
   for (const [path, actions] of byFile) {
     const before = read(path)
 
-    const guard = blockedTarget(profile, dirs, path, before)
+    // A missing file may have a system-wide original the desktop was reading
+    // instead. That copy is the base the block goes into, while `before` stays
+    // empty so the diff shows the whole file as added, which is what it is.
+    let seededFrom: string | undefined
+    let base = before
+    if (before.length === 0) {
+      for (const action of actions) {
+        const seeded = action.seed?.(dirs)
+        if (seeded !== undefined && seeded !== null && seeded.text.length > 0) {
+          base = seeded.text
+          seededFrom = seeded.from
+          break
+        }
+      }
+    }
+
+    const guard = seededFrom === undefined ? blockedTarget(profile, dirs, path, before) : null
     if (guard !== null) {
       edits.push({ actions, state: 'blocked', path, before, after: before, diff: '', problem: guard })
       continue
@@ -192,14 +212,15 @@ export function planFixes(
     // what keeps it that way rather than silently letting one win.
     const transforms = actions.filter((action) => action.transform !== undefined)
     if (transforms.length > 0) {
-      const after = transforms.reduce((text, action) => action.transform?.(text) ?? text, before)
+      const after = transforms.reduce((text, action) => action.transform?.(text) ?? text, base)
       edits.push({
         actions,
         state: after === before ? 'up-to-date' : before.length === 0 ? 'will-add' : 'will-update',
         path,
         before,
         after,
-        diff: renderDiff(before, after, path)
+        diff: renderDiff(before, after, path),
+        ...(seededFrom === undefined ? {} : { seededFrom })
       })
       continue
     }
@@ -223,7 +244,7 @@ export function planFixes(
     const bodies = actions.map((action) => bodyFor(action, existing?.body ?? []))
     const header = `${style?.comment ?? '#'} ${HEADER}`
     const body = [header, ...bodies.flatMap((lines, index) => (index === 0 ? lines : ['', ...lines]))]
-    const after = upsertBlock(before, body, style)
+    const after = upsertBlock(base, body, style)
     const existed = existing !== null
 
     edits.push({
@@ -232,7 +253,8 @@ export function planFixes(
       path,
       before,
       after,
-      diff: renderDiff(before, after, path)
+      diff: renderDiff(before, after, path),
+      ...(seededFrom === undefined ? {} : { seededFrom })
     })
   }
 
@@ -268,10 +290,13 @@ function blockedTarget(
   before: string
 ): string | null {
   if (profile.isSway && path === join(dirs.config, 'sway', 'config') && before.length === 0) {
+    const system = dirs.system ?? '/etc'
     return (
       'no sway user config exists, and creating one holding only our lines would shadow ' +
-      '/etc/sway/config entirely - sway reads the user config instead of the system one, so every ' +
-      'default keybind would vanish. Copy /etc/sway/config to ~/.config/sway/config first, then re-run.'
+      `${system}/sway/config entirely - sway reads the user config instead of the system one, so every ` +
+      `default keybind would vanish. No system config was found to copy at ${system}/sway/config or ` +
+      `${system}/xdg/sway/config (or it uses a relative include, which would not survive the copy). ` +
+      'Copy the system config to ~/.config/sway/config first, then re-run.'
     )
   }
   return null

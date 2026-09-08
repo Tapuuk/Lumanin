@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { APP_DISPLAY_NAME, APP_ID, WINDOW_CLASS } from '../../shared/identity'
 import { PANEL_TOP_FRACTION } from '../../shared/placement'
 import {
@@ -78,6 +80,15 @@ export interface FixAction {
    * behaviour we need and must be updatable — so they do not set this.
    */
   readonly preserveUserEdits?: boolean
+  /**
+   * The text a *new* file starts from, when the desktop reads a system-wide
+   * original instead of a missing user file. sway reads `~/.config/sway/config`
+   * in place of `/etc/sway/config`, not on top of it, so a user file holding
+   * only our block would strip every default keybind; what sway's own docs
+   * tell users to do is copy the system file, and that copy is what our block
+   * is appended to. Consulted only when the target is absent or empty.
+   */
+  readonly seed?: (dirs: { readonly system?: string }) => { readonly text: string; readonly from: string } | null
   /**
    * Which existing lines count as "the user's version of this action".
    *
@@ -564,6 +575,29 @@ const hyprlandLuaRequire: FixAction = {
  * apostrophe (the one thing that makes shellQuote emit a backslash) is
  * load-bearing here too.
  */
+/**
+ * The system sway config, byte for byte, as the base of a new user config.
+ * Null when neither documented location has one, or when it carries a
+ * relative `include`: that resolves against the including file's directory,
+ * which changes from `/etc/sway` to `~/.config/sway` in the copy, so the copy
+ * would silently lose it. Refusing there is today's behaviour.
+ */
+export function swaySeed(dirs: { readonly system?: string }): { text: string; from: string } | null {
+  const system = dirs.system ?? '/etc'
+  for (const from of [join(system, 'sway', 'config'), join(system, 'xdg', 'sway', 'config')]) {
+    let text: string
+    try {
+      text = readFileSync(from, 'utf8')
+    } catch {
+      continue
+    }
+    if (text.length === 0) return null
+    if (/^[ \t]*include[ \t]+(?![/~])/m.test(text)) return null
+    return { text: text.endsWith('\n') ? text : `${text}\n`, from }
+  }
+  return null
+}
+
 function swayRules(choice: HotkeyChoice): FixAction {
   return {
     id: 'sway-rules',
@@ -573,6 +607,7 @@ function swayRules(choice: HotkeyChoice): FixAction {
     alternateFiles: ['sway/config.d/lumanin.conf'],
     signature: /^\s*(for_window|bindsym)\b/m,
     preserveUserEdits: !choice.explicit,
+    seed: swaySeed,
     body: [
       `for_window [app_id="^${WINDOW_CLASS}$"] floating enable, border none`,
       ...bindSpecs(choice).map(
