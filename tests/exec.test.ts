@@ -128,6 +128,32 @@ describe('running a command', () => {
     expect(outcome.stdout).toBe('set')
   })
 
+  it('extends process.env rather than replacing it', async () => {
+    const outcome = await runCommand(
+      '/bin/sh',
+      ['-c', 'echo "${PATH:-MISSING}:${LUMANIN_TEST:-MISSING}"'],
+      { env: { LUMANIN_TEST: 'set' } },
+      never
+    )
+    expect(outcome.stdout).not.toContain('MISSING')
+    expect(String(outcome.stdout).endsWith(':set')).toBe(true)
+  })
+
+  it('lets a caller override an inherited variable', async () => {
+    process.env.LUMANIN_TEST = 'inherited'
+    try {
+      const outcome = await runCommand(
+        '/bin/sh',
+        ['-c', 'echo "$LUMANIN_TEST"'],
+        { env: { LUMANIN_TEST: 'override' } },
+        never
+      )
+      expect(outcome.stdout).toBe('override')
+    } finally {
+      delete process.env.LUMANIN_TEST
+    }
+  })
+
   /** `shell` opts into shell syntax; without it `&&` would be an argument. */
   it('runs through a shell only when asked', async () => {
     const withShell = await runCommand('echo a && echo b', [], { shell: true }, never)

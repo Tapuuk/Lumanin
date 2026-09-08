@@ -18,6 +18,7 @@ export interface ExecOptions {
   /** @default true */
   stripFinalNewline?: boolean
   cwd?: string
+  /** Extends `process.env`; a key given here wins over an inherited one. */
   env?: NodeJS.ProcessEnv
   /** `"buffer"` leaves stdout and stderr as `Buffer`s. @default "utf8" */
   encoding?: BufferEncoding | 'buffer'
@@ -141,16 +142,19 @@ export async function runCommand(
   const timeout = options.timeout ?? 10_000
   const useShell = options.shell !== undefined && options.shell !== false
   const line = [file, ...args].join(' ')
+  // The spec says `env` extends `process.env`. The caller's map is spread last
+  // so a key given there wins over an inherited one of the same name.
+  const env = options.env === undefined ? process.env : { ...process.env, ...options.env }
 
   const child = useShell
     ? spawn(options.shell === true ? '/bin/sh' : String(options.shell), ['-c', line], {
         ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
-        env: options.env ?? process.env,
+        env,
         signal
       })
     : spawn(file, [...args], {
         ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
-        env: options.env ?? process.env,
+        env,
         signal
       })
 
