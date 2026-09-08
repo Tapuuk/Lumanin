@@ -23,7 +23,14 @@ permissions:
   contents: write
 
 jobs:
+  # The whole CI suite first. package.sh runs `build:app`, which skips the
+  # typecheck, so without this a tag could be cut from a commit that does not
+  # compile and the artifacts would still reach the release page.
+  test:
+    uses: ./.github/workflows/ci.yml
+
   package:
+    needs: test
     strategy:
       fail-fast: false
       matrix:

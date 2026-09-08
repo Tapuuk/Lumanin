@@ -24,7 +24,7 @@ Run it with `npm run dev` for a hot-reloading window, or start the built daemon 
 
 ### Cutting a release
 
-1. Set the version in `package.json`, `packaging/aur/PKGBUILD` (`pkgver`) and the `CHANGELOG.md` heading. Commit.
+1. Set the version in all five places: `package.json`, `npm-package/package.json`, `packaging/aur/PKGBUILD` (`pkgver`), `packaging/aur/.SRCINFO` (`pkgver`), and the `CHANGELOG.md` heading, with its date. `npm test` proves they agree (`tests/version.test.ts`). Commit.
 2. Tag `vX.Y.Z` and push the tag. The Release workflow builds and attaches the packages.
 3. Read the draft release, paste the changelog entry into it, publish.
 4. AUR: in `packaging/aur`, run `updpkgsums` (the tarball sum is per tag), `makepkg --printsrcinfo > .SRCINFO`, and push both files plus `lumanin.install` to the `lumanin` AUR repository. This is by hand and needs an AUR account with an SSH key; the workflow does not do it.

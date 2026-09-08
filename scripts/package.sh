@@ -11,6 +11,9 @@
 #   --out DIR            where packages land (default release/)
 #   --electron-zip FILE  an already-downloaded electron-v<ver>-linux-<arch>.zip
 #   --no-build           trust the existing out/ instead of running the build
+#   --node-modules DIR   copy the runtime node_modules from DIR instead of running
+#                        `npm ci` inside the staged tree (what the PKGBUILD does,
+#                        so package() needs no network)
 #
 # The staged tree is the same for every package:
 #
@@ -44,6 +47,7 @@ FORMATS=()
 DEST=""
 OUT="$ROOT/release"
 ELECTRON_ZIP=""
+NODE_MODULES=""
 BUILD=1
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -52,6 +56,7 @@ while [ $# -gt 0 ]; do
     --out) OUT="$2"; shift ;;
     --electron-zip) ELECTRON_ZIP="$2"; shift ;;
     --no-build) BUILD=0 ;;
+    --node-modules) NODE_MODULES="$2"; shift ;;
     -h|--help) sed -n '2,40p' "$0"; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -155,8 +160,14 @@ stage() {
   # script: better-sqlite3 ships Node-API prebuilds inside its tarball, esbuild's
   # postinstall only re-checks its own binary, and Electron is a devDependency
   # that --omit=dev leaves out.
-  say "installing runtime dependencies"
-  (cd "$app" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund --silent)
+  if [ -n "$NODE_MODULES" ]; then
+    [ -d "$NODE_MODULES" ] || die "--node-modules $NODE_MODULES is not a directory"
+    say "copying runtime dependencies from $NODE_MODULES"
+    cp -R "$NODE_MODULES" "$app/node_modules"
+  else
+    say "installing runtime dependencies"
+    (cd "$app" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund --silent)
+  fi
   rm -f "$app/package-lock.json"
   [ -f "$app/node_modules/better-sqlite3/prebuilds/linux-$NODE_ARCH.node" ] \
     || die "better-sqlite3 has no prebuild for linux-$NODE_ARCH; the package would fail at first launch"

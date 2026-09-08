@@ -3,7 +3,7 @@
 Versions follow semver. What the version number promises to plugin authors and to your
 config is written in [CONTRIBUTING.md](CONTRIBUTING.md#what-stays-stable).
 
-## 1.0.0 - unreleased
+## 1.0.0 - 2026-08-15
 
 First release.
 
@@ -59,7 +59,9 @@ First release.
 
 - `scripts/install.sh`: build from source into your home directory, no root.
   `scripts/uninstall.sh` reverses it and unwrites the desktop integration first.
-- `lumanin update` pulls, rebuilds in place and restarts, with your say-so.
+- `lumanin update` pulls, rebuilds in place and restarts, with your say-so (`--check` only
+  reports, `--yes` skips the question). An installation from a distro package is told to use
+  its package manager instead of rebuilding itself.
 - `lumanin doctor --fix` and `--unfix` install and remove the compositor rule, keybind and
   autostart entry.
 - No online services, no accounts, no telemetry. Plugin tokens are stored on this machine

@@ -19,6 +19,10 @@
  * those marks — top-level *and* members, which is the only way `Action.PickDate`
  * is ever counted at all.
  *
+ * `--min-built N` turns the report into a gate: exit 1 when fewer than N
+ * top-level exports are built. CI passes the recorded number so the floor can
+ * only go up; a shim export regressing to a stub is what it catches.
+ *
  * Four numbers, not one, because "this throws" has four different answers to
  * "so what do I do instead":
  *
@@ -200,3 +204,17 @@ show('PENDING — named, throws, ours to build', listing('pending'))
 show('UNSUPPORTED — cannot work on Linux', listing('unsupported'))
 show('DECLINED — will not be built, and what to use instead', listing('declined'))
 console.log('\nABSENT:', missing.join(', ') || '(none)')
+
+const flag = process.argv.indexOf('--min-built')
+if (flag !== -1) {
+  const floor = Number(process.argv[flag + 1])
+  if (!Number.isFinite(floor)) {
+    console.error('--min-built needs a number')
+    process.exitCode = 1
+  } else if (built.length < floor) {
+    console.error(
+      `compat floor: built ${built.length} is below the recorded floor ${floor} - a shim export regressed to a stub`
+    )
+    process.exitCode = 1
+  }
+}
