@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { answerHeadlessAlert, headlessAlertNotice } from '../src/main/extensions/headless-alert'
+import { AlertRegistry } from '../src/main/extensions/alerts'
 import type { AlertPayload } from '../src/shared/ext-protocol'
 
 /**
@@ -70,5 +71,47 @@ describe('answerHeadlessAlert', () => {
     expect(consumed).toBe(false)
     expect(answers).toEqual([])
     expect(notices).toEqual([])
+  })
+})
+
+/**
+ * The registry behind `confirmAlert` in a windowed session. Without it, hiding
+ * the panel deleted the session and left the worker parked on a promise nobody
+ * could answer, for the life of the host process.
+ */
+describe('AlertRegistry', () => {
+  it('resolves an answered alert once and forgets it', () => {
+    const registry = new AlertRegistry()
+    const answers: boolean[] = []
+    registry.register('s1', 'alert-1', (confirmed) => answers.push(confirmed))
+    expect(registry.answer('alert-1', true)).toBe(true)
+    expect(registry.answer('alert-1', false)).toBe(false)
+    expect(answers).toEqual([true])
+    expect(registry.size).toBe(0)
+  })
+
+  it('dismisses a closing session’s alerts and leaves another session’s alone', () => {
+    const registry = new AlertRegistry()
+    const answers: Array<[string, boolean]> = []
+    registry.register('s1', 'alert-1', (confirmed) => answers.push(['alert-1', confirmed]))
+    registry.register('s2', 'alert-2', (confirmed) => answers.push(['alert-2', confirmed]))
+    registry.closeSession('s1')
+    expect(answers).toEqual([['alert-1', false]])
+    expect(registry.size).toBe(1)
+  })
+
+  it('closeAll empties it, every alert dismissed', () => {
+    const registry = new AlertRegistry()
+    const answers: boolean[] = []
+    registry.register('s1', 'alert-1', (confirmed) => answers.push(confirmed))
+    registry.register('s2', 'alert-2', (confirmed) => answers.push(confirmed))
+    registry.closeAll()
+    expect(answers).toEqual([false, false])
+    expect(registry.size).toBe(0)
+  })
+
+  it('ignores an unknown token', () => {
+    const registry = new AlertRegistry()
+    expect(registry.answer('alert-none', true)).toBe(false)
   })
 })

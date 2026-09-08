@@ -47,7 +47,7 @@ function absoluteWaylandDisplay(): Record<string, string> {
  * prop. If any of that needed adapting, the gate would not be met.
  */
 const EXTENSION_SOURCE = `
-import { Action, ActionPanel, Detail, List, environment, showToast, Toast, useNavigation } from "lumanin";
+import { Action, ActionPanel, Detail, List, confirmAlert, environment, showToast, Toast, useNavigation } from "lumanin";
 import { useEffect, useState } from "react";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -87,6 +87,11 @@ export default function Command(props: { launchContext?: { category?: string } }
                 {/* A side effect on disk, so a headless run — which shows nothing
                     by design — can still be proved to have happened. */}
                 <Action title="Write Marker" onAction={() => writeFileSync(join(environment.supportPath, "marker.txt"), item)} />
+                <Action title="Confirm Marker" shortcut={{ modifiers: ["cmd"], key: "y" }} onAction={async () => {
+                  if (await confirmAlert({ title: "Write it?", primaryTitle: "Write" })) {
+                    writeFileSync(join(environment.supportPath, "confirmed.txt"), item);
+                  }
+                }} />
               </ActionPanel>
             }
           />
@@ -547,13 +552,23 @@ test('Ctrl+K opens the action panel and lists the shortcut', async () => {
   expect(await page.locator('.overlay__label').allTextContents()).toEqual([
     'Announce',
     'Show Details',
-    'Write Marker'
+    'Write Marker',
+    'Confirm Marker'
   ])
   // `{modifiers: ["cmd"], key: "d"}` — cmd maps to Ctrl on Linux.
-  await expect(page.locator('.overlay__key')).toHaveText('Ctrl+D')
+  await expect(page.locator('.overlay__key')).toHaveText(['Ctrl+D', 'Ctrl+Y'])
 
   await page.locator('.overlay__panel').press('Escape')
   await expect(page.locator('.overlay__panel')).toHaveCount(0)
+})
+
+test('Escape dismisses a confirmAlert without running its action', async () => {
+  await page.locator('.search__input').press('Control+y')
+  await expect(page.locator('.alert')).toBeVisible()
+  await page.locator('.alert').press('Escape')
+  await expect(page.locator('.alert')).toHaveCount(0)
+  await expect(page.locator('.result__title').first()).toHaveText('Avocado')
+  expect(existsSync(join(supportPath, 'confirmed.txt'))).toBe(false)
 })
 
 test('an action can push a view, and Esc pops it', async () => {
@@ -632,14 +647,14 @@ test('the daemon answers enumerate with the rows of one category', async () => {
         title: 'Blueberry',
         subtitle: '9 letters',
         icon: null,
-        actions: ['Announce', 'Show Details', 'Write Marker']
+        actions: ['Announce', 'Show Details', 'Write Marker', 'Confirm Marker']
       },
       {
         id: 'Cranberry',
         title: 'Cranberry',
         subtitle: '9 letters',
         icon: null,
-        actions: ['Announce', 'Show Details', 'Write Marker']
+        actions: ['Announce', 'Show Details', 'Write Marker', 'Confirm Marker']
       }
     ]
   })

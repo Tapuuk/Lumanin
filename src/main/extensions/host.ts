@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync } from 'node:fs'
+import { AlertRegistry } from './alerts'
 import { join } from 'node:path'
 import { utilityProcess, type UtilityProcess } from 'electron'
 import {
@@ -161,7 +162,7 @@ export class ExtensionHost {
   /** When the running host was forked, which is how long it has been alive. */
   private forkedAt = 0
   private readonly sessions = new Map<string, LiveSession>()
-  private readonly alerts = new Map<string, (confirmed: boolean) => void>()
+  private readonly alerts = new AlertRegistry()
 
   constructor(private readonly deps: HostDeps) {}
 
@@ -309,10 +310,7 @@ export class ExtensionHost {
     // Every pending alert is answered "no". Leaving them unanswered would leave
     // a modal on screen with no process behind it, and answering "yes" would
     // confirm a destructive action nobody agreed to.
-    for (const [token, resolve] of this.alerts) {
-      resolve(false)
-      this.alerts.delete(token)
-    }
+    this.alerts.closeAll()
 
     if (!wasRunning) return
     // A host that ran for a long time before dying is a fresh incident, not the
@@ -480,6 +478,9 @@ export class ExtensionHost {
   }
 
   close(sessionId: string): void {
+    // Before the guard: an alert whose session was already forgotten is still
+    // a worker parked on a promise, and it is settled rather than leaked.
+    this.alerts.closeSession(sessionId)
     if (!this.sessions.has(sessionId)) return
     this.sessions.delete(sessionId)
     this.forward(HOST_METHODS.DESTROY, { sessionId })
@@ -491,10 +492,7 @@ export class ExtensionHost {
   }
 
   answerAlert(token: string, confirmed: boolean): void {
-    const resolve = this.alerts.get(token)
-    if (resolve === undefined) return
-    this.alerts.delete(token)
-    resolve(confirmed)
+    this.alerts.answer(token, confirmed)
   }
 
   dispose(): void {
@@ -749,7 +747,7 @@ export class ExtensionHost {
   private showAlert(sessionId: string, request: AlertRequest): Promise<boolean> {
     const token = `alert-${++alertCounter}`
     return new Promise<boolean>((resolve) => {
-      this.alerts.set(token, resolve)
+      this.alerts.register(sessionId, token, resolve)
       const payload: AlertPayload = {
         sessionId,
         token,

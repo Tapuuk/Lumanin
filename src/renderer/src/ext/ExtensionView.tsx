@@ -514,7 +514,36 @@ function AlertDialog({ alert, answer }: AlertDialogProps): React.JSX.Element {
   }, [])
 
   return (
-    <div className="alert" role="alertdialog" aria-label={alert.title}>
+    <div
+      className="alert"
+      role="alertdialog"
+      aria-label={alert.title}
+      // A press on the scrim dismisses; a press inside must not, which is why
+      // the target is compared rather than the event simply being stopped.
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) answer(false)
+      }}
+      // Escape abandons, as it does in every flow of the launcher, and the
+      // arrows move between the two buttons. Enter is deliberately left to the
+      // focused button, which activates natively; answering it here too would
+      // answer twice.
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          event.stopPropagation()
+          answer(false)
+          return
+        }
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+          event.preventDefault()
+          event.stopPropagation()
+          const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>('button')
+          const focused = Array.from(buttons).indexOf(document.activeElement as HTMLButtonElement)
+          const next = event.key === 'ArrowLeft' ? Math.max(0, focused - 1) : Math.min(buttons.length - 1, focused + 1)
+          buttons[next]?.focus()
+        }
+      }}
+    >
       <div className="alert__box">
         <div className="alert__title">{alert.title}</div>
         {alert.message !== undefined && <div className="alert__message">{alert.message}</div>}
