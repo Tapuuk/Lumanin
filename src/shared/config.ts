@@ -17,6 +17,7 @@ import {
   type FileCategory
 } from './files'
 import { ENV_PREFIX } from './identity'
+import { parseHotkey } from './hotkey'
 import { normalizeSearchTemplate } from './websearch'
 
 /**
@@ -454,14 +455,20 @@ function asNonEmptyString(raw: unknown): string | undefined {
   return typeof raw === 'string' && raw.length > 0 ? raw : undefined
 }
 
+/** A chord `parseHotkey` accepts, returned unchanged; a typo is reported, not written. */
+function asHotkey(raw: unknown): string | undefined {
+  return typeof raw === 'string' && parseHotkey(raw) !== null ? raw : undefined
+}
+
 /**
- * A string, including the empty one — which is a value here rather than an
- * absence: `file_search_hotkey = ""` means "do not bind one", and it has to be
- * distinguishable from the key not being in the file at all, which takes the
- * default.
+ * The empty string, or a chord `parseHotkey` accepts. Empty is a value here
+ * rather than an absence: `hotkey = ""` means "do not bind one", and it has to
+ * be distinguishable from the key not being in the file at all, which takes
+ * the default.
  */
-function asString(raw: unknown): string | undefined {
-  return typeof raw === 'string' ? raw : undefined
+function asOptionalHotkey(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined
+  return raw.trim().length === 0 || parseHotkey(raw) !== null ? raw : undefined
 }
 
 function asEnum<T extends string>(allowed: readonly T[]): (raw: unknown) => T | undefined {
@@ -843,6 +850,12 @@ function hotkeysFrom(
       problems.push('config.toml [[hotkeys]]: dropped a binding with no `bind`')
       continue
     }
+    if (parseHotkey(bind) === null) {
+      problems.push(
+        `config.toml [[hotkeys]] bind = ${JSON.stringify(bind)}: dropped, that is not a key combination this can write`
+      )
+      continue
+    }
     if (typeof target !== 'string' || !isPinKey(target)) {
       problems.push(
         `config.toml [[hotkeys]] bind = ${JSON.stringify(bind)}: dropped, target is not a <kind>:<id> key`
@@ -1046,7 +1059,7 @@ export function loadConfig(options: LoadOptions): ResolvedConfig {
         section: 'general',
         fileKey: 'hotkey',
         fallback: 'Super+R',
-        coerce: asNonEmptyString
+        coerce: asHotkey
       }),
       hideOnBlur: r.resolve({
         envKey: 'HIDE_ON_BLUR',
@@ -1149,7 +1162,7 @@ export function loadConfig(options: LoadOptions): ResolvedConfig {
         // of its own. A config written in that window still works.
         movedFrom: { section: 'general', fileKey: 'file_search_hotkey' },
         fallback: 'Super+Shift+R',
-        coerce: asString
+        coerce: asOptionalHotkey
       }),
       order: r.resolve<readonly FileCategory[]>({
         envKey: 'FILE_ORDER',

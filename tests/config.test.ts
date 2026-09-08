@@ -56,6 +56,27 @@ height = 600
 })
 
 describe('invalid values fall through instead of winning', () => {
+  it('reports a hotkey it cannot write instead of binding a typo', () => {
+    const config = loadConfig({
+      fileContents: '[general]\nhotkey = "Super+Retrun"\n',
+      env: NO_ENV
+    })
+
+    expect(config.general.hotkey.value).toBe('Super+R')
+    expect(config.general.hotkey.layer).toBe('default')
+    expect(config.problems.join('\n')).toContain('[general].hotkey')
+  })
+
+  it('keeps an empty file-search hotkey as "do not bind one"', () => {
+    const config = loadConfig({
+      fileContents: '[file_search]\nhotkey = ""\n',
+      env: NO_ENV
+    })
+
+    expect(config.fileSearch.hotkey.value).toBe('')
+    expect(config.problems).toHaveLength(0)
+  })
+
   it('skips an out-of-range dimension and reports it', () => {
     const config = loadConfig({
       fileContents: '[general]\nwidth = 40000\n',

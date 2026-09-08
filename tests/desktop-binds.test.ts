@@ -8,7 +8,17 @@ import { mergeKwinRule, removeKwinRule } from '../src/platform/fix/kwin'
 import { parseStringList, planGnomeBinds, readGnomeBinds, type SettingReader } from '../src/platform/fix/gnome'
 import { bindSpecs, desktopExec, ronString, shellQuote } from '../src/platform/fix/actions'
 import { planKdeLiveBinds, qtCombined } from '../src/platform/fix/kde-dbus'
-import { formatHotkey, parseHotkey, toCosmic, toGnome, toHyprland, toKde, toSway } from '../src/shared/hotkey'
+import {
+  formatHotkey,
+  HOTKEY_KEYS,
+  HOTKEY_PRESETS,
+  parseHotkey,
+  toCosmic,
+  toGnome,
+  toHyprland,
+  toKde,
+  toSway
+} from '../src/shared/hotkey'
 import { PROBED_BINARIES, type BinaryMap } from '../src/platform/probe/binaries'
 import type { DbusProbe } from '../src/platform/probe/dbus'
 import type { WaylandProtocols } from '../src/platform/probe/wayland'
@@ -98,6 +108,28 @@ function apply(plan: ReturnType<typeof planFixes>): void {
 const read = (path: string): string => readFileSync(path, 'utf8')
 
 // ---------------------------------------------------------------------------
+
+describe('what parseHotkey refuses', () => {
+  it('refuses a key it cannot spell in every format', () => {
+    for (const text of ['Super+Retrun', 'Super+ctl', 'Super+foo', 'Super+f0', 'Super+f99']) {
+      expect(parseHotkey(text)).toBeNull()
+    }
+  })
+
+  it('still accepts every key the pickers offer', () => {
+    for (const key of HOTKEY_KEYS) expect(parseHotkey(`Super+${key}`)).not.toBeNull()
+  })
+
+  it('accepts the arrows and spells them the way COSMIC wants', () => {
+    const up = parseHotkey('Super+Up')
+    expect(up).not.toBeNull()
+    expect(toCosmic(up as never)).toContain('key: "Up"')
+  })
+
+  it('accepts every preset', () => {
+    for (const preset of HOTKEY_PRESETS) expect(parseHotkey(preset.hotkey)).not.toBeNull()
+  })
+})
 
 describe('each desktop’s spelling of a chord', () => {
   it('writes GTK accelerators for GNOME', () => {

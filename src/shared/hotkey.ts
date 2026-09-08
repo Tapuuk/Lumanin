@@ -93,7 +93,11 @@ const DISPLAY_KEYS: Readonly<Record<string, string>> = {
   delete: 'Delete',
   insert: 'Insert',
   home: 'Home',
-  end: 'End'
+  end: 'End',
+  up: 'Up',
+  down: 'Down',
+  left: 'Left',
+  right: 'Right'
 }
 
 const MODIFIER_LABELS: Readonly<Record<Modifier, string>> = {
@@ -136,9 +140,12 @@ export function parseHotkey(text: string): Hotkey | null {
   }
 
   if (key === null || key.length === 0) return null
-  // A modifier on its own is not a hotkey, and a "key" of several characters
-  // that is not a known keysym shape would be handed to the compositor verbatim.
-  if (!/^[a-z0-9]$|^f[0-9]{1,2}$|^[a-z]+$/.test(key)) return null
+  // A key this module cannot spell in all four formats is refused here. The
+  // alternative is writing it into someone else's config, where it reads as
+  // bound and fires nothing.
+  if (!/^[a-z0-9]$/.test(key) && !/^f([1-9]|1[0-9]|2[0-4])$/.test(key) && !NAMED_KEYS.has(key)) {
+    return null
+  }
 
   return { mods: MODIFIERS.filter((modifier) => mods.has(modifier)), key }
 }
@@ -310,7 +317,11 @@ const COSMIC_KEYS: Readonly<Record<string, string>> = {
   insert: 'Insert',
   home: 'Home',
   end: 'End',
-  backspace: 'BackSpace'
+  backspace: 'BackSpace',
+  up: 'Up',
+  down: 'Down',
+  left: 'Left',
+  right: 'Right'
 }
 
 /** `null` when the chord holds a modifier COSMIC's enum cannot spell. */
@@ -366,6 +377,17 @@ export const HOTKEY_KEYS: readonly string[] = [
   'bracketleft',
   'bracketright'
 ]
+
+// Declared after `HOTKEY_KEYS`, `QT_KEYS` and `COSMIC_KEYS` on purpose: a
+// module-scope Set built above them would read them in the temporal dead zone.
+// `parseHotkey` only reads this when called, which is always after module init.
+const NAMED_KEYS: ReadonlySet<string> = new Set([
+  ...Object.values(KEY_ALIASES),
+  ...Object.keys(DISPLAY_KEYS),
+  ...Object.keys(QT_KEYS),
+  ...Object.keys(COSMIC_KEYS),
+  ...HOTKEY_KEYS
+])
 
 /** A key label for the pickers, so the list reads as keys and not as keysyms. */
 export function keyLabel(key: string): string {
