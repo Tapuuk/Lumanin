@@ -389,6 +389,13 @@ const LIST_CHROME = 8
 /** The most rows a list draws at once, however tall the terminal. */
 const MAX_ROWS = 20
 
+/**
+ * The lines a block frame spends on its title, its hint and the blanks around
+ * them, plus the same spare `LIST_CHROME` keeps. Named so the two numbers stop
+ * being coincidences.
+ */
+const BLOCK_CHROME = 8
+
 export class Menu {
   private readonly style: Style
   private readonly keys: Keys
@@ -454,12 +461,30 @@ export class Menu {
       const shown = visible()
       clamp()
 
-      const lines: string[] = ['', `  ${s.bold(spec.title)}`]
+      // `draw` appends a newline, so a frame may use one line fewer than the
+      // terminal has: a frame taller than that cannot be redrawn in place and
+      // leaves its top behind on every keypress. On a short terminal the
+      // optional chrome is shed first (the leading blank, the blank above the
+      // hints, the help slot), in that fixed order and depending only on the
+      // terminal height, and only then are rows given up, down to one.
+      const budget = this.screen.rows - 1
+      const chrome = LIST_CHROME + (spec.subtitle === undefined ? 0 : 1)
+      const comfortable = Math.min(MAX_ROWS, this.screen.rows - chrome)
+      const shed = {
+        leadingBlank: comfortable < 4,
+        hintsBlank: comfortable < 3,
+        help: comfortable < 2
+      }
+      const chromeShed = (shed.leadingBlank ? 1 : 0) + (shed.hintsBlank ? 1 : 0) + (shed.help ? 1 : 0)
+      const fixedChrome = chrome - 1 - chromeShed
+      const capacity = Math.max(1, Math.min(MAX_ROWS, budget - fixedChrome))
+
+      const lines: string[] = shed.leadingBlank ? [] : ['']
+      lines.push(`  ${s.bold(spec.title)}`)
       if (spec.subtitle !== undefined) lines.push(`  ${s.dim(spec.subtitle)}`)
       lines.push('')
 
       // A viewport, so a 500-application picker does not redraw the world.
-      const capacity = Math.max(4, Math.min(MAX_ROWS, this.screen.rows - LIST_CHROME - (spec.subtitle === undefined ? 0 : 1)))
       const at = Math.max(0, cursor)
       if (at < start) start = at
       if (at >= start + capacity) start = at - capacity + 1
@@ -500,9 +525,9 @@ export class Menu {
         lines.push(`    ${s.dim(parts.join(' · '))}`)
       }
       const help = shown[cursor]?.help
-      lines.push(help === undefined ? '' : `    ${s.dim(help)}`)
+      if (!shed.help) lines.push(help === undefined ? '' : `    ${s.dim(help)}`)
 
-      lines.push('')
+      if (!shed.hintsBlank) lines.push('')
       const hints = [
         '↑↓ move',
         'space select',
@@ -719,7 +744,9 @@ export class Menu {
 
   private block(title: string, body: readonly string[], hint: string): readonly string[] {
     const s = this.style
-    const room = Math.max(4, this.screen.rows - 8)
+    // A floor of 1, not 4: on an eight-row terminal four body lines plus the
+    // chrome is a frame taller than the screen, which cannot be redrawn in place.
+    const room = Math.max(1, this.screen.rows - BLOCK_CHROME)
     // The *last* lines, not the first: a progress log grows downward and the
     // interesting end of it is the bottom.
     const shown = body.length > room ? body.slice(body.length - room) : body

@@ -72,6 +72,47 @@ describe('the list viewport', () => {
     for (const frame of drawn) expect(lineOf(frame, 'Row 6')).toBe(lineOf(first, 'Row 6'))
   })
 
+  it('fits a short terminal: every frame at most the terminal height, title and highlight visible', async () => {
+    for (const rows of [8, 9, 10, 11]) {
+      const { term, input, frames } = fakeTerm(rows)
+      const menu = new Menu(term, new Screen(term), {})
+      const choices = Array.from({ length: 40 }, (_, index) => ({
+        value: index,
+        label: `Row ${String(index)}`,
+        ...(index % 3 === 0 ? { help: `About row ${String(index)}` } : {})
+      }))
+      const pending = menu.list<number>({ title: 'Many', choices })
+      await settle()
+      for (let press = 0; press < 5; press += 1) {
+        input.write(DOWN)
+        await settle()
+      }
+      input.write('\r')
+      expect((await pending).value).toBe(5)
+      menu.close()
+
+      const drawn = frames()
+      expect(drawn.length).toBeGreaterThan(0)
+      for (const frame of drawn) {
+        // `draw` appends a newline, so a frame of n lines uses n+1 terminal lines.
+        expect(frame.split('\n').length, `${String(rows)} rows`).toBeLessThanOrEqual(rows)
+        expect(frame).toContain('Many')
+      }
+      expect(drawn.at(-1) ?? '').toContain('Row 5')
+    }
+  })
+
+  it('fits a block frame on a short terminal', () => {
+    const { term, frames } = fakeTerm(9)
+    const menu = new Menu(term, new Screen(term), {})
+    const body = Array.from({ length: 40 }, (_, index) => `Many line ${String(index)}`)
+    menu.showNow('Working', body)
+    menu.close()
+    const drawn = frames()
+    expect(drawn.length).toBeGreaterThan(0)
+    for (const frame of drawn) expect(frame.split('\n').length).toBeLessThanOrEqual(9)
+  })
+
   it('scrolls by one row at a time once the highlight reaches the bottom', async () => {
     const { term, input, frames } = fakeTerm(16)
     const menu = new Menu(term, new Screen(term), {})
