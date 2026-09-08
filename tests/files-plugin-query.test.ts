@@ -9,6 +9,7 @@ import {
   parseSearchOutput,
   splitOutput
 } from '../plugins/files/src/query'
+import { pickTool } from '../plugins/files/src/tools'
 
 /**
  * The pure half of the Search Files plugin — pattern building, the argv per
@@ -249,5 +250,33 @@ describe('parseSearchOutput', () => {
     const spawnError = new Error('spawn fd ENOENT')
     const outcome = { stdout: '', stderr: '', exitCode: null, error: spawnError }
     expect(() => parseSearchOutput(outcome, 'fd')).toThrow(spawnError)
+  })
+})
+
+/** The decision that makes Search Files work at all on a machine without `fd`. */
+describe('pickTool', () => {
+  const has =
+    (...names: string[]) =>
+    (wanted: readonly string[]) =>
+      wanted.find((n) => names.includes(n)) === undefined ? null : '/usr/bin/x'
+
+  it('prefers fd, under either of its names', () => {
+    expect(pickTool('auto', has('fdfind', 'plocate', 'find'))?.name).toBe('fd')
+  })
+
+  it('falls back to plocate when there is no fd', () => {
+    expect(pickTool('auto', has('plocate', 'find'))?.name).toBe('locate')
+  })
+
+  it('falls back to find when that is all there is', () => {
+    expect(pickTool('auto', has('find'))?.name).toBe('find')
+  })
+
+  it('answers null on a machine with nothing', () => {
+    expect(pickTool('auto', has())).toBeNull()
+  })
+
+  it('does not silently fall through when the preferred tool is missing', () => {
+    expect(pickTool('fd', has('plocate', 'find'))).toBeNull()
   })
 })

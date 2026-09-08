@@ -39,7 +39,7 @@
     {
       "name": "tool",
       "title": "Search With",
-      "description": "Adaptive prefers fd, then plocate, then find.",
+      "description": "Adaptive prefers fd, then plocate, then find. fd skips anything listed in .gitignore, .ignore or .fdignore; plocate and find do not read those files.",
       "type": "dropdown",
       "required": false,
       "default": "auto",

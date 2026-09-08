@@ -16,7 +16,8 @@ import {
   useNavigation
 } from 'lumanin'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { argsFor, parseSearchOutput, splitOutput, type ToolName } from './query'
+import { argsFor, parseSearchOutput, splitOutput } from './query'
+import { onPath, pickTool, type Tool } from './tools'
 
 /**
  * Search Files — a search of its own, not a row in the root list.
@@ -54,37 +55,6 @@ const TIMEOUT_MS = 6000
 
 // ─── what to search with ────────────────────────────────────────────────────
 
-interface Tool {
-  readonly name: ToolName
-  /** Absolute path, so nothing depends on the worker's PATH at spawn time. */
-  readonly path: string
-}
-
-/**
- * Find an executable on PATH without spawning anything.
- *
- * `which` would mean a child process per candidate on every view open, to answer
- * a question `readdir`-free `existsSync` answers in microseconds. It also keeps
- * this honest about the argv rule: there is no shell here at all,
- * not even to look something up.
- */
-function onPath(names: readonly string[]): string | null {
-  const path = process.env['PATH'] ?? ''
-  for (const name of names) {
-    for (const directory of path.split(':')) {
-      if (directory.length === 0) continue
-      const candidate = join(directory, name)
-      try {
-        // `statSync`, not `lstatSync`: a PATH entry is allowed to be a symlink
-        // (Nix, `~/.local/bin` shims), and what matters is what it points at.
-        if (statSync(candidate).isFile()) return candidate
-      } catch {
-        continue
-      }
-    }
-  }
-  return null
-}
 
 /**
  * The home directory as the filesystem knows it.
@@ -98,38 +68,6 @@ function realHome(): string {
   } catch {
     return homedir()
   }
-}
-
-/**
- * Which tool answers this search.
- *
- * Order is by how good the answer is, not by how common the tool is. `fd`
- * respects `.gitignore` unless Ignored Files is on, which is the difference
- * between finding your source file and finding forty copies of it under
- * `node_modules`. `plocate` is
- * instant but answers from a database that is as old as the last `updatedb`, so
- * a file saved a minute ago is not in it. `find` is always there and is always
- * the slowest; it exists so that this feature never simply does not work.
- */
-function pickTool(preferred: Preferences['tool']): Tool | null {
-  const fd = (): Tool | null => {
-    // Debian and Ubuntu ship the binary as `fdfind`, because `fd` was taken.
-    const path = onPath(['fd', 'fdfind'])
-    return path === null ? null : { name: 'fd', path }
-  }
-  const locate = (): Tool | null => {
-    const path = onPath(['plocate', 'locate'])
-    return path === null ? null : { name: 'locate', path }
-  }
-  const find = (): Tool | null => {
-    const path = onPath(['find'])
-    return path === null ? null : { name: 'find', path }
-  }
-
-  if (preferred === 'fd') return fd()
-  if (preferred === 'locate') return locate()
-  if (preferred === 'find') return find()
-  return fd() ?? locate() ?? find()
 }
 
 // ─── icons ──────────────────────────────────────────────────────────────────
@@ -626,7 +564,10 @@ async function openTerminal(directory: string): Promise<void> {
     void showToast({ style: Toast.Style.Failure, title: 'Could not open a terminal', message: error.message })
   })
   child.unref()
-  await closeMainWindow()
+  // Closed once the terminal has actually started: closing on the same tick as
+  // `spawn` meant a machine with no terminal failed into a window already gone,
+  // and the toast above had nowhere to appear.
+  child.once('spawn', () => void closeMainWindow())
 }
 
 // ─── browsing ───────────────────────────────────────────────────────────────
@@ -711,14 +652,14 @@ function Row({
               <Action
                 title="Open Containing Folder"
                 icon={Icon.Folder}
-                shortcut={{ modifiers: ['ctrl'], key: 'o' }}
+                shortcut={{ modifiers: ['cmd'], key: 'o' }}
                 onAction={() => handOff(dirname(hit.path))}
               />
             )}
             <Action
               title="Open in Terminal"
               icon={Icon.Terminal}
-              shortcut={{ modifiers: ['ctrl'], key: 't' }}
+              shortcut={{ modifiers: ['cmd'], key: 't' }}
               onAction={() => openTerminal(hit.directory ? hit.path : dirname(hit.path))}
             />
           </ActionPanel.Section>
@@ -726,7 +667,7 @@ function Row({
             <Action.CopyToClipboard
               title="Copy Path"
               content={hit.path}
-              shortcut={{ modifiers: ['ctrl'], key: 'c' }}
+              shortcut={{ modifiers: ['cmd'], key: 'c' }}
             />
             <Action.CopyToClipboard title="Copy Name" content={hit.name} />
           </ActionPanel.Section>
@@ -832,7 +773,7 @@ export default function SearchFiles(): React.JSX.Element {
   const { push } = useNavigation()
   const hidden = preferences.showHidden === true
 
-  const tool = useMemo(() => pickTool(preferences.tool), [preferences.tool])
+  const tool = useMemo(() => pickTool(preferences.tool, onPath), [preferences.tool])
   // Read once per open rather than per keystroke, and re-read on the next open:
   // the settings menu writes `config.toml` and this view is short-lived, so
   // "when it opens" is as live as a watcher would be.
