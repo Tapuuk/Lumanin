@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process'
-import { accessSync, constants, existsSync } from 'node:fs'
+import { accessSync, closeSync, constants, existsSync, openSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { connect } from 'node:net'
 import { dirname, join, resolve as resolvePath } from 'node:path'
 import { APP_ID } from '../shared/identity'
@@ -20,6 +20,14 @@ import type { Response, Verb } from '../shared/protocol'
 const CONNECT_TIMEOUT_MS = 1500
 const DAEMON_START_TIMEOUT_MS = 10_000
 const RETRY_INTERVAL_MS = 50
+/**
+ * The budget per phase of a version-mismatch restart (quit, unit restart,
+ * plain start). A daemon that was up two seconds ago comes back in well under
+ * a second; three phases at the cold-start budget held a compositor bind for
+ * ~30 s with nothing on screen. Giving up loses only the replay of the verb,
+ * which the old daemon already served, and the next press finds the new one.
+ */
+export const RESTART_PHASE_TIMEOUT_MS = 2500
 
 export function fail(message: string, code = 1): never {
   process.stderr.write(`${APP_ID}: ${message}\n`)
@@ -120,9 +128,48 @@ export interface RestartDeps {
   readonly request: (socketPath: string, verb: Verb) => Promise<Response | null>
   readonly unitActive: () => boolean
   readonly restartUnit: () => boolean
-  readonly startDaemon: (socketPath: string) => Promise<boolean>
+  readonly startDaemon: (socketPath: string, timeoutMs?: number) => Promise<boolean>
+  /** Takes the one-restart-at-a-time lock; `null` when another CLI holds it. */
+  readonly lock: (path: string) => (() => void) | null
   readonly retryMs: number
   readonly timeoutMs: number
+}
+
+/**
+ * One restart at a time. A held key fires the bind once per repeat, each
+ * spawning a CLI that would quit the daemon the previous one had just
+ * started. The lock is a file next to the socket, in `$XDG_RUNTIME_DIR`, which
+ * is cleared at logout; within a session a lock left by a killed CLI is stale
+ * once it is older than every budget a holder could still be inside.
+ */
+function takeRestartLock(path: string): (() => void) | null {
+  const open = (): (() => void) | null => {
+    try {
+      const fd = openSync(path, 'wx', 0o600)
+      writeFileSync(fd, String(process.pid))
+      return () => {
+        try {
+          closeSync(fd)
+          unlinkSync(path)
+        } catch {
+          // Already gone: the stale rule below removed it under us.
+        }
+      }
+    } catch {
+      return null
+    }
+  }
+  const first = open()
+  if (first !== null) return first
+  try {
+    if (Date.now() - statSync(path).mtimeMs > RESTART_PHASE_TIMEOUT_MS * 3) {
+      unlinkSync(path)
+      return open()
+    }
+  } catch {
+    // Cannot tell whether it is stale: failing closed costs one skipped restart.
+  }
+  return null
 }
 
 const defaultRestartDeps: RestartDeps = {
@@ -131,8 +178,9 @@ const defaultRestartDeps: RestartDeps = {
   unitActive: () => systemctl(['is-active', '--quiet']),
   restartUnit: () => systemctl(['restart']),
   startDaemon,
+  lock: takeRestartLock,
   retryMs: RETRY_INTERVAL_MS,
-  timeoutMs: DAEMON_START_TIMEOUT_MS
+  timeoutMs: RESTART_PHASE_TIMEOUT_MS
 }
 
 export async function restartIfStale(
@@ -141,20 +189,28 @@ export async function restartIfStale(
   deps: RestartDeps = defaultRestartDeps
 ): Promise<boolean> {
   if (!reply.ok || reply.version === undefined || reply.version === deps.ownVersion()) return false
-  const sleep = (): Promise<void> => new Promise((r) => setTimeout(r, deps.retryMs))
-  await deps.request(socketPath, { kind: 'quit' })
-  const gone = Date.now() + deps.timeoutMs
-  while (Date.now() < gone && (await deps.request(socketPath, { kind: 'ping' })) !== null) {
-    await sleep()
-  }
-  if (deps.unitActive() && deps.restartUnit()) {
-    const deadline = Date.now() + deps.timeoutMs
-    while (Date.now() < deadline) {
-      if ((await deps.request(socketPath, { kind: 'ping' })) !== null) return true
+  // Another CLI is already restarting: sending `quit` now would kill the daemon
+  // it just started. The verb was served by the old one, so nothing is lost.
+  const release = deps.lock(`${socketPath}.restart`)
+  if (release === null) return false
+  try {
+    const sleep = (): Promise<void> => new Promise((r) => setTimeout(r, deps.retryMs))
+    await deps.request(socketPath, { kind: 'quit' })
+    const gone = Date.now() + deps.timeoutMs
+    while (Date.now() < gone && (await deps.request(socketPath, { kind: 'ping' })) !== null) {
       await sleep()
     }
+    if (deps.unitActive() && deps.restartUnit()) {
+      const deadline = Date.now() + deps.timeoutMs
+      while (Date.now() < deadline) {
+        if ((await deps.request(socketPath, { kind: 'ping' })) !== null) return true
+        await sleep()
+      }
+    }
+    return await deps.startDaemon(socketPath, deps.timeoutMs)
+  } finally {
+    release()
   }
-  return deps.startDaemon(socketPath)
 }
 
 function systemctl(args: readonly string[]): boolean {
@@ -217,7 +273,7 @@ function isExecutable(path: string): boolean {
   }
 }
 
-export async function startDaemon(socketPath: string): Promise<boolean> {
+export async function startDaemon(socketPath: string, timeoutMs = DAEMON_START_TIMEOUT_MS): Promise<boolean> {
   const daemon = resolveDaemonCommand()
   if (daemon === null) return false
 
@@ -247,7 +303,7 @@ export async function startDaemon(socketPath: string): Promise<boolean> {
   child.on('error', () => undefined)
   child.unref()
 
-  const deadline = Date.now() + DAEMON_START_TIMEOUT_MS
+  const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, RETRY_INTERVAL_MS))
     const reply = await request(socketPath, { kind: 'ping' })
