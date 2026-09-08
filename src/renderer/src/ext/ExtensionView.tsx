@@ -139,7 +139,10 @@ export function ExtensionView({ state, focusToken, keys, onExit }: ExtensionView
   // rows below skip their own render.
   const shape = useMemo(() => (view?.type === 'List' ? readListShape(view) : null), [view])
   const visible = useMemo(
-    () => (shape === null ? EMPTY_ROWS : filterRows(shape.rows, searchText, shape.filtered)),
+    () =>
+      shape === null
+        ? EMPTY_ROWS
+        : filterRows(shape.rows, searchText, shape.filtered, shape.keepSectionOrder),
     [shape, searchText]
   )
   const list = useMemo(
@@ -660,6 +663,8 @@ interface ListModel {
   readonly onSearchTextChange: string | null
   readonly onSelectionChange: string | null
   readonly filtered: boolean
+  /** `filtering={{ keepSectionOrder: true }}`: sections in the author's order. */
+  readonly keepSectionOrder: boolean
   readonly throttle: boolean
 }
 
@@ -686,6 +691,7 @@ function readListShape(node: RenderNode): ListModel {
       : objectProp(explicitFiltering) !== null
         ? true
         : onSearchTextChange === null
+  const keepSectionOrder = objectProp(explicitFiltering)?.['keepSectionOrder'] === true
 
   const rows: Row[] = []
   let emptyView: RenderNode | null = null
@@ -718,6 +724,7 @@ function readListShape(node: RenderNode): ListModel {
     onSearchTextChange,
     onSelectionChange: handler(node.props['onSelectionChange']),
     filtered: filtering,
+    keepSectionOrder,
     throttle: bool(node.props['throttle'])
   }
 }
@@ -960,7 +967,8 @@ function ListBody({ list, selected, extension, send }: ListBodyProps): React.JSX
         const index = start + offset
         const isSelected = row.id === selected?.id
         // Whether this row opens a section is a question about the row before
-        // it, so it is answered here rather than inside the row.
+        // it, so it is answered here rather than inside the row. It depends on
+        // `filterRows` keeping a section's rows together.
         const showSection =
           row.sectionTitle !== null && row.sectionTitle !== list.rows[index - 1]?.sectionTitle
 

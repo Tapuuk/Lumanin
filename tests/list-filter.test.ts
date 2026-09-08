@@ -6,8 +6,22 @@ interface Row extends SearchableRow {
   readonly subtitle: string
 }
 
-function row(id: string, title: string, keywords = '', subtitle = ''): Row {
-  return { id, title, keywords, subtitle }
+function row(id: string, title: string, keywords = '', subtitle = '', sectionTitle: string | null = null): Row {
+  return { id, title, keywords, subtitle, sectionTitle }
+}
+
+const sections = (rows: readonly Row[]): (string | null)[] => rows.map((entry) => entry.sectionTitle ?? null)
+
+/** Every section appears as one contiguous run: no heading is drawn twice. */
+function contiguous(values: readonly (string | null)[]): boolean {
+  const seen = new Set<string | null>()
+  let previous: string | null | undefined
+  for (const value of values) {
+    if (value !== previous && seen.has(value)) return false
+    seen.add(value)
+    previous = value
+  }
+  return true
 }
 
 const titles = (rows: readonly Row[]): string[] => rows.map((entry) => entry.title)
@@ -73,5 +87,50 @@ describe('filtering an extension list', () => {
     expect(visible).toHaveLength(2)
     expect(visible[0]).toBe(rows[0])
     expect(visible[1]).toBe(rows[1])
+  })
+})
+
+/**
+ * Sections. The view draws a heading whenever a row's section differs from the
+ * one before it, so interleaving two sections drew the same heading again and
+ * again on the first keystroke.
+ */
+describe('sections', () => {
+  const grouped = [
+    row('t1', 'Appel', '', '', 'Today'),
+    row('t2', 'Zebra', 'apple', '', 'Today'),
+    row('y1', 'Banana', 'apple', '', 'Yesterday'),
+    row('y2', 'Apple', '', '', 'Yesterday'),
+    row('o1', 'Cider', 'apple', '', 'Older'),
+    row('o2', 'Apple Pie', '', '', 'Older')
+  ]
+
+  it('keeps every section contiguous, so a heading is drawn once', () => {
+    const visible = filterRows(grouped, 'apple', true)
+    expect(visible).toHaveLength(6)
+    expect(contiguous(sections(visible))).toBe(true)
+  })
+
+  it('puts the section holding the best match first by default', () => {
+    const visible = filterRows(grouped, 'apple', true)
+    // Yesterday holds the only exact title match, so it rises above Today.
+    expect(sections(visible)[0]).toBe('Yesterday')
+  })
+
+  it('keeps the author’s section order when asked to', () => {
+    const visible = filterRows(grouped, 'apple', true, true)
+    expect(sections(visible)).toEqual(['Today', 'Today', 'Yesterday', 'Yesterday', 'Older', 'Older'])
+  })
+
+  it('still ranks by tier inside one section', () => {
+    const visible = filterRows(grouped, 'apple', true, true)
+    expect(titles(visible.filter((entry) => entry.sectionTitle === 'Yesterday'))).toEqual(['Apple', 'Banana'])
+    expect(titles(visible.filter((entry) => entry.sectionTitle === 'Today'))).toEqual(['Zebra', 'Appel'])
+  })
+
+  it('is the old behaviour for a list with no sections', () => {
+    const rows = [row('typo', 'Appel'), row('keyword', 'Banana', 'apple fruit'), row('title', 'Apple')]
+    expect(titles(filterRows(rows, 'apple', true))).toEqual(['Apple', 'Banana', 'Appel'])
+    expect(filterRows(rows, 'app', false)).toBe(rows)
   })
 })
