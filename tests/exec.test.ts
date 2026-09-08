@@ -597,6 +597,7 @@ describe('a run the user has moved on from', () => {
    */
   it('reports nothing when a superseded promise rejects', async () => {
     let which = 'first'
+    let loading: boolean | undefined
     const onError = vi.fn()
     const Command = (): ReactNode => {
       const { isLoading } = usePromise(
@@ -611,6 +612,7 @@ describe('a run the user has moved on from', () => {
         [which],
         { onError }
       )
+      loading = isLoading
       return createElement('List', { isLoading })
     }
 
@@ -620,5 +622,37 @@ describe('a run the user has moved on from', () => {
     await pump(h, createElement(Command), 500)
 
     expect(onError).not.toHaveBeenCalled()
+    expect(loading).toBe(false)
+  })
+
+  /**
+   * The other half of the abort rule: an abort the *plugin* raised on the
+   * current run is a failure, not the hook doing its job. Before this, the
+   * name alone was enough to skip state, and the spinner never stopped.
+   */
+  it('reports an abort the plugin raised itself, and stops loading', async () => {
+    const onError = vi.fn()
+    let last: { isLoading: boolean; error: Error | undefined } | undefined
+    const Command = (): ReactNode => {
+      const { isLoading, error } = usePromise(
+        async () => {
+          await sleep(10)
+          const aborted = new Error('aborted')
+          aborted.name = 'AbortError'
+          throw aborted
+        },
+        [],
+        { onError }
+      )
+      last = { isLoading, error }
+      return createElement('List', { isLoading })
+    }
+
+    const h = harness()
+    await pump(h, createElement(Command), 300)
+
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(last?.isLoading).toBe(false)
+    expect(last?.error?.name).toBe('AbortError')
   })
 })

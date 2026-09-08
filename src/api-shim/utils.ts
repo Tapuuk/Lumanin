@@ -118,8 +118,12 @@ export function usePromise<T>(
       return data
     } catch (error) {
       const failure = error instanceof Error ? error : new Error(String(error))
-      // An abort is the hook doing its job, not a failure to report.
-      if (failure.name === 'AbortError') throw failure
+      // An abort the hook caused is always a superseded one: `run` and the
+      // `execute` effect bump the generation before they abort. An abort on the
+      // *current* run came from the plugin (its own timeout signal, a library
+      // cancelling internally) and is a failure it must see, or the spinner
+      // never stops.
+      if (failure.name === 'AbortError' && generation.current !== ours) throw failure
       if (generation.current === ours) {
         setState({ isLoading: false, error: failure })
         if (current.onError !== undefined) current.onError(failure)
@@ -134,6 +138,16 @@ export function usePromise<T>(
     // array itself is a new object on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
+
+  // A result that arrives after the view is gone is reported nowhere: without
+  // this bump, `useExec`'s unmount abort would look like a plugin's own and
+  // raise a toast over the next command.
+  useEffect(
+    () => () => {
+      generation.current += 1
+    },
+    []
+  )
 
   useEffect(() => {
     if (!execute) {
