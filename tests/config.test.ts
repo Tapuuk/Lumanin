@@ -122,6 +122,12 @@ describe('robustness', () => {
     expect(config.problems.join('\n')).toContain('could not be parsed')
   })
 
+  it('reports a file it could not read instead of booting on defaults in silence', () => {
+    const config = loadConfig({ env: NO_ENV, readProblem: 'config.toml could not be read: EACCES' })
+    expect(config.general.width.value).toBe(760)
+    expect(config.problems).toContain('config.toml could not be read: EACCES')
+  })
+
   it('preserves unknown sections rather than dropping them', () => {
     const config = loadConfig({
       fileContents: '[general]\nwidth = 800\n\n[future_feature]\nenabled = true\n',

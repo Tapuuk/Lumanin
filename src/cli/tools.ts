@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
-import { readFileSync } from 'node:fs'
+import { readConfigFileContents } from '../node/config-file'
+import {  } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { runConfigUi } from './config-ui'
 import { probePlatform } from '../platform/detect'
@@ -170,15 +171,10 @@ export async function runPlugins(): Promise<number> {
 export async function runDoctor(flags: ReadonlySet<string>): Promise<void> {
   const paths = resolvePaths()
 
-  let fileContents: string | null = null
-  try {
-    fileContents = readFileSync(paths.configFile, 'utf8')
-  } catch {
-    fileContents = null
-  }
+  const read = readConfigFileContents(paths.configFile)
 
   const profile = await probePlatform(process.env)
-  const config = loadConfig({ fileContents, env: process.env })
+  const config = loadConfig({ fileContents: read.contents, readProblem: read.problem, env: process.env })
 
   const dirs = { config: paths.configHome, data: paths.dataHome }
 

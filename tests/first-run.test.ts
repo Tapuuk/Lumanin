@@ -25,6 +25,16 @@ describe('firstRunPending', () => {
     const { configFile, stateDir } = fresh()
     writeFileSync(configFile, '')
     expect(firstRunPending(configFile, stateDir)).toBe(false)
+    writeFileSync(configFile, '[general]\nwidth = 900\n')
+    expect(firstRunPending(configFile, stateDir)).toBe(false)
+  })
+
+  it('is still pending when config.toml holds only comments', () => {
+    // "Open Configuration File" creates such a file on a fresh install; that
+    // must not silently cancel the setup wizard.
+    const { configFile, stateDir } = fresh()
+    writeFileSync(configFile, '# Lumanin configuration.\n# nothing set yet\n')
+    expect(firstRunPending(configFile, stateDir)).toBe(true)
   })
 
   it('is settled once the wizard finished, even with no config written', () => {

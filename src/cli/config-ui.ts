@@ -227,7 +227,14 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
   let commentBackup: string | null = null
   let applying: Promise<void> = Promise.resolve()
   const set = (path: readonly string[], value: unknown): void => {
-    setValue(draft, path, value)
+    if (!setValue(draft, path, value)) {
+      // Refused with its name, in the same red the parse-error banner uses: a
+      // section that is a scalar or an array in the file cannot take this key.
+      menu.say(
+        `\n  ${s.bad(`Could not set "${path.join('.')}" - [${path[0] ?? ''}] is not a table in your config.toml.`)}\n`
+      )
+      return
+    }
     if (!dirty()) return
     const hadComments = document.commentLines
     const written = writeConfigDocument(document, draft, stamp())

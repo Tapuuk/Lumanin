@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { commentsOnly, readConfigDocument } from './config-file'
 
 /**
  * First run, answered from either door.
@@ -11,7 +12,9 @@ import { join } from 'node:path'
  * when it has a terminal to ask in.
  *
  * Three files decide, all under the state dir except the config itself:
- * `config.toml` existing means the machine is set up (however that happened);
+ * `config.toml` existing means the machine is set up (however that happened),
+ * unless it is comments alone, as "Open Configuration File" creates on a
+ * fresh install: that configures nothing and settles nothing;
  * `first-run-done` means the wizard ran to its end; `first-run-offered` means
  * one of the doors already asked. The last one is what keeps this from nagging:
  * being offered setup once is a welcome, being offered it on every command is a
@@ -24,7 +27,7 @@ const OFFERED = 'first-run-offered'
 export function firstRunPending(configFile: string, stateDir: string): boolean {
   // Ordered by likelihood: on every machine that is set up, the first stat
   // answers and the toggle path pays exactly one.
-  if (existsSync(configFile)) return false
+  if (existsSync(configFile) && !commentsOnly(readConfigDocument(configFile).original)) return false
   if (existsSync(join(stateDir, DONE))) return false
   if (existsSync(join(stateDir, OFFERED))) return false
   return true

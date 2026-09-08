@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, watch, type FSWatcher } from 'node:fs'
+import { existsSync, mkdirSync, watch, type FSWatcher } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, clipboard, ipcMain, net, Notification, protocol, shell, type IpcMainInvokeEvent } from 'electron'
@@ -29,6 +29,7 @@ import {
 } from '../shared/ipc'
 import { createFileSink, createStderrSink, Logger } from '../node/logger'
 import { firstRunPending, markFirstRunOffered } from '../node/first-run'
+import { readConfigFileContents } from '../node/config-file'
 import { bundledPluginsDir, resolvePaths } from '../node/paths'
 import { parseArgs, type DaemonStatus, type EnumerateData, type Request, type Response } from '../shared/protocol'
 import { ACTION_DRAIN_CEILING_MS, HOST_NOT_RUNNING, type ExtensionHostStatus } from '../shared/ext-protocol'
@@ -114,12 +115,11 @@ process.on('uncaughtException', (error: Error) => {
   logger.error('uncaught exception in main', { error })
 })
 
-function readConfigFile(): string | null {
-  try {
-    return readFileSync(paths.configFile, 'utf8')
-  } catch {
-    return null // No config file is the normal case, not an error.
-  }
+// No config file is the normal case, not an error; an unreadable one is, and
+// reaches `doctor` through `problems` instead of booting on defaults in silence.
+function readConfigFile(): { fileContents: string | null; readProblem: string | null } {
+  const read = readConfigFileContents(paths.configFile)
+  return { fileContents: read.contents, readProblem: read.problem }
 }
 
 /**
@@ -131,7 +131,7 @@ function readConfigFile(): string | null {
  * and calls it at the point of use, so nobody is holding a snapshot from
  * startup.
  */
-let config: ResolvedConfig = loadConfig({ fileContents: readConfigFile(), env: process.env })
+let config: ResolvedConfig = loadConfig({ ...readConfigFile(), env: process.env })
 const current = (): ResolvedConfig => config
 
 function reportConfig(loaded: ResolvedConfig): void {
@@ -162,7 +162,7 @@ function needsRestart(_before: ResolvedConfig, _after: ResolvedConfig): readonly
 
 /** Re-read `config.toml`. Returns what changed but could not be applied live. */
 function reloadConfig(reason: string): readonly string[] {
-  const loaded = loadConfig({ fileContents: readConfigFile(), env: process.env })
+  const loaded = loadConfig({ ...readConfigFile(), env: process.env })
   const pending = needsRestart(config, loaded)
   config = loaded
   reportConfig(loaded)

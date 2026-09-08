@@ -165,19 +165,24 @@ export function render(data: Record<string, unknown>): string {
  * table it leaves empty. That distinction matters: a key that is absent takes
  * the built-in default and keeps taking it as the default changes, where a key
  * pinned to today's default is a decision the user never made.
+ *
+ * Returns `false` when the path cannot be addressed (a segment lands on an
+ * array entry that is not a table, or on a scalar where a table was expected)
+ * and nothing was changed. Not a throw: the CLI calls this inside a menu
+ * redraw, and only `AbandonedFlow` may unwind one of those.
  */
 export function setValue(
   data: Record<string, unknown>,
   path: readonly string[],
   value: unknown
-): void {
+): boolean {
   const [head, ...rest] = path
-  if (head === undefined) return
+  if (head === undefined) return false
 
   if (rest.length === 0) {
     if (value === undefined) delete data[head]
     else data[head] = value
-    return
+    return true
   }
 
   const existing = data[head]
@@ -188,19 +193,75 @@ export function setValue(
   if (Array.isArray(existing)) {
     const index = Number(rest[0])
     const entry = existing[index]
-    if (!Number.isInteger(index) || typeof entry !== 'object' || entry === null) return
-    setValue(entry as Record<string, unknown>, rest.slice(1), value)
-    return
+    if (!Number.isInteger(index) || typeof entry !== 'object' || entry === null) return false
+    return setValue(entry as Record<string, unknown>, rest.slice(1), value)
   }
+
+  // A scalar where a table was expected: nothing under it to delete, and
+  // building a fresh `{}` here used to find it empty and delete the parent.
+  if (existing !== undefined && (typeof existing !== 'object' || existing === null)) return false
 
   const table =
     typeof existing === 'object' && existing !== null ? (existing as Record<string, unknown>) : {}
 
-  if (value === undefined && !(head in data)) return
-  setValue(table, rest, value)
+  if (value === undefined && !(head in data)) return true
+  const done = setValue(table, rest, value)
 
   if (Object.keys(table).length === 0) delete data[head]
   else data[head] = table
+  return done
+}
+
+/**
+ * The file's contents, distinguishing "no file" from "could not read it".
+ *
+ * `ENOENT` is the normal case on a fresh machine and is not a problem; any
+ * other errno is one, and it used to be swallowed into "no config", which
+ * booted the launcher on defaults with nothing anywhere saying why.
+ */
+export function readConfigFileContents(path: string): { contents: string | null; problem: string | null } {
+  try {
+    return { contents: readFileSync(path, 'utf8'), problem: null }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') return { contents: null, problem: null }
+    return { contents: null, problem: `config.toml could not be read: ${(error as Error).message}` }
+  }
+}
+
+/** The header a fresh file starts with; comment lines only, so it configures nothing. */
+const FRESH_CONFIG_HEADER = [
+  '# Lumanin configuration.',
+  '# Every key is optional; an absent key takes the built-in default.',
+  '# A rewrite by `lumanin config` or the settings app keeps a backup but drops these comments.',
+  ''
+].join('\n')
+
+/**
+ * Make sure the file exists before something opens it: the "Open Configuration
+ * File" row on a fresh install used to answer an errno on the one machine where
+ * it is most likely to be pressed. Does nothing when the file is there.
+ */
+export function ensureConfigFile(path: string): void {
+  try {
+    readFileSync(path)
+    return
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return
+  }
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+  writeFileSync(path, FRESH_CONFIG_HEADER, { mode: 0o644 })
+}
+
+/**
+ * Whether a file's text is comments alone, which is what {@link ensureConfigFile}
+ * writes: such a file configures nothing and must not count as a set-up
+ * machine. An empty file keeps its old meaning (it exists, so someone put it
+ * there), and any key at all settles the question.
+ */
+export function commentsOnly(original: string | null): boolean {
+  if (original === null || original.trim().length === 0) return false
+  return original.split('\n').every((line) => line.trim() === '' || line.trim().startsWith('#'))
 }
 
 /** Read a value at a dotted path, or `undefined`. */

@@ -329,6 +329,8 @@ export interface LoadOptions {
   readonly env: Readonly<Record<string, string | undefined>>
   /** Raw `config.toml` contents, or `null` when the file does not exist. */
   readonly fileContents?: string | null
+  /** Why the file could not be read, when it exists but could not be; reported, not swallowed. */
+  readonly readProblem?: string | null
   /** Values from parsed CLI flags; highest precedence. */
   readonly flags?: Readonly<Record<string, string | undefined>>
 }
@@ -1029,9 +1031,10 @@ function readAliases(file: Record<string, unknown>): Readonly<Record<string, Pin
 }
 
 export function loadConfig(options: LoadOptions): ResolvedConfig {
-  const { fileContents = null, env, flags = {} } = options
+  const { fileContents = null, env, flags = {}, readProblem = null } = options
 
   const problems: string[] = []
+  if (readProblem !== null) problems.push(readProblem)
   let file: Record<string, unknown> = {}
 
   if (fileContents !== null) {

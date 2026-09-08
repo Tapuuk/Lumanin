@@ -4,8 +4,10 @@ import { join } from 'node:path'
 import { PassThrough, Writable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 import {
+  ensureConfigFile,
   getValue,
   readConfigDocument,
+  readConfigFileContents,
   render,
   setValue,
   writeConfigDocument
@@ -42,6 +44,21 @@ describe('the config document', () => {
     const after = readFileSync(path, 'utf8')
     expect(after).toContain('retention_days = 14')
     expect(after).toContain('width = 1000')
+  })
+
+  it('creates a comment-only file once, and reports a read problem apart from a missing file', () => {
+    const path = tempFile()
+    ensureConfigFile(path)
+    const first = readFileSync(path, 'utf8')
+    expect(first.split('\n').every((line) => line === '' || line.startsWith('#'))).toBe(true)
+    ensureConfigFile(path)
+    expect(readFileSync(path, 'utf8')).toBe(first)
+
+    expect(readConfigFileContents(tempFile('absent.toml'))).toEqual({ contents: null, problem: null })
+    // A directory where a file was expected: readable as nothing, so a problem.
+    const directory = tempFile('dir.toml')
+    mkdirSync(directory)
+    expect(readConfigFileContents(directory).problem).not.toBeNull()
   })
 
   it('keeps the previous version when it rewrites', () => {
@@ -121,6 +138,26 @@ describe('setValue', () => {
     const data: Record<string, unknown> = { general: { width: 900 } }
     setValue(data, ['general', 'width'], undefined)
     expect(data).toEqual({})
+  })
+
+  it('refuses a delete under a scalar instead of deleting the parent', () => {
+    // `general = "x"` plus a delete of general.hotkey used to build a fresh
+    // table, find it empty, and delete `general` itself.
+    const data: Record<string, unknown> = { general: 'something' }
+    expect(setValue(data, ['general', 'hotkey'], undefined)).toBe(false)
+    expect(data['general']).toBe('something')
+  })
+
+  it('refuses a set under an array and says so with false', () => {
+    const data: Record<string, unknown> = { extensions: [] }
+    expect(setValue(data, ['extensions', 'disabled'], ['x'])).toBe(false)
+    expect(data['extensions']).toEqual([])
+  })
+
+  it('answers true for an ordinary set', () => {
+    const data: Record<string, unknown> = {}
+    expect(setValue(data, ['general', 'width'], 900)).toBe(true)
+    expect(data).toEqual({ general: { width: 900 } })
   })
 
   it('edits inside an array of tables', () => {

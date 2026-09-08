@@ -1,5 +1,6 @@
 import type { LaunchOutcome } from '../shared/ipc'
 import type { RootCommand } from './root-search'
+import { ensureConfigFile } from '../node/config-file'
 
 /**
  * The root command list: the launcher's own commands, searchable alongside
@@ -120,7 +121,12 @@ export function rootCommands(handlers: CommandHandlers): readonly RegisteredComm
       title: 'Open Configuration File',
       subtitle: 'config.toml',
       keywords: ['settings', 'preferences', 'toml', 'edit'],
-      run: () => opened(handlers.configFile, 'config.toml')
+      run: () => {
+        // A fresh install has no file yet, and opening a path that is not
+        // there answered an errno on exactly the machine most likely to press this.
+        ensureConfigFile(handlers.configFile)
+        return opened(handlers.configFile, 'config.toml')
+      }
     },
     {
       id: 'builtin/open-log',

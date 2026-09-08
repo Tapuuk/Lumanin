@@ -41,7 +41,7 @@ import {
 import { allSettings, type Setting } from '../shared/settings-model'
 import { THEME_FILE_BASENAME, ISSUES_URL } from '../shared/identity'
 import type { EnumerateData } from '../shared/protocol'
-import { getValue, readConfigDocument, setValue, writeConfigDocument } from '../node/config-file'
+import { getValue, readConfigDocument, setValue, writeConfigDocument, commentsOnly } from '../node/config-file'
 import { type LumaninPaths } from '../node/paths'
 import type { Logger } from '../node/logger'
 import {
@@ -329,7 +329,7 @@ export class SettingsIpc {
       bindable: bindable(profile),
       // First run: nothing configured yet and the wizard never finished. The
       // marker is state, not config — config.toml stays entirely the user's.
-      firstRun: !document.existed && !existsSync(this.wizardMarker())
+      firstRun: (!document.existed || commentsOnly(document.original)) && !existsSync(this.wizardMarker())
     }
   }
 
@@ -440,7 +440,7 @@ export class SettingsIpc {
       // Arrays are written verbatim, empty included: `engines = []` means "no
       // web searches", which is a choice — deleting the key would mean "the
       // default set", the opposite one. Only `null` deletes.
-      setValue(data, params.path, value)
+      return setValue(data, params.path, value)
     })
   }
 
@@ -468,7 +468,7 @@ export class SettingsIpc {
       }
     }
     return this.write((data) => {
-      setValue(
+      return setValue(
         data,
         ['hotkeys'],
         params.entries.length === 0
@@ -502,7 +502,7 @@ export class SettingsIpc {
       (entry, index) => params.entries.findIndex((candidate) => candidate.key === entry.key) === index
     )
     return this.write((data) => {
-      setValue(
+      return setValue(
         data,
         ['search', 'pins'],
         entries.length === 0
@@ -528,9 +528,7 @@ export class SettingsIpc {
       return { ok: false, detail: 'an alias is one short word' }
     }
     if (params.key === null) {
-      return this.write((data) => {
-        setValue(data, ['aliases', alias], undefined)
-      })
+      return this.write((data) => setValue(data, ['aliases', alias], undefined))
     }
     if (!isPinKey(params.key)) return { ok: false, detail: 'that target is not something the root can launch' }
     if (params.key.startsWith('web:')) {
@@ -544,12 +542,10 @@ export class SettingsIpc {
         : key.startsWith('shell:') || key.includes('#')
           ? key
           : key.slice(key.indexOf(':') + 1)
-    return this.write((data) => {
-      setValue(data, ['aliases', alias], value)
-    })
+    return this.write((data) => setValue(data, ['aliases', alias], value))
   }
 
-  private write(edit: (data: Record<string, unknown>) => void): { ok: boolean; detail?: string } {
+  private write(edit: (data: Record<string, unknown>) => boolean): { ok: boolean; detail?: string } {
     const document = readConfigDocument(this.deps.paths.configFile)
     if (document.parseError !== null) {
       // Editing would mean rewriting from an empty document, silently
@@ -558,7 +554,11 @@ export class SettingsIpc {
     }
 
     const data = structuredClone(document.data)
-    edit(data)
+    // A path the document cannot address (a section that is a scalar or an
+    // array in the user's file) is refused with its name, never reported done.
+    if (!edit(data)) {
+      return { ok: false, detail: `could not change config.toml: a section on that path is not a table` }
+    }
     const result = writeConfigDocument(document, data, stamp())
     this.deps.logger.info('config written', { changed: result.changed, backup: result.backup })
     // The daemon follows the file through its watcher; the settings renderer
@@ -851,7 +851,7 @@ export class SettingsIpc {
       const raw = getValue(data, ['extensions', 'disabled'])
       const list = Array.isArray(raw) ? raw.filter((item): item is string => typeof item === 'string') : []
       const next = disable ? [...new Set([...list, entry])] : list.filter((item) => item !== entry)
-      setValue(data, ['extensions', 'disabled'], next.length === 0 ? undefined : next)
+      return setValue(data, ['extensions', 'disabled'], next.length === 0 ? undefined : next)
     })
     void this.reloadDaemon()
     return result
