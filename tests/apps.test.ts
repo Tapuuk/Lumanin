@@ -262,16 +262,116 @@ describe('launching', () => {
     actions: []
   }
 
-  function recorder(): { calls: { command: string; args: readonly string[] }[]; spawn: (c: string, a: readonly string[]) => boolean } {
+  function recorder(answer: (command: string) => boolean | Promise<boolean> = () => true): {
+    calls: { command: string; args: readonly string[] }[]
+    kinds: (string | undefined)[]
+    spawn: (c: string, a: readonly string[], o?: { kind?: string }) => boolean | Promise<boolean>
+  } {
     const calls: { command: string; args: readonly string[] }[] = []
-    return { calls, spawn: (command, args) => (calls.push({ command, args }), true) }
+    const kinds: (string | undefined)[] = []
+    return {
+      calls,
+      kinds,
+      spawn: (command, args, options) => {
+        calls.push({ command, args })
+        kinds.push(options?.kind)
+        return answer(command)
+      }
+    }
   }
 
-  it('prefers gio, so the app is not started as our child', () => {
+  it('falls through to gtk-launch when gio reports failure', async () => {
+    const { calls, spawn } = recorder((command) => command !== 'gio')
+    const result = await launchEntry(app, {
+      binaries: binaries(['gio', 'gtk-launch']),
+      env: {},
+      resolveBinary: () => null,
+      spawnDetached: spawn
+    })
+
+    expect(result.method).toBe('gtk-launch')
+    expect(calls.map((call) => call.command)).toEqual(['gio', 'gtk-launch'])
+  })
+
+  it('falls all the way through to Exec when both helpers fail', async () => {
+    const { calls, spawn } = recorder((command) => command === 'thing')
+    const result = await launchEntry(app, {
+      binaries: binaries(['gio', 'gtk-launch']),
+      env: {},
+      resolveBinary: (name) => (name === 'thing' ? '/usr/bin/thing' : null),
+      spawnDetached: spawn
+    })
+
+    expect(calls[2]).toEqual({ command: 'thing', args: ['--flag'] })
+    expect(result.method).toBe('exec')
+  })
+
+  it('reports the failure rather than claiming success when every strategy fails', async () => {
+    const { spawn } = recorder(() => false)
+    const result = await launchEntry(app, {
+      binaries: binaries(['gio', 'gtk-launch']),
+      env: {},
+      resolveBinary: (name) => (name === 'thing' ? '/usr/bin/thing' : null),
+      spawnDetached: spawn
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.detail).toContain('thing')
+  })
+
+  it('asks a helper for a verdict and an application for none', async () => {
+    const { kinds, spawn } = recorder(() => false)
+    await launchEntry(app, {
+      binaries: binaries(['gio', 'gtk-launch']),
+      env: {},
+      resolveBinary: (name) => (name === 'thing' ? '/usr/bin/thing' : null),
+      spawnDetached: spawn
+    })
+    expect(kinds).toEqual(['helper', 'helper', 'application'])
+
+    const terminal = recorder(() => false)
+    await launchEntry(
+      { ...app, exec: 'htop', terminal: true },
+      {
+        binaries: binaries([]),
+        env: {},
+        resolveBinary: (name) => (name === 'xterm' ? '/usr/bin/xterm' : null),
+        spawnDetached: terminal.spawn
+      }
+    )
+    expect(terminal.kinds).toEqual(['application'])
+  })
+
+  it('awaits an async fake rather than truth-testing the promise', async () => {
+    const { calls, spawn } = recorder((command) => Promise.resolve(command !== 'gio'))
+    const result = await launchEntry(app, {
+      binaries: binaries(['gio', 'gtk-launch']),
+      env: {},
+      resolveBinary: () => null,
+      spawnDetached: spawn
+    })
+
+    expect(result.method).toBe('gtk-launch')
+    expect(calls).toHaveLength(2)
+  })
+
+  it('reports a real spawn of a missing program as a failure', async () => {
+    // A path, so the pre-spawn staleness check does not short-circuit it: this
+    // pins the default spawn, which used to answer true before ENOENT arrived.
+    const result = await launchEntry(
+      { ...app, exec: '/nonexistent/lumanin-test-binary --flag' },
+      { binaries: binaries([]), env: {}, resolveBinary: () => null }
+    )
+
+    expect(result.ok).toBe(false)
+    expect(result.detail).toContain('could not start')
+  }, 1000)
+
+  it('prefers gio, so the app is not started as our child', async () => {
     // A child inherits our environment, our cgroup and our death: quitting
     // Lumanin would take the user's editor with it.
     const { calls, spawn } = recorder()
-    const result = launchEntry(app, {
+    const result = await launchEntry(app, {
       binaries: binaries(['gio', 'gtk-launch']),
       env: {},
       resolveBinary: () => null,
@@ -282,9 +382,9 @@ describe('launching', () => {
     expect(calls[0]).toEqual({ command: 'gio', args: ['launch', '/apps/thing.desktop'] })
   })
 
-  it('falls back to gtk-launch with the id, not the path', () => {
+  it('falls back to gtk-launch with the id, not the path', async () => {
     const { calls, spawn } = recorder()
-    launchEntry(app, {
+    await launchEntry(app, {
       binaries: binaries(['gtk-launch']),
       env: {},
       resolveBinary: () => null,
@@ -294,9 +394,9 @@ describe('launching', () => {
     expect(calls[0]).toEqual({ command: 'gtk-launch', args: ['thing'] })
   })
 
-  it('parses Exec itself when neither helper exists', () => {
+  it('parses Exec itself when neither helper exists', async () => {
     const { calls, spawn } = recorder()
-    launchEntry(app, {
+    await launchEntry(app, {
       binaries: binaries([]),
       env: {},
       resolveBinary: (name) => (name === 'thing' ? '/usr/bin/thing' : null),
@@ -306,13 +406,13 @@ describe('launching', () => {
     expect(calls[0]).toEqual({ command: 'thing', args: ['--flag'] })
   })
 
-  it('refuses a .desktop entry whose program has been uninstalled', () => {
+  it('refuses a .desktop entry whose program has been uninstalled', async () => {
     // Not an edge case: uninstalling an application routinely leaves its entry
     // behind. A detached spawn cannot report ENOENT — it arrives a tick later,
     // after we have already said the app started — and an unhandled `error`
     // event took the whole daemon down with it.
     const { calls, spawn } = recorder()
-    const result = launchEntry(app, {
+    const result = await launchEntry(app, {
       binaries: binaries([]),
       env: {},
       resolveBinary: () => null,
@@ -324,11 +424,11 @@ describe('launching', () => {
     expect(calls).toEqual([])
   })
 
-  it('wraps a Terminal=true entry in a terminal, with that terminal\'s exec flag', () => {
+  it('wraps a Terminal=true entry in a terminal, with that terminal\'s exec flag', async () => {
     // gnome-terminal wants `--` where everything else wants `-e`; the wrong flag
     // silently opens an empty terminal instead of running anything.
     const { calls, spawn } = recorder()
-    launchEntry(
+    await launchEntry(
       { ...app, exec: 'htop', terminal: true },
       {
         binaries: binaries([]),
@@ -341,9 +441,9 @@ describe('launching', () => {
     expect(calls[0]).toEqual({ command: 'gnome-terminal', args: ['--', 'htop'] })
   })
 
-  it('honours $TERMINAL over the built-in list', () => {
+  it('honours $TERMINAL over the built-in list', async () => {
     const { calls, spawn } = recorder()
-    launchEntry(
+    await launchEntry(
       { ...app, exec: 'htop', terminal: true },
       {
         binaries: binaries([]),
@@ -356,8 +456,8 @@ describe('launching', () => {
     expect(calls[0]?.command).toBe('/usr/bin/alacritty')
   })
 
-  it('says so rather than failing silently when no terminal exists', () => {
-    const result = launchEntry(
+  it('says so rather than failing silently when no terminal exists', async () => {
+    const result = await launchEntry(
       { ...app, terminal: true },
       { binaries: binaries([]), env: {}, resolveBinary: () => null, spawnDetached: () => true }
     )

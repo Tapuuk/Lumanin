@@ -36,8 +36,31 @@ export interface LaunchDeps {
    */
   readonly resolveBinary: (name: string) => string | null
   /** Injectable for tests; defaults to a real detached spawn. */
-  readonly spawnDetached?: (command: string, args: readonly string[], cwd?: string) => boolean
+  readonly spawnDetached?: (
+    command: string,
+    args: readonly string[],
+    options?: SpawnOptions
+  ) => boolean | Promise<boolean>
 }
+
+/**
+ * What the spawned process is, which decides what its exit means. A helper
+ * (`gio launch`, `gtk-launch`) hands the request to the desktop and exits
+ * promptly, so its exit code is a verdict. An application is the user's own
+ * program: an editor that quits in 40 ms was still launched, so only a spawn
+ * error counts against it.
+ */
+export type SpawnKind = 'helper' | 'application'
+
+export interface SpawnOptions {
+  readonly cwd?: string
+  readonly kind?: SpawnKind
+}
+
+/** How long a helper gets to report before "it worked" is assumed. */
+const HELPER_REPORT_TIMEOUT_MS = 400
+/** ENOENT/EACCES arrive on the tick after `spawn()`; this is that tick, with margin. */
+const SPAWN_ERROR_GRACE_MS = 60
 
 /**
  * Terminals to try for `Terminal=true` entries, in the order a Linux desktop is
@@ -60,15 +83,23 @@ const TERMINALS: readonly { readonly command: string; readonly flag: string }[] 
   { command: 'xterm', flag: '-e' }
 ]
 
-function defaultSpawn(command: string, args: readonly string[], cwd?: string): boolean {
-  try {
-    // detached + ignored stdio + unref: the application must outlive the daemon
-    // and must not hold a pipe to it. Argv array, no shell.
-    const child = spawn(command, [...args], {
-      detached: true,
-      stdio: 'ignore',
-      ...(cwd === undefined ? {} : { cwd })
-    })
+function defaultSpawn(command: string, args: readonly string[], options: SpawnOptions = {}): Promise<boolean> {
+  const { cwd, kind = 'application' } = options
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (ok: boolean): void => {
+      if (settled) return
+      settled = true
+      resolve(ok)
+    }
+    try {
+      // detached + ignored stdio + unref: the application must outlive the daemon
+      // and must not hold a pipe to it. Argv array, no shell.
+      const child = spawn(command, [...args], {
+        detached: true,
+        stdio: 'ignore',
+        ...(cwd === undefined ? {} : { cwd })
+      })
     // **Required, not defensive.** A failed spawn — the overwhelmingly common
     // case being a `.desktop` file left behind by an uninstalled application —
     // reports ENOENT by emitting `error` on the next tick, and an `error` event
@@ -77,12 +108,20 @@ function defaultSpawn(command: string, args: readonly string[], cwd?: string): b
     // entry: the daemon died, the window vanished, and the next hotkey press
     // paid a cold start. The synchronous `catch` below only ever caught bad
     // arguments, which is not a thing that happens in practice.
-    child.on('error', () => undefined)
-    child.unref()
-    return true
-  } catch {
-    return false
-  }
+      child.on('error', () => finish(false))
+      // A helper's exit is its verdict, bounded so an unusual one cannot hold
+      // Enter. An application's exit is never one: it is the user's program.
+      if (kind === 'helper') {
+        child.on('exit', (code) => finish(code === 0))
+        setTimeout(() => finish(true), HELPER_REPORT_TIMEOUT_MS).unref()
+      } else {
+        setTimeout(() => finish(true), SPAWN_ERROR_GRACE_MS).unref()
+      }
+      child.unref()
+    } catch {
+      finish(false)
+    }
+  })
 }
 
 /**
@@ -103,10 +142,26 @@ function defaultSpawn(command: string, args: readonly string[], cwd?: string): b
  * (a non-interactive shell reads neither) but their `$PATH` to be the one they
  * have. A login shell would re-read profile scripts on every launch for nothing.
  */
+/**
+ * The synchronous spawn a user's own `shell:` line still gets: a different
+ * contract from a `.desktop` launch, and one this file does not wait on.
+ */
+function spawnFireAndForget(command: string, args: readonly string[]): boolean {
+  try {
+    const child = spawn(command, [...args], { detached: true, stdio: 'ignore' })
+    // Required, not defensive: see `defaultSpawn`.
+    child.on('error', () => undefined)
+    child.unref()
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function runShellCommand(
   command: string,
   env: Readonly<Record<string, string | undefined>>,
-  spawnDetached: (command: string, args: readonly string[]) => boolean = defaultSpawn
+  spawnDetached: (command: string, args: readonly string[]) => boolean = spawnFireAndForget
 ): boolean {
   const shell = env['SHELL'] ?? '/bin/sh'
   return spawnDetached(shell, ['-c', command])
@@ -180,14 +235,16 @@ function defaultRunGio(gio: string, args: readonly string[]): Promise<boolean> {
   })
 }
 
-export function launchEntry(entry: DesktopEntry, deps: LaunchDeps): LaunchResult {
+export async function launchEntry(entry: DesktopEntry, deps: LaunchDeps): Promise<LaunchResult> {
   const spawnDetached = deps.spawnDetached ?? defaultSpawn
 
   // `gio launch` takes the desktop file itself, so the desktop's own launcher
   // resolves Exec, field codes, Terminal and Path — every rule we would
   // otherwise reimplement, applied exactly as the rest of the session applies it.
   if (deps.binaries.gio !== null) {
-    if (spawnDetached('gio', ['launch', entry.path])) {
+    // A helper that reported failure launched nothing, so the next strategy
+    // is tried without risk of a double launch.
+    if (await spawnDetached('gio', ['launch', entry.path], { kind: 'helper' })) {
       return { ok: true, method: 'gio', detail: `gio launch ${entry.path}` }
     }
   }
@@ -196,7 +253,7 @@ export function launchEntry(entry: DesktopEntry, deps: LaunchDeps): LaunchResult
   // in a standard directory — which everything in the index is, by construction.
   if (deps.binaries['gtk-launch'] !== null) {
     const id = entry.id.replace(/\.desktop$/, '')
-    if (spawnDetached('gtk-launch', [id])) {
+    if (await spawnDetached('gtk-launch', [id], { kind: 'helper' })) {
       return { ok: true, method: 'gtk-launch', detail: `gtk-launch ${id}` }
     }
   }
@@ -216,7 +273,10 @@ export function launchEntry(entry: DesktopEntry, deps: LaunchDeps): LaunchResult
         detail: 'this is a terminal application and no terminal emulator was found (set $TERMINAL)'
       }
     }
-    const ok = spawnDetached(terminal.command, [terminal.flag, ...argv], entry.path_)
+    const ok = await spawnDetached(terminal.command, [terminal.flag, ...argv], {
+      kind: 'application',
+      ...(entry.path_ === undefined ? {} : { cwd: entry.path_ })
+    })
     return {
       ok,
       method: 'exec',
@@ -238,7 +298,10 @@ export function launchEntry(entry: DesktopEntry, deps: LaunchDeps): LaunchResult
     }
   }
 
-  const ok = spawnDetached(command, argv.slice(1), entry.path_)
+  const ok = await spawnDetached(command, argv.slice(1), {
+    kind: 'application',
+    ...(entry.path_ === undefined ? {} : { cwd: entry.path_ })
+  })
   return { ok, method: 'exec', detail: ok ? argv.join(' ') : `could not start ${command}` }
 }
 

@@ -591,7 +591,7 @@ export class SearchService {
 
     switch (kind) {
       case 'app': {
-        const result = this.launch(payload)
+        const result = await this.launch(payload)
         return { ok: result.ok, detail: result.detail }
       }
       case 'command':
@@ -696,17 +696,21 @@ export class SearchService {
     return commands
   }
 
-  launch(id: string): LaunchResult {
+  async launch(id: string): Promise<LaunchResult> {
     const entry = this.byId.get(id)
     if (entry === undefined) {
       return { ok: false, method: 'exec', detail: 'that application is no longer in the index' }
     }
 
-    const result = launchEntry(entry, {
+    // Timed, because a launch now waits for the helper's verdict and the panel
+    // hides only after this resolves: the cost is written down, not assumed.
+    const started = performance.now()
+    const result = await launchEntry(entry, {
       binaries: this.deps.binaries,
       env: this.deps.env,
       resolveBinary: (name) => resolveBinary(name, this.deps.env)
     })
+    this.deps.logger.debug('launch', { id, method: result.method, ms: Math.round(performance.now() - started) })
 
     // Only a successful launch counts. Recording a failure would teach the
     // ranking to promote something that does not start.
