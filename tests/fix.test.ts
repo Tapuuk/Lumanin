@@ -5,7 +5,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { detectPlatform, type PlatformProfile } from '../src/platform/detect'
 import { applyPlan, planFixes, planRevert, readManagedBinds, type FixDirs } from '../src/platform/fix/index'
-import { planBind, reloadNotes } from '../src/platform/fix/bind'
+import { choiceFromConfig, planBind, reloadNotes } from '../src/platform/fix/bind'
+import { loadConfig } from '../src/shared/config'
 import {
   BLOCK_END,
   BLOCK_START,
@@ -820,5 +821,51 @@ describe('readManagedBinds', () => {
       `bind = SUPER, Return, exec, foot\n${BLOCK_START}\nbindd = SUPER, K, Lumanin, exec, lumanin toggle\n${BLOCK_END}\n`
     )
     expect(readManagedBinds(profile(HYPRLAND), dirs(dir)).map((bind) => bind.keyText)).toEqual(['SUPER, K'])
+  })
+})
+
+/**
+ * Who wins when `config.toml` and a hand edit to the managed block disagree.
+ * CONFIG.md: a hotkey the user set beats the edit; one left at its default
+ * does not. The planner used to assert `explicit` and stamp the edit back.
+ */
+describe('who wins when the config and the managed block disagree', () => {
+  const config = (fileContents: string) => loadConfig({ fileContents, env: {} })
+  const hyprEdit = (dir: string, fileContents: string) =>
+    planBind(profile(HYPRLAND), dirs(dir), choiceFromConfig(config(fileContents))).edits.find((e) =>
+      e.path.endsWith('hypr/hyprland.conf')
+    )
+
+  /** A block written for the default key, then the toggle chord edited by hand. */
+  function handEdited(): string {
+    const dir = tempConfig()
+    mkdirSync(join(dir, 'hypr'), { recursive: true })
+    writeFileSync(join(dir, 'hypr', 'hyprland.conf'), 'monitor=,preferred,auto,1\n')
+    applyPlan(planBind(profile(HYPRLAND), dirs(dir), choiceFromConfig(config(''))).edits, 'stamp')
+    const file = join(dir, 'hypr', 'hyprland.conf')
+    const written = readFileSync(file, 'utf8')
+    const edited = written.replace(/^(bindd = )SUPER, R,/m, '$1SUPER ALT, R,')
+    expect(edited).not.toBe(written)
+    writeFileSync(file, edited)
+    return dir
+  }
+
+  it('leaves a hand-edited bind alone when the hotkey is at its default, and still plans the rule', () => {
+    const edit = hyprEdit(handEdited(), '')
+    expect(edit?.state).toBe('up-to-date')
+    expect(edit?.after).toContain('SUPER ALT, R,')
+    expect(edit?.after).toContain('lumanin')
+  })
+
+  it('stamps the hand edit when the hotkey was set in the file', () => {
+    const edit = hyprEdit(handEdited(), '[general]\nhotkey = "Super+R"\n')
+    expect(edit?.state).toBe('will-update')
+    expect(edit?.after).not.toContain('SUPER ALT, R,')
+  })
+
+  it('treats an unparseable hotkey as not set, so the hand edit survives', () => {
+    const edit = hyprEdit(handEdited(), '[general]\nhotkey = "Super+Retrun"\n')
+    expect(edit?.state).toBe('up-to-date')
+    expect(edit?.after).toContain('SUPER ALT, R,')
   })
 })

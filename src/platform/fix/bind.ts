@@ -90,16 +90,24 @@ const BIND_ACTIONS = new Set([
  *
  * The block is rewritten whole, so every plan must carry *all* the binds — a
  * main-hotkey change that omitted the `[[hotkeys]]` entries would erase them.
+ *
+ * `hotkeyChoice` in `src/cli/tools.ts` is the CLI's copy of this computation;
+ * the two must agree on `explicit`, or the two frontends disagree about who
+ * wins when `config.toml` and a hand edit to the managed block differ.
  */
 export function choiceFromConfig(config: ResolvedConfig): HotkeyChoice {
-  const main = parseHotkey(config.general.hotkey.value) ?? DEFAULT_HOTKEY
+  const parsed = parseHotkey(config.general.hotkey.value)
+  const main = parsed ?? DEFAULT_HOTKEY
   const fileSearchRaw = config.fileSearch.hotkey.value.trim()
   const fileSearch: Hotkey | null =
     fileSearchRaw.length === 0 ? null : parseHotkey(fileSearchRaw)
 
   return {
     hotkey: main,
-    explicit: true,
+    // CONFIG.md is the authority: a hotkey the user *set* beats a hand edit to
+    // our managed block, and one left at its default does not. Read from the
+    // setting's winning layer, never asserted.
+    explicit: parsed !== null && config.general.hotkey.layer !== 'default',
     panelTop: panelTopFraction(config.general.top.value),
     fileSearch,
     extraBinds: config.hotkeys.value.flatMap((binding) => {

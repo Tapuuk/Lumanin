@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { ipcMain } from 'electron'
 import { SettingsIpc } from '../src/main/settings-ipc'
@@ -357,6 +357,30 @@ describe('settings.plugins', () => {
     expect(read()).not.toContain('disabled')
     const enabled = (await handler(sender, 'settings.plugins', undefined)) as readonly Plugin[]
     expect(enabled[0]?.enabled).toBe(true)
+  })
+})
+
+describe('settings.planBind', () => {
+  it('plans no change to a hand-edited bind when the hotkey is at its default', async () => {
+    // The settings path used to assert `explicit` and stamp a hand edit back to
+    // Super+R on every plan; it now reads the config layer like the CLI does.
+    const { handler, configFile } = setUp({ profile: fakeProfile() })
+    const hyprDir = join(dirname(configFile), '..', 'hypr')
+    mkdirSync(hyprDir, { recursive: true })
+    const conf = join(hyprDir, 'hyprland.conf')
+    writeFileSync(conf, 'monitor=,preferred,auto,1\n')
+    await handler(sender, 'settings.applyBind', undefined)
+    const written = readFileSync(conf, 'utf8')
+    const edited = written.replace(/^(bindd = )SUPER, R,/m, '$1SUPER ALT, R,')
+    expect(edited).not.toBe(written)
+    writeFileSync(conf, edited)
+
+    const plan = (await handler(sender, 'settings.planBind', undefined)) as {
+      pending: boolean
+      edits: { path: string; state: string }[]
+    }
+    expect(plan.edits.find((edit) => edit.path.endsWith('hypr/hyprland.conf'))?.state).toBe('up-to-date')
+    expect(plan.pending).toBe(false)
   })
 })
 
