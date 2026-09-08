@@ -34,7 +34,12 @@ import { isUnsupportedMember, unsupported } from './unsupported'
  * would be wrong for the rest of the session. The values come from the session
  * spec, which the worker refreshes.
  */
-export const environment: Environment = {
+/** The spec's `Environment` plus the one path it lacks: the plugin's own directory. */
+export interface LumaninEnvironment extends Environment {
+  readonly extensionPath: string
+}
+
+export const environment: LumaninEnvironment = {
   get raycastVersion(): string {
     return requireRuntime().spec.environment.apiVersion
   },
@@ -55,6 +60,12 @@ export const environment: Environment = {
   },
   get supportPath(): string {
     return requireRuntime().spec.environment.supportPath
+  },
+  // The directory the plugin was installed into, where `src/` and `commands/`
+  // live. A second entry point (a detached helper, a worker) cannot be reached
+  // from `assetsPath`: on an installed plugin `assets/` may not exist at all.
+  get extensionPath(): string {
+    return requireRuntime().spec.extensionDir
   },
   get isDevelopment(): boolean {
     return requireRuntime().spec.environment.isDevelopment

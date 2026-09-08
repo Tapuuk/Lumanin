@@ -291,6 +291,8 @@ describe('environment and preferences', () => {
     expect(shim.environment.appearance).toBe('dark')
     expect(shim.environment.raycastVersion).toBe('1.104.24')
     expect(shim.environment.launchType).toBe(shim.LaunchType.UserInitiated)
+    expect(shim.environment.extensionPath).toBe('/tmp/fixture')
+    expect(shim.environment.extensionPath).not.toBe(shim.environment.assetsPath)
   })
 
   /**

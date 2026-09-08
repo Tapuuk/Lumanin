@@ -153,7 +153,10 @@ still contains Shift in places - prefer writing the chord out to importing one o
   the new view arriving filtered by whatever the user typed to reach it.
 - `LocalStorage` (`getItem`/`setItem`/`removeItem`/`allItems`/`clear`), `Cache` (sync API).
 - `getPreferenceValues()`, `environment` (incl. `environment.canAccess(...)` for feature
-  detection, `supportPath` for a writable per-plugin directory), `LaunchProps`.
+  detection, `supportPath` for a writable per-plugin directory, and `extensionPath` for the
+  directory the plugin was installed into: use it to reach a second file of your own
+  (`join(environment.extensionPath, 'src', 'helper.ts')`); it is read-only on a packaged
+  install, so write to `supportPath`, never next to your source), `LaunchProps`.
 - `Clipboard.copy` / `.paste` / `.read` / `.readText` / `.clear`.
 - `open(target)`, `trash(path)`, `getApplications()`, `getDefaultApplication()`.
 - `getFrontmostApplication()` - the focused window's application. Answered on Hyprland, Sway and
