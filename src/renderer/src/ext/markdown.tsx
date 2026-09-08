@@ -1,4 +1,5 @@
 import { Fragment, useMemo, type ReactNode } from 'react'
+import { linkTarget } from '@shared/link'
 
 /**
  * Markdown, rendered to React elements — never to HTML.
@@ -197,21 +198,30 @@ function inline(text: string, asset: (path: string) => string): ReactNode {
     if (token.startsWith('[')) {
       const link = /^\[([^\]]*)\]\(([^)]+)\)$/.exec(token)
       const href = link?.[2] ?? ''
+      const label = link?.[1] ?? href
+      const target = linkTarget(href)
+      // Not an `<a>`. In-page navigation is blocked in the renderer, so
+      // a real anchor would either do nothing or need an exception; a web
+      // link asks main to open it in the user's browser, which is what a
+      // link in a launcher means anyway. Anything else is drawn as text:
+      // the panel cannot open it, and a dead button would look live.
       out.push(
-        // Not an `<a>`. In-page navigation is blocked in the renderer, so
-        // a real anchor would either do nothing or need an exception; this asks
-        // main to open it in the user's browser, which is what a link in a
-        // launcher means anyway.
-        <button
-          className="md__link"
-          type="button"
-          key={key++}
-          onClick={() => {
-            if (/^https?:/i.test(href)) void window.lumanin.invoke('search.launch', { id: `web:${href}` })
-          }}
-        >
-          {link?.[1] ?? href}
-        </button>
+        target.kind === 'web' ? (
+          <button
+            className="md__link"
+            type="button"
+            key={key++}
+            onClick={() => {
+              void window.lumanin.invoke('search.launch', { id: `web:${target.url}` })
+            }}
+          >
+            {label}
+          </button>
+        ) : (
+          <span className="md__link md__link--inert" title={href} key={key++}>
+            {label}
+          </span>
+        )
       )
       continue
     }

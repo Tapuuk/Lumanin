@@ -620,6 +620,12 @@ body {
   cursor: pointer;
 }
 
+/* A link the panel cannot open: keeps the author's reference, loses the affordance. */
+.md__link--inert {
+  cursor: default;
+  text-decoration: none;
+}
+
 /* --------------------------------------------------------------- action bar */
 
 /* Always the last row of the panel, and the only place that says what Enter

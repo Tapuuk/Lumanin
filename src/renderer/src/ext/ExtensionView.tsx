@@ -21,6 +21,7 @@ import { readActionPanel, type ActionEntry, type ActionSet } from './actions'
 import { Dropdown } from './Dropdown'
 import { FormBody, readForm, useFormState, type FormModel } from './Form'
 import { enterBelongsToControl } from './form-model'
+import { linkTarget } from '@shared/link'
 import { ExtIcon, IconImage, assetUrl, colorToken, resolveIcon } from './icons'
 import { Markdown } from './markdown'
 import type { SessionState } from './useSession'
@@ -1017,18 +1018,26 @@ function Metadata({ node }: { readonly node: RenderNode }): React.JSX.Element {
             return (
               <div className="ext-metadata__row" key={child.id}>
                 <span className="ext-metadata__label">{str(child.props['title'])}</span>
-                <button
-                  type="button"
-                  className="md__link"
-                  onClick={() => {
-                    const target = str(child.props['target'])
-                    if (target !== null && /^https?:/i.test(target)) {
-                      void window.lumanin.invoke('search.launch', { id: `web:${target}` })
-                    }
-                  }}
-                >
-                  {str(child.props['text']) ?? str(child.props['target'])}
-                </button>
+                {(() => {
+                  const href = str(child.props['target']) ?? ''
+                  const label = str(child.props['text']) ?? str(child.props['target'])
+                  const target = linkTarget(href)
+                  return target.kind === 'web' ? (
+                    <button
+                      type="button"
+                      className="md__link"
+                      onClick={() => {
+                        void window.lumanin.invoke('search.launch', { id: `web:${target.url}` })
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ) : (
+                    <span className="md__link md__link--inert" title={href}>
+                      {label}
+                    </span>
+                  )
+                })()}
               </div>
             )
           case 'Detail.Metadata.TagList':
