@@ -31,7 +31,7 @@ import { createFileSink, createStderrSink, Logger } from '../node/logger'
 import { firstRunPending, markFirstRunOffered } from '../node/first-run'
 import { bundledPluginsDir, resolvePaths } from '../node/paths'
 import { parseArgs, type DaemonStatus, type EnumerateData, type Request, type Response } from '../shared/protocol'
-import { HOST_NOT_RUNNING, type ExtensionHostStatus } from '../shared/ext-protocol'
+import { ACTION_DRAIN_CEILING_MS, HOST_NOT_RUNNING, type ExtensionHostStatus } from '../shared/ext-protocol'
 import { actionHandlerOf, listItemsOf, type RenderNode } from '../shared/render-tree'
 import { createCopy } from './clipboard-copy'
 import { rootCommands, type RegisteredCommand } from './commands'
@@ -39,6 +39,7 @@ import { launchSettings } from '../cli/client'
 import { applyCsp } from './csp'
 import { ExtensionHost } from './extensions/host'
 import { answerHeadlessAlert } from './extensions/headless-alert'
+import { waitForRelease } from './extensions/action-drain'
 import type { AlertPayload } from '../shared/ext-protocol'
 import {
   cachedRootCommands,
@@ -634,6 +635,8 @@ const ENUMERATE_TIMEOUT_MS = 8000
  * it itself (`popToRoot`), which is the common case and costs nothing.
  */
 const ACTION_GRACE_MS = 5000
+// Since the drain landed this is a floor, not a deadline: a handler that has
+// reported busy keeps its worker up to `ACTION_DRAIN_CEILING_MS`.
 
 /**
  * Sessions running with no window, by id — the value is what a notice about
@@ -790,10 +793,21 @@ async function runItemAction(
  */
 async function releaseAfterAction(sessionId: string): Promise<void> {
   try {
-    const deadline = Date.now() + ACTION_GRACE_MS
-    while (Date.now() < deadline) {
-      if (extensionHost?.snapshot(sessionId) == null) return
-      await new Promise((resolve) => setTimeout(resolve, 100))
+    const outcome = await waitForRelease(
+      {
+        gone: () => extensionHost?.snapshot(sessionId) == null,
+        busy: () => extensionHost?.busy(sessionId) === true,
+        now: () => Date.now(),
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+      },
+      { floorMs: ACTION_GRACE_MS, ceilingMs: ACTION_DRAIN_CEILING_MS }
+    )
+    if (outcome === 'released') return
+    if (outcome === 'ceiling') {
+      logger.warn('a bound action was still running at the ceiling; closing its session', {
+        sessionId,
+        ceilingMs: ACTION_DRAIN_CEILING_MS
+      })
     }
     extensionHost?.close(sessionId)
   } finally {

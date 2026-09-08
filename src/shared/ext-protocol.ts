@@ -67,6 +67,8 @@ export const APP_METHODS = {
   UPDATE_METADATA: 'ui.updateCommandMetadata',
   SESSION_FAILED: 'session.failed',
   SESSION_FINISHED: 'session.finished',
+  /** The worker's in-flight handler count changed; `{ sessionId, count }`. */
+  SESSION_BUSY: 'session.busy',
   CLIPBOARD_COPY: 'clipboard.copy',
   CLIPBOARD_PASTE: 'clipboard.paste',
   CLIPBOARD_READ: 'clipboard.read',
@@ -95,8 +97,23 @@ export const APP_METHODS = {
  */
 export const WORKER_NOTIFICATIONS = {
   /** React, the reconciler and the shim are loaded; the worker has no command yet. */
-  READY: 'worker.ready'
+  READY: 'worker.ready',
+  /**
+   * The number of action handlers still running changed. Recorded by the host
+   * on the session, then relayed to main as `APP_METHODS.SESSION_BUSY`.
+   */
+  BUSY: 'worker.busy'
 } as const
+
+/**
+ * The hard ceiling on how long a started action keeps its worker alive after
+ * its session is told to end. A busy worker gets this instead of the idle
+ * bound; it is a ceiling, not a budget, because the ordinary case ends the
+ * moment the handler settles. 90 s clears the slowest thing a bound action
+ * legitimately waits on, the 1Password CLI's own 60 s timeout, with room for
+ * a prompt behind it. One constant for three processes, so they cannot drift.
+ */
+export const ACTION_DRAIN_CEILING_MS = 90_000
 
 /**
  * How far along the warm spare is.

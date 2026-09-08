@@ -57,7 +57,11 @@ writeFileSync(
     'module.exports = {',
     '  default: function Command() {',
     '    useEffect(() => () => globalThis.__lumaninTeardownWrite(), [])',
-    "    return createElement('List', { isLoading: false })",
+    "    return createElement('List', {",
+    '      isLoading: false,',
+    '      onSlow: () => globalThis.__lumaninTeardownSlow(),',
+    '      onNever: () => globalThis.__lumaninTeardownNever()',
+    '    })',
     '  }',
     '}',
     ''
@@ -65,7 +69,11 @@ writeFileSync(
 )
 
 const port = new EventEmitter() as EventEmitter & { postMessage: (message: unknown) => void }
-port.postMessage = (): void => {}
+/** Everything the worker sends back, so a test can find a handler id or a log line. */
+const sent: unknown[] = []
+port.postMessage = (message: unknown): void => {
+  sent.push(message)
+}
 
 vi.mock('node:worker_threads', () => ({
   parentPort: (globalThis as Record<string, unknown>)['__lumaninTeardownPort'],
@@ -102,6 +110,27 @@ const send = (id: number, method: string, params?: unknown): void => {
   port.emit('message', { jsonrpc: '2.0', id, method, params })
 }
 
+/** The two action handlers: one that finishes after a beat, one that never does. */
+let slowDone = false
+globals['__lumaninTeardownSlow'] = (): Promise<void> =>
+  new Promise((resolve) =>
+    setTimeout(() => {
+      slowDone = true
+      resolve()
+    }, 300)
+  )
+globals['__lumaninTeardownNever'] = (): Promise<void> => new Promise(() => {})
+
+/** The handler id the last render assigned to the function prop of that name. */
+function handlerIdOf(prop: string): string {
+  const text = JSON.stringify(sent)
+  const match = new RegExp(`"${prop}":\\{"__handler":"([^"]+)"`).exec(text)
+  if (match === null) throw new Error(`no handler for ${prop} in ${text.slice(0, 400)}`)
+  return match[1] as string
+}
+
+const replyTo = (id: number): unknown => sent.find((m) => (m as { id?: number }).id === id)
+
 describe('the worker on its way out', () => {
   it('writes a cache entry an unmounting component made', async () => {
     await import('../src/host/worker')
@@ -116,5 +145,51 @@ describe('the worker on its way out', () => {
       entries: Record<string, string>
     }
     expect(written.entries['written while unmounting']).toBe('yes')
+  })
+
+  /**
+   * A started action finishes: DESTROY is answered only once the handler's
+   * promise has settled, so a hide or a headless dispatch does not cut off
+   * work the user asked for.
+   */
+  it('answers DESTROY after an in-flight action has finished, not before', async () => {
+    sent.length = 0
+    send(3, WORKER_METHODS.CREATE, { ...session, sessionId: 'drain-test' })
+    await new Promise((r) => setTimeout(r, 50))
+    const handlerId = handlerIdOf('onSlow')
+
+    send(4, WORKER_METHODS.EVENT, { sessionId: 'drain-test', handlerId, payload: null })
+    send(5, WORKER_METHODS.DESTROY, { sessionId: 'drain-test' })
+    expect(replyTo(5)).toBeUndefined()
+    expect(slowDone).toBe(false)
+
+    await new Promise((r) => setTimeout(r, 500))
+    expect(slowDone).toBe(true)
+    expect(replyTo(5)).toBeDefined()
+  })
+
+  it('still answers at the ceiling for a handler that never settles, and says so', async () => {
+    vi.useFakeTimers()
+    try {
+      sent.length = 0
+      send(6, WORKER_METHODS.CREATE, { ...session, sessionId: 'never-test' })
+      await vi.advanceTimersByTimeAsync(50)
+      const handlerId = handlerIdOf('onNever')
+
+      send(7, WORKER_METHODS.EVENT, { sessionId: 'never-test', handlerId, payload: null })
+      send(8, WORKER_METHODS.DESTROY, { sessionId: 'never-test' })
+      await vi.advanceTimersByTimeAsync(89_000)
+      expect(replyTo(8)).toBeUndefined()
+
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(replyTo(8)).toBeDefined()
+      const warned = sent.some((m) => {
+        const message = m as { method?: string; params?: { level?: string; message?: string } }
+        return message.params?.level === 'warn' && /1 of 1 actions still running/.test(message.params.message ?? '')
+      })
+      expect(warned).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

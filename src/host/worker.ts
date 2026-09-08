@@ -7,7 +7,8 @@ import {
   WORKER_METHODS,
   WORKER_NOTIFICATIONS,
   type EventParams,
-  type SessionSpec
+  type SessionSpec,
+  ACTION_DRAIN_CEILING_MS
 } from '../shared/ext-protocol'
 import { createPeer, toErrorBody, type RpcMessage } from '../node/rpc'
 import { emptyTree, isDateRef, type RenderNode } from '../shared/render-tree'
@@ -137,8 +138,14 @@ const peer = createPeer({
       return null
     },
     [WORKER_METHODS.DESTROY]: () => {
-      teardown()
-      return null
+      // Nothing in flight: answered synchronously, as before. A started action
+      // is awaited up to the ceiling first, so a hide or a headless dispatch
+      // does not cut off work the user asked for.
+      if (inFlight.size === 0) {
+        teardown()
+        return null
+      }
+      return drainThenTeardown()
     }
   }
 })
@@ -424,6 +431,31 @@ function fail(error: unknown, fatal: boolean): void {
 // Events.
 // ---------------------------------------------------------------------------
 
+/** Handlers still running. Reported to the host on every change, so teardown can wait. */
+const inFlight = new Set<Promise<unknown>>()
+/** Handlers between "about to run" and "known to be sync or async", counted as busy. */
+let starting = 0
+
+function reportBusy(): void {
+  peer.notify(WORKER_NOTIFICATIONS.BUSY, { sessionId: spec?.sessionId ?? '', count: inFlight.size + starting })
+}
+
+async function drainThenTeardown(): Promise<null> {
+  const started = inFlight.size
+  let timer: NodeJS.Timeout | null = null
+  const ceiling = new Promise<'ceiling'>((resolve) => {
+    timer = setTimeout(() => resolve('ceiling'), ACTION_DRAIN_CEILING_MS)
+  })
+  const settled = Promise.allSettled([...inFlight]).then(() => 'settled' as const)
+  const outcome = await Promise.race([settled, ceiling])
+  if (timer !== null) clearTimeout(timer)
+  if (outcome === 'ceiling') {
+    log('warn', `${String(inFlight.size)} of ${String(started)} actions still running after ${String(ACTION_DRAIN_CEILING_MS)}ms; tearing down anyway`)
+  }
+  teardown()
+  return null
+}
+
 function dispatch(params: EventParams): null {
   const handler = treeHandlers.get(params.handlerId) ?? detachedHandlers.get(params.handlerId)
   if (handler === undefined) {
@@ -434,13 +466,33 @@ function dispatch(params: EventParams): null {
     return null
   }
 
+  // Reported *before* the handler runs, on the same ordered port the handler's
+  // own calls leave by: an action that starts with `await closeMainWindow()`
+  // (which `showHUD` does) would otherwise have its session closed as idle
+  // before main heard it was busy, and the work after the await refused.
+  starting += 1
+  reportBusy()
+  let tracked = false
   try {
     const result = handler(reviveDates(params.payload)) as unknown
     // An `async onAction` rejects long after this returns; without this the
-    // rejection is unhandled and takes the worker down with it.
-    if (result instanceof Promise) result.catch((error: unknown) => fail(error, false))
+    // rejection is unhandled and takes the worker down with it. The promise is
+    // also what teardown waits on, so it is tracked until it settles.
+    if (result instanceof Promise) {
+      const settled = result.catch((error: unknown) => fail(error, false))
+      inFlight.add(settled)
+      tracked = true
+      void settled.finally(() => {
+        inFlight.delete(settled)
+        reportBusy()
+      })
+    }
   } catch (error) {
     fail(error, false)
+  } finally {
+    starting -= 1
+    // A tracked promise leaves the count where it was; a sync handler drops it.
+    if (!tracked) reportBusy()
   }
   return null
 }

@@ -14,7 +14,8 @@ import {
   type RenderParams,
   type SessionFailure,
   type SessionSpec,
-  type ToastPayload
+  type ToastPayload,
+  ACTION_DRAIN_CEILING_MS
 } from '../../shared/ext-protocol'
 import type { SessionInfo } from '../../shared/ipc'
 import { applyRenderPatches } from '../../shared/render-patch'
@@ -132,6 +133,8 @@ interface LiveSession {
    * Main still applies them: the tree is what answers a read of the session.
    */
   readonly headless: boolean
+  /** True while the worker reports an action handler still running. */
+  busy: boolean
   /**
    * Recorded before the session is dropped, so `launch` can still see it.
    *
@@ -163,6 +166,8 @@ export class ExtensionHost {
   private forkedAt = 0
   private readonly sessions = new Map<string, LiveSession>()
   private readonly alerts = new AlertRegistry()
+  /** Sessions past `close()` whose worker still has an action in flight. */
+  private readonly draining = new Map<string, { session: LiveSession; timer: NodeJS.Timeout }>()
 
   constructor(private readonly deps: HostDeps) {}
 
@@ -434,7 +439,8 @@ export class ExtensionHost {
       tree: emptyTree(),
       revision: 0,
       headless: options.headless === true,
-      failure: null
+      failure: null,
+      busy: false
     }
     this.sessions.set(sessionId, live)
     options.onSession?.(sessionId)
@@ -481,9 +487,34 @@ export class ExtensionHost {
     // Before the guard: an alert whose session was already forgotten is still
     // a worker parked on a promise, and it is settled rather than leaked.
     this.alerts.closeSession(sessionId)
-    if (!this.sessions.has(sessionId)) return
+    const session = this.sessions.get(sessionId)
+    if (session === undefined) return
     this.sessions.delete(sessionId)
+    // A session with an action still running stays addressable until it
+    // settles: the first thing a drained action does (`open`, a clipboard
+    // write, a HUD) is a service call, and answering it with "not running"
+    // would fail the work the drain exists to finish. Renders and toasts from
+    // it are dropped, because the panel is gone.
+    if (session.busy) this.startDraining(sessionId, session)
     this.forward(HOST_METHODS.DESTROY, { sessionId })
+  }
+
+  /** Whether the worker reports an action handler still running. */
+  busy(sessionId: string): boolean {
+    return (this.sessions.get(sessionId) ?? this.draining.get(sessionId)?.session)?.busy === true
+  }
+
+  private startDraining(sessionId: string, session: LiveSession): void {
+    const timer = setTimeout(() => this.stopDraining(sessionId), ACTION_DRAIN_CEILING_MS)
+    timer.unref?.()
+    this.draining.set(sessionId, { session, timer })
+  }
+
+  private stopDraining(sessionId: string): void {
+    const entry = this.draining.get(sessionId)
+    if (entry === undefined) return
+    clearTimeout(entry.timer)
+    this.draining.delete(sessionId)
   }
 
   /** End every session. Called when the panel is dismissed or the daemon quits. */
@@ -522,7 +553,10 @@ export class ExtensionHost {
    */
   private owner(params: unknown): LiveSession {
     const sessionId = (params as { sessionId?: unknown } | undefined)?.sessionId
-    const session = typeof sessionId === 'string' ? this.sessions.get(sessionId) : undefined
+    const session =
+      typeof sessionId === 'string'
+        ? (this.sessions.get(sessionId) ?? this.draining.get(sessionId)?.session)
+        : undefined
     if (session === undefined) {
       throw new RpcError(RPC_ERRORS.INVALID_PARAMS, 'that extension session is not running')
     }
@@ -794,13 +828,27 @@ export class ExtensionHost {
         this.deps.emit('ext.hud', { title: typeof title === 'string' ? title : '' })
         return
       }
+      case APP_METHODS.SESSION_BUSY: {
+        const { sessionId, count } = params as { sessionId: string; count: number }
+        const busy = count > 0
+        const live = this.sessions.get(sessionId)
+        if (live !== undefined) live.busy = busy
+        const draining = this.draining.get(sessionId)
+        if (draining !== undefined) {
+          draining.session.busy = busy
+          if (!busy) this.stopDraining(sessionId)
+        }
+        return
+      }
       case APP_METHODS.SESSION_FAILED: {
         const failure = params as SessionFailure
+        if (failure.fatal) this.stopDraining(failure.sessionId)
         this.onFailure(failure)
         return
       }
       case APP_METHODS.SESSION_FINISHED: {
         const { sessionId } = params as { sessionId: string }
+        this.stopDraining(sessionId)
         this.close(sessionId)
         this.deps.emit('ext.ended', { sessionId, message: null, stack: null })
         return

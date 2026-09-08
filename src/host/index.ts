@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
+import { DESTROY_GRACE_MS, destroyDeadlineMs } from './drain'
 import {
   APP_METHODS,
   HOST_METHODS,
@@ -59,7 +60,12 @@ interface Session {
   readonly peer: RpcPeer
   /** True once the session has been told to stop, so a death is not reported twice. */
   ended: boolean
+  /** True while the worker reports an action handler still running. */
+  busy: boolean
 }
+
+/** Sessions past their destroy that are waiting on an in-flight action. */
+let draining = 0
 
 const sessions = new Map<string, Session>()
 
@@ -215,6 +221,15 @@ function spawn(): PooledWorker {
         report('debug', 'worker warm')
         return
       }
+      if (method === WORKER_NOTIFICATIONS.BUSY) {
+        // Recorded here so `destroy` knows which bound to wait on, then relayed
+        // so main can keep a draining session addressable until it settles.
+        const busy = params as { sessionId?: unknown; count?: unknown }
+        const session = typeof busy.sessionId === 'string' ? sessions.get(busy.sessionId) : undefined
+        if (session !== undefined) session.busy = typeof busy.count === 'number' && busy.count > 0
+        host.notify(APP_METHODS.SESSION_BUSY, params)
+        return
+      }
       host.notify(method, params)
     },
     // A worker call is really a call on main, so it is relayed with main's own
@@ -311,7 +326,7 @@ async function create(spec: SessionSpec): Promise<{ sessionId: string }> {
   }
 
   const { worker, peer } = takeWarm()
-  const session: Session = { spec, worker, peer, ended: false }
+  const session: Session = { spec, worker, peer, ended: false, busy: false }
   sessions.set(spec.sessionId, session)
 
   worker.on('error', (error: Error) => died(session, error))
@@ -371,17 +386,6 @@ async function forward(params: SessionRef, method: string): Promise<null> {
   return null
 }
 
-/**
- * How long a worker gets to acknowledge that its session is over.
- *
- * A worker that has not answered by then is not going to: the thread is inside a
- * loop of the extension's own making, and the call it was sent is queued behind
- * work that never yields. Waiting on it is what leaked a spinning thread and its
- * heap ceiling per launch, so the wait is bounded and the thread is stopped
- * either way.
- */
-const DESTROY_GRACE_MS = 1500
-
 async function destroy(sessionId: string): Promise<null> {
   const session = sessions.get(sessionId)
   if (session === undefined) return null
@@ -389,17 +393,24 @@ async function destroy(sessionId: string): Promise<null> {
   session.ended = true
   sessions.delete(sessionId)
 
+  // A busy worker gets the action ceiling, an idle one the idle bound; either
+  // way the thread is stopped at the deadline, which is PLAN-053's rule.
+  const deadline = destroyDeadlineMs({ busy: session.busy, draining })
+  const isDraining = deadline !== DESTROY_GRACE_MS
+  if (isDraining) draining += 1
   try {
     const answered = await withDeadline(
       session.peer.call(WORKER_METHODS.DESTROY, { sessionId }).then(() => true),
-      DESTROY_GRACE_MS,
+      deadline,
       false
     )
     if (!answered) {
-      report('warn', `session ${sessionId} did not stop within ${DESTROY_GRACE_MS}ms; terminating`)
+      report('warn', `session ${sessionId} did not stop within ${String(deadline)}ms; terminating`)
     }
   } catch {
     // The worker may already be gone, which is the outcome we wanted anyway.
+  } finally {
+    if (isDraining) draining -= 1
   }
   session.peer.dispose('the session ended')
   // Not awaited, for the same reason the deadline above exists: nothing waits on

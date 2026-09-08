@@ -241,6 +241,14 @@ still contains Shift in places - prefer writing the chord out to importing one o
 
 ## Gotchas
 
+- **Work that outlives the panel.** An `onAction` that returns a promise keeps its worker alive
+  until that promise settles, across the panel hiding and across a bound key's headless run, up
+  to a ceiling of 90 seconds. So `await closeMainWindow()` and then carrying on is supported.
+  Work that may take longer than that must be a detached child
+  (`spawn(cmd, argv, { detached: true, stdio: 'ignore' }).unref()`), because the worker is torn
+  down at the ceiling. Only a *returned* promise is tracked: a floating `void doThing()` is
+  invisible and may be cut off. A hidden panel shows no toasts, so report with `showHUD` before
+  closing, or leave the outcome in `LocalStorage` for the next launch to read.
 - `List`'s `throttle` is honoured: the typed text reaches `onSearchTextChange` as a 150 ms
   trailing debounce, so a burst of keystrokes is one call carrying the last of them. An emptied
   search box still arrives at once - cancelling is never worth waiting for. Set it whenever a

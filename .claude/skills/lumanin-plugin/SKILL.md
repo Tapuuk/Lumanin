@@ -42,6 +42,11 @@ A missing or unconfigured tool is your problem to solve (step 4), not a surprise
 
 ## 2. Design within the supported surface
 
+**Work that outlives the panel.** An awaited `onAction` keeps its worker alive after the panel
+hides, up to 90 seconds, so `await closeMainWindow()` followed by the real work is a supported
+shape. Anything that may run longer goes in a detached child process. Report the outcome with
+`showHUD` before closing or write it to `LocalStorage`: a hidden panel shows no toast.
+
 **A plugin is part of the launcher, not a separate app.** It inherits Lumanin's conventions and
 you do not re-invent them unless the user explicitly asks for different behaviour:
 
