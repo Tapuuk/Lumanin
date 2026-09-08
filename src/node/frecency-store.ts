@@ -54,7 +54,19 @@ export interface LaunchRecord extends Frecency {
   readonly launches: number
 }
 
-export class FrecencyStore {
+/** What ranking needs from launch history: the two calls `SearchService` makes. */
+export interface LaunchHistory {
+  record(id: string, at?: number): void
+  all(): ReadonlyMap<string, LaunchRecord>
+}
+
+/** Ranking without history, for a session whose database could not be opened. */
+export const NO_FRECENCY: LaunchHistory = {
+  record: () => undefined,
+  all: () => new Map()
+}
+
+export class FrecencyStore implements LaunchHistory {
   private readonly db: Db
   private readonly selectAll: Statement
   private readonly upsertLaunch: Statement

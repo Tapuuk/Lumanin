@@ -23,7 +23,7 @@ export interface WaylandProtocols {
   readonly detail: string
 }
 
-const UNPROBED: WaylandProtocols = {
+export const UNPROBED_PROTOCOLS: WaylandProtocols = {
   hasLayerShell: 'UNKNOWN',
   hasDataControl: 'UNKNOWN',
   hasForeignToplevel: 'UNKNOWN',
@@ -53,10 +53,10 @@ export async function probeWaylandProtocols(
   if (!isWayland) return NOT_WAYLAND
 
   const tool = binaries['wayland-info'] ?? binaries['weston-info']
-  if (tool === null || tool === undefined) return UNPROBED
+  if (tool === null || tool === undefined) return UNPROBED_PROTOCOLS
 
   const result = await run(tool, [])
-  if (!result.ok) return { ...UNPROBED, detail: `${tool} failed to enumerate globals` }
+  if (!result.ok) return { ...UNPROBED_PROTOCOLS, detail: `${tool} failed to enumerate globals` }
 
   const globals = result.stdout
   return {

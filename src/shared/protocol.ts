@@ -73,6 +73,11 @@ export interface DaemonStatus {
    */
   backends: Readonly<Record<string, string>>
   /**
+   * Startup steps that failed and what the session lacks because of it, one
+   * sentence each. Omitted when nothing failed.
+   */
+  degraded?: readonly string[]
+  /**
    * The extension host process and its warm worker.
    *
    * `spare` is `'ready'` once a worker has loaded React, the reconciler and the

@@ -6,7 +6,8 @@ import { detectPlatform, describePlatform, probePlatform } from '../platform/det
 import { createRuntime, type PlatformRuntime } from '../platform/runtime'
 import type { BinaryMap } from '../platform/probe/binaries'
 import { openPath } from '../platform/apps/launch'
-import { FrecencyStore } from '../node/frecency-store'
+import { FrecencyStore, NO_FRECENCY, type LaunchHistory } from '../node/frecency-store'
+import { Degradations, degradedProfile, runStep } from './startup'
 import { pinIconPath, storePinIcon } from '../node/pin-icons'
 import { SearchService } from './search'
 import { isExtensionCommandEnabled, loadConfig, type ResolvedConfig } from '../shared/config'
@@ -100,6 +101,17 @@ app.setPath('userData', join(paths.state, 'chromium'))
 app.setPath('sessionData', join(paths.cache, 'chromium'))
 
 const logger = Logger.fromEnv([createStderrSink(), createFileSink(paths.logDir)])
+const degradations = new Degradations(logger)
+
+// Logged and survived, never fatal: a launcher that quits on a stray rejection
+// is the failure the startup fallbacks exist to remove. The worker has the same
+// pair; main had none, so a rejection here used to vanish without a line.
+process.on('unhandledRejection', (reason: unknown) => {
+  logger.error('unhandled rejection in main', { error: reason })
+})
+process.on('uncaughtException', (error: Error) => {
+  logger.error('uncaught exception in main', { error })
+})
 
 function readConfigFile(): string | null {
   try {
@@ -430,6 +442,7 @@ function status(host: ExtensionHostStatus): DaemonStatus {
     sessionType: profile.sessionType,
     desktop: describePlatform(profile),
     backends: chosenBackends(),
+    ...(degradations.list().length === 0 ? {} : { degraded: degradations.list() }),
     extensionHost: host
   }
 }
@@ -1087,14 +1100,31 @@ app.whenReady().then(async () => {
   // holding the socket closed for that long would make the very first
   // `lumanin toggle` after login wait on a diagnostic — but anything that needs
   // a backend can wait on the promise instead of racing it.
-  platformReady = probePlatform().then((probed) => {
-    probedBinaries = probed.binaries
-    const runtime = createRuntime({
-      profile: probed,
-      systemClipboard: clipboard,
-      home: paths.home,
-      dataHome: paths.dataHome
+  platformReady = probePlatform()
+    .catch((error: unknown) => {
+      degradations.record(
+        'the platform probes failed',
+        'backends were chosen from the desktop name alone',
+        error
+      )
+      return degradedProfile(process.env, degradations)
     })
+    .then((probed) => {
+    probedBinaries = probed.binaries
+    const runtimeFor = (profile: typeof probed): PlatformRuntime =>
+      createRuntime({
+        profile,
+        systemClipboard: clipboard,
+        home: paths.home,
+        dataHome: paths.dataHome
+      })
+    const runtime = runStep(
+      'the platform backends could not be selected',
+      'the desktop was treated as unknown',
+      () => runtimeFor(probed),
+      () => runtimeFor(degradedProfile(process.env, degradations)),
+      degradations
+    )
     platform = runtime
 
     // The chain's second link needs a probed backend, so the theme starts as the
@@ -1107,10 +1137,20 @@ app.whenReady().then(async () => {
     // here rather than earlier. Indexing is disk-bound and takes tens of
     // milliseconds; doing it once at startup is what keeps every later keystroke
     // pure arithmetic.
-    extensionStore = new ExtensionStore(paths.data)
-    extensionHost = new ExtensionHost({
+    // A store that failed to open is not replaced by one that forgets: a
+    // plugin whose storage silently lost everything is worse than a plugin
+    // that does not start, so plugins are off for the session instead.
+    const store = runStep(
+      'the extension database could not be opened',
+      'plugins are off this session',
+      () => new ExtensionStore(paths.data),
+      () => null,
+      degradations
+    )
+    extensionStore = store
+    extensionHost = store === null ? null : new ExtensionHost({
       logger,
-      store: extensionStore,
+      store,
       hostScript: join(__dirname, 'host.js'),
       compileCacheDir: join(paths.cache, 'compile-cache'),
       // `EmitMap` is a narrow view of the renderer's `EventMap` — the host may
@@ -1239,13 +1279,32 @@ app.whenReady().then(async () => {
       home: process.env['HOME'] ?? '',
       desktops: probed.desktops,
       binaries: probed.binaries,
-      frecency: new FrecencyStore(paths.data),
+      frecency: runStep(
+        'the launch-history database could not be opened',
+        'results are ranked without history this session',
+        (): LaunchHistory => new FrecencyStore(paths.data),
+        () => NO_FRECENCY,
+        degradations
+      ),
       logger
     })
-    search.reindex()
+    const built = search
+    runStep(
+      'the application index could not be built',
+      'no applications are listed until it is rebuilt',
+      () => built.reindex(),
+      () => undefined,
+      degradations
+    )
     // Watch after the first build: the watch list comes from the directories
     // that actually exist, which is something only the index knows.
-    search.watch()
+    runStep(
+      'the application directories could not be watched',
+      'newly installed applications appear after a restart',
+      () => built.watch(),
+      () => undefined,
+      degradations
+    )
 
     // Ids only. `doctor` prints the full chain and the reasons; the log needs the
     // outcome, and a line per candidate would bury the startup record.

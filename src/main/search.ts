@@ -11,7 +11,7 @@ import { createIconResolver, type IconResolver } from '../platform/apps/icons'
 import { launchEntry, runShellCommand, type LaunchResult } from '../platform/apps/launch'
 import type { BinaryMap } from '../platform/probe/binaries'
 import { resolveBinary } from '../platform/probe/binaries'
-import type { FrecencyStore } from '../node/frecency-store'
+import type { LaunchHistory } from '../node/frecency-store'
 import type { Logger } from '../node/logger'
 
 /**
@@ -103,7 +103,7 @@ export interface SearchDeps {
   readonly home: string
   readonly desktops: readonly string[]
   readonly binaries: BinaryMap
-  readonly frecency: FrecencyStore
+  readonly frecency: LaunchHistory
   readonly logger: Logger
   /** Overrides the XDG directory list. Tests only; production leaves it unset. */
   readonly directories?: readonly string[]

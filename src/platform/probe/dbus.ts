@@ -34,7 +34,7 @@ export interface DbusProbe {
   readonly via: 'busctl' | 'gdbus' | 'none'
 }
 
-const UNKNOWN_PROBE: DbusProbe = {
+export const UNKNOWN_DBUS_PROBE: DbusProbe = {
   available: 'UNKNOWN',
   names: new Set(),
   portalInterfaces: new Set(),
@@ -98,7 +98,7 @@ export async function probeDbus(binaries: BinaryMap): Promise<DbusProbe> {
 
   // Neither tool present or neither worked: we know nothing, and must say so
   // rather than reporting every D-Bus-backed feature as unsupported.
-  if (via === 'none') return UNKNOWN_PROBE
+  if (via === 'none') return UNKNOWN_DBUS_PROBE
 
   const hasPortal = names.has(PORTAL_NAME)
 
