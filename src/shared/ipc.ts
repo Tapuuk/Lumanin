@@ -538,7 +538,8 @@ export interface SettingsInvokeMap {
    * a minute or two of npm and a build. Only for a git checkout; a package
    * answers with its manager's command.
    */
-  'settings.updateApply': { params: undefined; result: UpdateApplyDto }
+  /** `expect` is the newest sha the user was shown; the update refuses if that has moved. */
+  'settings.updateApply': { params: { expect: string }; result: UpdateApplyDto }
 }
 
 export interface UpdateCheckDto {
@@ -553,6 +554,8 @@ export interface UpdateCheckDto {
   readonly problem: string | null
   /** For a package: the manager's own upgrade command. */
   readonly managerCommand: string | null
+  /** For git: where the code would come from, shown before the user agrees to run it. */
+  readonly remote: string | null
 }
 
 export interface UpdateApplyDto {

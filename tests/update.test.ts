@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { applyUpdate, checkForUpdates, detectInstall, pathWithNodeManagers } from '../src/node/update'
+import { applyUpdate, checkForUpdates, detectInstall, httpsRemote, pathWithNodeManagers } from '../src/node/update'
 import { runCommand } from '../src/store/git'
 import type { Run, RunResult } from '../src/store/git'
 
@@ -47,7 +47,8 @@ describe('detectInstall', () => {
   it('a directory with .git is a git checkout on its current branch', async () => {
     const { clone } = await realCheckout()
     const install = await detectInstall(clone)
-    expect(install).toEqual({ kind: 'git', root: clone, branch: 'main' })
+    expect(install).toMatchObject({ kind: 'git', root: clone, branch: 'main' })
+    expect(install.kind === 'git' ? install.remote : null).not.toBeNull()
   })
 
   it('a tree owned by pacman is a package', async () => {
@@ -83,9 +84,15 @@ describe('checkForUpdates on a real checkout', () => {
     expect(after.dirty).toBe(false)
 
     // Applying: the pull happens; the install script is absent in this fixture,
-    // and that is reported rather than pretended.
+    // and that is reported rather than pretended. The fixture's origin is a
+    // local path, which the transport check refuses, so `origin`'s URL alone is
+    // answered as https while every other git call stays real.
     const lines: string[] = []
-    const outcome = await applyUpdate(install, (line) => lines.push(line))
+    const httpsOrigin: Run = (command, args, cwd) =>
+      command === 'git' && args[0] === 'remote' && args[1] === 'get-url'
+        ? Promise.resolve(ok('https://example.invalid/lumanin.git\n'))
+        : runCommand(command, args, cwd)
+    const outcome = await applyUpdate(await detectInstall(clone, httpsOrigin), (line) => lines.push(line))
     expect(outcome.ok).toBe(false)
     expect(outcome.log).toContain('install.sh is missing')
     const head = await runCommand('git', ['log', '--oneline', '-1'], clone)
@@ -98,6 +105,42 @@ describe('checkForUpdates on a real checkout', () => {
     const check = await checkForUpdates(await detectInstall(clone), '1.0.0')
     expect(check.available).toBe(false)
     expect(check.problem).toContain('could not reach')
+  })
+})
+
+/**
+ * The transport an update comes over. What is pulled is then run as the user,
+ * so the rule `plugin-install` applies to third-party code applies here too.
+ */
+describe('the transport an update comes over', () => {
+  it('refuses a local-path origin with the URL in the message, and never pulls', async () => {
+    const { upstream, clone } = await realCheckout()
+    await runCommand('git', ['commit', '-q', '--allow-empty', '-m', 'two'], upstream)
+    const install = await detectInstall(clone)
+    const outcome = await applyUpdate(install, () => undefined)
+    expect(outcome.ok).toBe(false)
+    expect(outcome.log).toContain(upstream)
+    expect(outcome.log).toContain('https://')
+    const head = await runCommand('git', ['log', '--oneline', '-1'], clone)
+    expect(head.output).not.toContain('two')
+  })
+
+  it('passes an https origin through to the pull', async () => {
+    const { clone } = await realCheckout()
+    await runCommand('git', ['remote', 'set-url', 'origin', 'https://example.invalid/x.git'], clone)
+    const install = await detectInstall(clone)
+    expect(install.kind === 'git' ? install.remote : null).toBe('https://example.invalid/x.git')
+    const outcome = await applyUpdate(install, () => undefined)
+    // The pull then fails for its own reasons; the refusal is not about the transport.
+    expect(outcome.ok).toBe(false)
+    expect(outcome.log).not.toContain('is not accepted')
+  })
+
+  it('spells out why each non-https transport is refused', () => {
+    expect(httpsRemote('https://example.invalid/x.git')).toEqual({ ok: true })
+    expect(httpsRemote('http://example.invalid/x.git')).toMatchObject({ ok: false })
+    expect(httpsRemote('git@github.com:o/r.git')).toMatchObject({ ok: false })
+    expect(httpsRemote(null)).toMatchObject({ ok: false })
   })
 })
 

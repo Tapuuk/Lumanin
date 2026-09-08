@@ -26,7 +26,13 @@ import { runCommand, type Run } from '../store/git'
  */
 
 export type InstallKind =
-  | { readonly kind: 'git'; readonly root: string; readonly branch: string }
+  | {
+      readonly kind: 'git'
+      readonly root: string
+      readonly branch: string
+      /** `origin`'s URL, the transport an update comes over; `null` when there is no origin. */
+      readonly remote: string | null
+    }
   | { readonly kind: 'package'; readonly root: string; readonly manager: 'pacman' | 'apt' | 'rpm'; readonly name: string }
   | { readonly kind: 'unknown'; readonly root: string }
 
@@ -58,7 +64,9 @@ export async function detectInstall(root: string, run: Run = runCommand): Promis
   if (existsSync(join(root, '.git'))) {
     const branch = await run('git', ['rev-parse', '--abbrev-ref', 'HEAD'], root)
     const name = branch.ok ? branch.output.trim() : ''
-    return { kind: 'git', root, branch: name.length > 0 && name !== 'HEAD' ? name : 'main' }
+    const origin = await run('git', ['remote', 'get-url', 'origin'], root)
+    const remote = origin.ok && origin.output.trim().length > 0 ? origin.output.trim() : null
+    return { kind: 'git', root, branch: name.length > 0 && name !== 'HEAD' ? name : 'main', remote }
   }
   const owner = await packageOwner(root, run)
   if (owner !== null) return { kind: 'package', root, ...owner }
@@ -131,9 +139,46 @@ export async function checkForUpdates(
 }
 
 /**
+ * The transport an update comes over must be https, and nothing else.
+ *
+ * The same rule `plugin-install` applies to third-party code, for the code
+ * that replaces the launcher itself: what is pulled is then *run*, as you.
+ * A small local check rather than the plugin URL parser, which also demands a
+ * forge-shaped path and would refuse a self-hosted `https://git.example.com/x.git`.
+ */
+export function httpsRemote(remote: string | null): { ok: true } | { ok: false; detail: string } {
+  if (remote === null || remote.trim().length === 0) {
+    return { ok: false, detail: 'this checkout has no origin remote, so there is nowhere to update from' }
+  }
+  let url: URL
+  try {
+    url = new URL(remote)
+  } catch {
+    return {
+      ok: false,
+      detail:
+        `${remote} is not accepted as the source of an update - only an https:// URL is.\n` +
+        'A local path or an scp-style remote is not a transport this can vouch for.'
+    }
+  }
+  if (url.protocol === 'https:') return { ok: true }
+  return {
+    ok: false,
+    detail:
+      `${url.protocol}// is not accepted as the source of an update - only https:// (${remote}).\n` +
+      (url.protocol === 'http:'
+        ? 'Plain http can be rewritten by anyone between you and the server, and this\n' +
+          'installs code that runs as you.'
+        : url.protocol === 'ssh:' || url.protocol === 'git+ssh:'
+          ? 'An ssh remote would use your keys to fetch code that then runs as you.'
+          : 'Only https is a transport this can vouch for.')
+  }
+}
+
+/**
  * Apply an update: fast-forward the checkout, then run the install script (which
  * rebuilds in place and re-links). Streams the script's output through `onLine`.
- * Never touches a packaged install.
+ * Never touches a packaged install, and never pulls over anything but https.
  */
 export async function applyUpdate(
   install: InstallKind,
@@ -147,6 +192,9 @@ export async function applyUpdate(
         : 'not a git checkout - update it the way it was installed'
     return { ok: false, log: hint, restart: false }
   }
+  // Before the pull, not after: the point is not to fetch the code at all.
+  const transport = httpsRemote(install.remote)
+  if (!transport.ok) return { ok: false, log: transport.detail, restart: false }
   const root = install.root
   const pull = await run('git', ['pull', '--ff-only', 'origin', install.branch], root)
   onLine(pull.output.trim())

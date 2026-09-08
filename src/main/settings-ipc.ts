@@ -270,7 +270,10 @@ export class SettingsIpc {
         case 'settings.updateCheck':
           return await this.updateCheck()
         case 'settings.updateApply':
-          return await this.updateApply()
+          if (!isRecord(params) || !isString(params['expect']) || params['expect'].length === 0) {
+            return { ok: false, log: 'malformed request: the commit the update was agreed on is missing', restarted: false }
+          }
+          return await this.updateApply(params['expect'])
         default:
           throw new Error('unknown method')
       }
@@ -291,12 +294,25 @@ export class SettingsIpc {
       changes: check.changes,
       dirty: check.dirty,
       problem: check.problem,
-      managerCommand: install.kind === 'package' ? managerHint(install.manager, install.name) : null
+      managerCommand: install.kind === 'package' ? managerHint(install.manager, install.name) : null,
+      remote: install.kind === 'git' ? install.remote : null
     }
   }
 
-  private async updateApply(): Promise<UpdateApplyDto> {
+  private async updateApply(expect: string): Promise<UpdateApplyDto> {
     const install = await detectInstall(repoRoot())
+    // The consent was for the commits the user was shown, not for pressing a
+    // button: a fresh check must still have that sha as its newest, or the
+    // code that would run is not the code that was described.
+    const fresh = await checkForUpdates(install, readVersion())
+    const newest = fresh.changes[0]?.split(' ')[0] ?? null
+    if (newest !== expect) {
+      return {
+        ok: false,
+        log: `the update moved since it was shown: you agreed to ${expect}, the newest commit is now ${newest ?? 'none'}. Check again.`,
+        restarted: false
+      }
+    }
     const outcome = await applyUpdate(install, (line) => this.deps.logger.info('update', { line }))
     if (!outcome.ok || !outcome.restart) return { ok: outcome.ok, log: outcome.log, restarted: false }
     // The daemon is on the old code until it is restarted; the settings app

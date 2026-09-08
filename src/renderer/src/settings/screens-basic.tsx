@@ -59,6 +59,8 @@ export function PanelScreen(): React.JSX.Element | null {
  * manager's command instead of a button - we do not pull over pacman's files.
  */
 function UpdatesSection(): React.JSX.Element {
+  // Two presses: the first names where the code comes from, the second runs it.
+  const [confirming, setConfirming] = useState(false)
   const [check, setCheck] = useState<UpdateCheckDto | null>(null)
   const [checking, setChecking] = useState(false)
   const [applying, setApplying] = useState(false)
@@ -76,10 +78,12 @@ function UpdatesSection(): React.JSX.Element {
       .finally(() => setChecking(false))
   }
   const runApply = (): void => {
+    const expect = check?.changes[0]?.split(' ')[0] ?? ''
+    setConfirming(false)
     setApplying(true)
     setProblem(null)
     window.lumanin
-      .invoke('settings.updateApply')
+      .invoke('settings.updateApply', { expect })
       .then((result) => {
         setOutcome(result)
         if (result.ok) setCheck(null)
@@ -131,17 +135,44 @@ function UpdatesSection(): React.JSX.Element {
               the launcher. It takes a minute or two.
               {check.dirty ? ' This checkout has local edits, which the update refuses to overwrite.' : ''}
             </span>
-            <button
-              type="button"
-              className="s-button s-button--primary"
-              disabled={applying || check.dirty}
-              aria-busy={applying}
-              onClick={runApply}
-            >
-              Update now
-              {applying && <Busy />}
-            </button>
+            {!confirming && (
+              <button
+                type="button"
+                className="s-button s-button--primary"
+                disabled={applying || check.dirty}
+                aria-busy={applying}
+                onClick={() => setConfirming(true)}
+              >
+                Update now
+                {applying && <Busy />}
+              </button>
+            )}
           </div>
+          {confirming && (
+            <div className="s-banner">
+              <span>
+                This pulls from <code>{check.remote ?? 'no origin remote'}</code> and runs its install script:{' '}
+                {String(check.changes.length)} {check.changes.length === 1 ? 'commit' : 'commits'},{' '}
+                <code>
+                  {check.changes.at(-1)?.split(' ')[0] ?? ''}..{check.changes[0]?.split(' ')[0] ?? ''}
+                </code>
+                .
+              </span>
+              <button
+                type="button"
+                className="s-button s-button--primary"
+                disabled={applying || check.remote === null}
+                aria-busy={applying}
+                onClick={runApply}
+              >
+                Pull and rebuild
+                {applying && <Busy />}
+              </button>
+              <button type="button" className="s-button" disabled={applying} onClick={() => setConfirming(false)}>
+                Cancel
+              </button>
+            </div>
+          )}
           <pre className="s-progress">{check.changes.slice(0, 20).join('\n')}</pre>
         </>
       )}
