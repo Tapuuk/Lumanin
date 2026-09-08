@@ -570,6 +570,57 @@ describe('a run the user has moved on from', () => {
     await settleTo(h, createElement(Command), 'two')
   })
 
+  /**
+   * The cached answer for *these* arguments paints on the render the
+   * arguments change. Before this, `initialData` was consumed once at mount,
+   * so a second visit to a category showed the other category's rows under
+   * the new label until the fresh request landed.
+   */
+  it('shows the cached answer for the new arguments immediately', async () => {
+    let word = 'alpha'
+    const Command = (): ReactNode => {
+      const { isLoading, data } = useExec('/bin/echo', [word])
+      return createElement(
+        'List',
+        { isLoading },
+        createElement('List.Item', { key: 'out', title: data ?? '' })
+      )
+    }
+
+    const h = harness()
+    await settleTo(h, createElement(Command), 'alpha')
+    word = 'beta'
+    await settleTo(h, createElement(Command), 'beta')
+    word = 'alpha'
+    const tree = h.render(createElement(Command))
+    const list = tree.children[0] as RenderNode | undefined
+    const item = list?.children[0] as RenderNode | undefined
+    expect(item?.props['title']).toBe('alpha')
+  })
+
+  it('starts a never-run argument set empty, unless asked to keep the previous rows', async () => {
+    for (const keep of [false, true]) {
+      let word = 'alpha'
+      const Command = (): ReactNode => {
+        const { isLoading, data } = useExec('/bin/echo', [word], keep ? { keepPreviousData: true } : {})
+        return createElement(
+          'List',
+          { isLoading },
+          createElement('List.Item', { key: 'out', title: data ?? '' })
+        )
+      }
+
+      const h = harness()
+      await settleTo(h, createElement(Command), 'alpha')
+      word = `never-${String(keep)}`
+      const tree = h.render(createElement(Command))
+      const list = tree.children[0] as RenderNode | undefined
+      const item = list?.children[0] as RenderNode | undefined
+      expect(list?.props['isLoading']).toBe(true)
+      expect(item?.props['title']).toBe(keep ? 'alpha' : '')
+    }
+  })
+
   it('re-runs when the environment changes', async () => {
     let mark = 'one'
     const Command = (): ReactNode => {

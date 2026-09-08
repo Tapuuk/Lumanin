@@ -95,6 +95,26 @@ export function usePromise<T>(
   const generation = useRef(0)
   const key = stableKey(args)
 
+  // `initialData` is per key, not per mount: `useCachedPromise` reads the cache
+  // for *these* arguments, and that answer has to be on screen the render the
+  // arguments change. Done during render rather than in an effect so there is
+  // no frame in which the previous arguments' data is painted under the new
+  // label. `keepPreviousData` is the spec's question of what fills the gap
+  // when there is nothing cached: the previous data when `true`, nothing else.
+  const previousKey = useRef(key)
+  if (previousKey.current !== key) {
+    previousKey.current = key
+    const { options: current } = latest.current
+    setState((previous) => ({
+      isLoading: current.execute !== false,
+      ...(current.initialData !== undefined
+        ? { data: current.initialData }
+        : current.keepPreviousData === true
+          ? { data: previous.data }
+          : {})
+    }))
+  }
+
   const run = useCallback(async (): Promise<T> => {
     const ours = ++generation.current
     const { fn: call, options: current } = latest.current
@@ -105,9 +125,11 @@ export function usePromise<T>(
       current.abortable.current = new AbortController()
     }
 
+    // What the new key starts from was decided during render; a run keeps
+    // whatever is on screen, so a `revalidate()` never blanks the list.
     setState((previous) => ({
       isLoading: true,
-      ...(current.keepPreviousData === false ? {} : { data: previous.data })
+      ...(previous.data === undefined ? {} : { data: previous.data })
     }))
 
     try {
@@ -205,7 +227,10 @@ type MutateFn<T> = (
  *
  * That is the whole reason extensions reach for it: a list that was populated
  * yesterday should be on screen before today's request finishes, rather than
- * showing an empty panel for 400 ms every single time.
+ * showing an empty panel for 400 ms every single time. The cached answer for
+ * *these* arguments paints immediately, on the render the arguments change;
+ * `keepPreviousData` is what holds the previous one when there is nothing
+ * cached for the new ones.
  */
 export function useCachedPromise<T>(
   fn: (...args: never[]) => Promise<T>,
@@ -227,9 +252,7 @@ export function useCachedPromise<T>(
     }
   })
 
-  // A cached value is *data*, so the first paint has content and `isLoading`
-  // still reports that a fresher answer is on its way.
-  return result.data === undefined && cached !== undefined ? { ...result, data: cached } : result
+  return result
 }
 
 /** `useCachedState(key, initial)` — `useState` that survives the command closing. */
