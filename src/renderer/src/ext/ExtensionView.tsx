@@ -20,6 +20,7 @@ import { ActionOverlay, ActionBar } from './ActionPanel'
 import { readActionPanel, type ActionEntry, type ActionSet } from './actions'
 import { Dropdown } from './Dropdown'
 import { FormBody, readForm, useFormState, type FormModel } from './Form'
+import { enterBelongsToControl } from './form-model'
 import { ExtIcon, IconImage, assetUrl, colorToken, resolveIcon } from './icons'
 import { Markdown } from './markdown'
 import type { SessionState } from './useSession'
@@ -363,7 +364,17 @@ export function ExtensionView({ state, focusToken, keys, onExit }: ExtensionView
       if (panelOpen) return
 
       if (bound === 'open') {
-        if (event.target instanceof HTMLTextAreaElement) return
+        // Enter belongs to a focused button-like control (a file picker's
+        // "Choose…", a TagPicker tag) or a textarea; the browser activates it.
+        // Submitting from there is Ctrl+Enter (`secondary`).
+        if (
+          event.target instanceof HTMLElement &&
+          enterBelongsToControl({
+            tag: event.target.tagName.toLowerCase(),
+            role: event.target.getAttribute('role')
+          })
+        )
+          return
         event.preventDefault()
         if (actions.primary !== null) run(actions.primary)
         return

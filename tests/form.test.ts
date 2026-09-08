@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { emptyValue, readForm, type FieldValue } from '../src/renderer/src/ext/form-model'
+import { emptyValue, enterBelongsToControl, readForm, type FieldValue } from '../src/renderer/src/ext/form-model'
 import type { RenderNode } from '../src/shared/render-tree'
 
 /**
@@ -166,5 +166,25 @@ describe('the blank a control starts from', () => {
       ['datepicker', null]
     ]
     for (const [kind, expected] of blanks) expect(emptyValue(kind)).toEqual(expected)
+  })
+})
+
+describe('who owns Enter in a form', () => {
+  // LocalSend's Send Files: the only control is a FilePicker button, and Enter
+  // used to submit an empty form instead of opening the file dialog.
+  it('a button keeps Enter (file picker, file-clear, TagPicker tag)', () => {
+    expect(enterBelongsToControl({ tag: 'button', role: null })).toBe(true)
+  })
+  it('a textarea keeps Enter, as before', () => {
+    expect(enterBelongsToControl({ tag: 'textarea', role: null })).toBe(true)
+  })
+  it('a text-like control submits', () => {
+    for (const tag of ['input', 'select', 'div', 'span']) {
+      expect(enterBelongsToControl({ tag, role: null })).toBe(false)
+    }
+  })
+  it('role="button" counts as a button', () => {
+    expect(enterBelongsToControl({ tag: 'div', role: 'button' })).toBe(true)
+    expect(enterBelongsToControl({ tag: 'span', role: null })).toBe(false)
   })
 })

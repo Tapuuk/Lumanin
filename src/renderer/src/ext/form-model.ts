@@ -208,3 +208,18 @@ export function sameValue(a: FieldValue | undefined, b: FieldValue | undefined):
   return a === b
 }
 
+
+export interface FocusedControl {
+  readonly tag: string
+  readonly role: string | null
+}
+
+/**
+ * A form's Enter belongs to the control that has focus when activating that
+ * control is the only way to use it. A file picker's "Choose…" button was
+ * keyboard-unreachable: the obvious keystroke submitted an empty form instead
+ * of opening the dialog. `tag` is already lower-cased by the caller.
+ */
+export function enterBelongsToControl(focused: FocusedControl): boolean {
+  return focused.tag === 'button' || focused.tag === 'textarea' || focused.role === 'button'
+}
