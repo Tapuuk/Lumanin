@@ -223,3 +223,35 @@ export interface FocusedControl {
 export function enterBelongsToControl(focused: FocusedControl): boolean {
   return focused.tag === 'button' || focused.tag === 'textarea' || focused.role === 'button'
 }
+
+/**
+ * An ISO instant as `<input type=date|datetime-local>` wants it.
+ *
+ * Local time, not UTC: the control shows and reads wall-clock time, so feeding
+ * it a `toISOString()` shifts every date by the timezone offset — which is
+ * invisible in London and off by a day everywhere east of it after 00:00.
+ */
+export function toInputDate(value: FieldValue, withTime: boolean): string {
+  if (typeof value !== 'string' || value.length === 0) return ''
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return ''
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  const day = `${String(parsed.getFullYear())}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`
+  return withTime ? `${day}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}` : day
+}
+
+/**
+ * The control's text back to an ISO instant. A bare `YYYY-MM-DD` is parsed as
+ * UTC midnight by the language, so it is constructed in local time instead:
+ * that keeps the round trip through `toInputDate` symmetric in every timezone
+ * and lands the value on local midnight, which is what `isFullDay()` checks.
+ */
+export function fromInputDate(text: string): string | null {
+  if (text.length === 0) return null
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text)
+  const parsed =
+    dateOnly === null
+      ? new Date(text)
+      : new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
+}

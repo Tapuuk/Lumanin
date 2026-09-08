@@ -8,7 +8,9 @@ import {
   type Field,
   type FieldValue,
   type FormModel,
-  type Values
+  type Values,
+  fromInputDate,
+  toInputDate
 } from './form-model'
 
 export { readForm, emptyValue } from './form-model'
@@ -465,28 +467,6 @@ function groupChoices(
     else groups.push({ title: choice.sectionTitle, choices: [choice] })
   }
   return groups
-}
-
-/**
- * An ISO instant as `<input type=date|datetime-local>` wants it.
- *
- * Local time, not UTC: the control shows and reads wall-clock time, so feeding
- * it a `toISOString()` shifts every date by the timezone offset — which is
- * invisible in London and off by a day everywhere east of it after 00:00.
- */
-function toInputDate(value: FieldValue, withTime: boolean): string {
-  if (typeof value !== 'string' || value.length === 0) return ''
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return ''
-  const pad = (n: number): string => String(n).padStart(2, '0')
-  const day = `${String(parsed.getFullYear())}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`
-  return withTime ? `${day}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}` : day
-}
-
-function fromInputDate(text: string): string | null {
-  if (text.length === 0) return null
-  const parsed = new Date(text)
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
 }
 
 /**

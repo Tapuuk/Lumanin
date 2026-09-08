@@ -1,5 +1,12 @@
-import { describe, expect, it } from 'vitest'
-import { emptyValue, enterBelongsToControl, readForm, type FieldValue } from '../src/renderer/src/ext/form-model'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import {
+  emptyValue,
+  enterBelongsToControl,
+  fromInputDate,
+  readForm,
+  toInputDate,
+  type FieldValue
+} from '../src/renderer/src/ext/form-model'
 import type { RenderNode } from '../src/shared/render-tree'
 
 /**
@@ -186,5 +193,49 @@ describe('who owns Enter in a form', () => {
   it('role="button" counts as a button', () => {
     expect(enterBelongsToControl({ tag: 'div', role: 'button' })).toBe(true)
     expect(enterBelongsToControl({ tag: 'span', role: null })).toBe(false)
+  })
+})
+
+describe("date values round-trip in the user's own timezone", () => {
+  const before = process.env.TZ
+  beforeAll(() => {
+    process.env.TZ = 'America/New_York'
+  })
+  afterAll(() => {
+    if (before === undefined) delete process.env.TZ
+    else process.env.TZ = before
+  })
+
+  it('a date-only pick comes back as the same day west of UTC', () => {
+    expect(toInputDate(fromInputDate('2026-01-05') ?? '', false)).toBe('2026-01-05')
+  })
+
+  it('a date-only pick lands on local midnight, which is what isFullDay checks', () => {
+    const iso = fromInputDate('2026-01-05')
+    expect(iso).toBe('2026-01-05T05:00:00.000Z')
+    // `Form.DatePicker.isFullDay` is local getHours/getMinutes/getSeconds all zero.
+    const date = new Date(iso ?? '')
+    expect(date.getHours()).toBe(0)
+    expect(date.getMinutes()).toBe(0)
+    expect(date.getSeconds()).toBe(0)
+  })
+
+  it('a date-time pick keeps its wall-clock time', () => {
+    expect(toInputDate(fromInputDate('2026-01-05T09:30') ?? '', true)).toBe('2026-01-05T09:30')
+  })
+
+  it('nothing and nonsense are null', () => {
+    expect(fromInputDate('')).toBeNull()
+    expect(fromInputDate('nonsense')).toBeNull()
+  })
+
+  it('holds east of UTC too', () => {
+    process.env.TZ = 'Pacific/Kiritimati'
+    try {
+      expect(toInputDate(fromInputDate('2026-01-05') ?? '', false)).toBe('2026-01-05')
+      expect(new Date(fromInputDate('2026-01-05') ?? '').getHours()).toBe(0)
+    } finally {
+      process.env.TZ = 'America/New_York'
+    }
   })
 })
