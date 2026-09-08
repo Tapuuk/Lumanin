@@ -465,13 +465,17 @@ function parseBindLine(line: string): Omit<ManagedBind, 'path'> | null {
     // Decoded before anything is split off it: what is on disk is hyprlang's
     // spelling of the line (`##` for a literal `#`, `'"$"'` for a `$`), and the
     // target this returns is compared with the one in `config.toml`.
-    const fields = decodeHyprlandLine(hyprland[1] ?? '')
-      .split(',')
-      .map((field) => field.trim())
+    const decoded = decodeHyprlandLine(hyprland[1] ?? '')
+    const fields = decoded.split(',').map((field) => field.trim())
     const execAt = fields.indexOf('exec')
     if (execAt < 2) return null
     keyText = `${fields[0] ?? ''}, ${fields[1] ?? ''}`
-    command = fields.slice(execAt + 1).join(',').trim()
+    // The command is sliced from the decoded line at the character after the
+    // `exec` field's comma, never reassembled from the split: a target with
+    // `, ` in it came back as `,` and never equalled the one in config.toml.
+    let offset = 0
+    for (let field = 0; field <= execAt; field += 1) offset = decoded.indexOf(',', offset) + 1
+    command = decoded.slice(offset).trim()
   } else if (sway !== null) {
     keyText = sway[1] ?? ''
     command = (sway[2] ?? '').trim()

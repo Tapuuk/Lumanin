@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { OFFERED_RESULT_GROUPS, RESULT_GROUP_LABELS, type ResultGroup } from '@shared/config'
 import { BUILTIN_ENGINES } from '@shared/engines'
+import { LAUNCHER_OWNED_TARGETS } from '@shared/bind-targets'
 import { formatHotkey, parseHotkey } from '@shared/hotkey'
 import type { PluginDto } from '@shared/ipc'
 import { HABIT_SETTING } from '@shared/settings-model'
@@ -321,7 +322,7 @@ export function PluginHotkeysGroup(): React.JSX.Element | null {
     (bind) =>
       bind.target !== null &&
       !entries.some((entry) => entry.target === bind.target) &&
-      !bind.target.startsWith('extension:files/')
+      !LAUNCHER_OWNED_TARGETS.has(bind.target)
   )
 
   return (

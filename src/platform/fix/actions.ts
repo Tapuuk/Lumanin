@@ -746,7 +746,24 @@ export interface BindSpec {
  * where the extension index is not loaded, and this command ships inside the
  * application — if it is not there, neither is half of `plugins/`.
  */
-export const FILE_SEARCH_COMMAND = 'files/search'
+import { FILE_SEARCH_COMMAND } from '../../shared/bind-targets'
+export { FILE_SEARCH_COMMAND }
+
+/**
+ * The `open` targets of the launcher's own binds, derived from `bindSpecs` on
+ * a choice that has every launcher bind present: the exclusion cannot depend
+ * on what this user configured, and a launcher-owned bind added later cannot
+ * regress it. A `[[hotkeys]]` spec has an `open-<n>` id and is never one.
+ */
+export function launcherOwnedTargets(): ReadonlySet<string> {
+  const probe: HotkeyChoice = { hotkey: DEFAULT_HOTKEY, fileSearch: DEFAULT_HOTKEY, panelTop: 0, explicit: true }
+  return new Set(
+    bindSpecs(probe)
+      .filter((spec) => !spec.id.startsWith('open-') && spec.argv[1] === 'open')
+      .map((spec) => spec.argv[2] ?? '')
+      .filter((target) => target !== '')
+  )
+}
 
 export function bindSpecs(choice: HotkeyChoice): readonly BindSpec[] {
   return [

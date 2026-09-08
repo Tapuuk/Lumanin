@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { detectPlatform, type PlatformProfile } from '../src/platform/detect'
 import { applyPlan, planFixes, planRevert, readManagedBinds, type FixDirs } from '../src/platform/fix/index'
 import { choiceFromConfig, planBind, reloadNotes } from '../src/platform/fix/bind'
+import { hyprlandCommand, hyprlandLine, launcherOwnedTargets } from '../src/platform/fix/actions'
+import { LAUNCHER_OWNED_TARGETS } from '../src/shared/bind-targets'
 import { loadConfig } from '../src/shared/config'
 import {
   BLOCK_END,
@@ -789,6 +791,17 @@ describe('readManagedBinds', () => {
     expect(binds[1]?.hotkey).toEqual(parseHotkey('Super+Shift+P'))
   })
 
+  it('reads a target with comma-space, # and $ back byte-identical', () => {
+    // The command used to be re-joined from the split fields with `,`, so a
+    // target holding `, ` never equalled the one in config.toml.
+    const target = 'extension:godot/search#project:a, b$x!Open project'
+    const dir = tempConfig()
+    write(dir, 'hyprland.conf', [
+      hyprlandLine(`bindd = SUPER, G, Lumanin open, exec, ${hyprlandCommand(['lumanin', 'open', target])}`)
+    ])
+    expect(readManagedBinds(profile(HYPRLAND), dirs(dir))[0]?.target).toBe(target)
+  })
+
   it('keeps a target containing a comma whole', () => {
     const dir = tempConfig()
     write(dir, 'hyprland.conf', [
@@ -867,5 +880,15 @@ describe('who wins when the config and the managed block disagree', () => {
     const edit = hyprEdit(handEdited(), '[general]\nhotkey = "Super+Retrun"\n')
     expect(edit?.state).toBe('up-to-date')
     expect(edit?.after).toContain('SUPER ALT, R,')
+  })
+})
+
+/** The launcher's own binds are never "still bound after removal". */
+describe('launcherOwnedTargets', () => {
+  it('names the file-search bind and no [[hotkeys]] target, and matches the shared spelling', () => {
+    const owned = launcherOwnedTargets()
+    expect(owned.has('extension:files/search')).toBe(true)
+    for (const target of owned) expect(target.startsWith('extension:')).toBe(true)
+    expect([...owned].sort()).toEqual([...LAUNCHER_OWNED_TARGETS].sort())
   })
 })

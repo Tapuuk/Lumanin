@@ -974,6 +974,149 @@ describe('the config menu, end to end', () => {
     await leave(input, pending)
   })
 
+  /** A `readBinds` fixture with the given binds, in front of the standard driver. */
+  function openWithBinds(
+    term: Term,
+    configFile: string,
+    binds: readonly { keyText: string; hotkey: { mods: readonly ('super' | 'shift')[]; key: string }; target: string | null }[],
+    planned?: string[][]
+  ): Promise<number> {
+    return runConfigUi({
+      term,
+      env: {},
+      configFile,
+      home: '/nonexistent',
+      extensionsDir: '/nonexistent',
+      bundledDir: '/nonexistent',
+      dataDir: '/nonexistent',
+      applyChanges: null,
+      restartDaemon: null,
+      planBind:
+        planned === undefined
+          ? null
+          : (choice) => {
+              planned.push((choice.extraBinds ?? []).map((bind) => bind.target))
+              return {
+                edits: [
+                  {
+                    path: '/home/x/.config/hypr/bindings.conf',
+                    state: 'will-update',
+                    before: 'bindd = SUPER, P, Firefox, exec, lumanin open …\n',
+                    after: '',
+                    diff: '- bindd = SUPER, P, …',
+                    actions: [
+                      {
+                        id: 'hyprland-bind',
+                        title: 'bind',
+                        why: 'why',
+                        file: 'hypr/bindings.conf',
+                        signature: /bindd/,
+                        body: [],
+                        applicable: () => true
+                      }
+                    ]
+                  }
+                ],
+                commands: [],
+                notes: []
+              }
+            },
+      applyBind: (plan) =>
+        Promise.resolve(plan.edits.map((edit) => ({ path: edit.path, ok: true, detail: 'written' }))),
+      enumerateItems: null,
+      readBinds: () =>
+        binds.map((bind) => ({
+          path: '/home/x/.config/hypr/hyprland.conf',
+          keyText: bind.keyText,
+          hotkey: { mods: [...bind.hotkey.mods], key: bind.hotkey.key },
+          target: bind.target
+        }))
+    })
+  }
+
+  it('does not report the launcher’s own file-search bind as still bound after removal', async () => {
+    const { term, input, frames, configFile } = driver()
+    const pending = openWithBinds(term, configFile, [
+      { keyText: 'SUPER SHIFT, R', hotkey: { mods: ['super', 'shift'], key: 'r' }, target: 'extension:files/search' }
+    ])
+    await beat()
+    expect(frames()).not.toContain('still bound after removal')
+
+    await type(input, [DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, ENTER])
+    expect(frames()).toContain('Plugin hotkeys')
+    expect(frames()).not.toContain('still bound')
+
+    await leave(input, pending)
+  })
+
+  it('keys rows by the chord, so one combination spelled twice is one entry', async () => {
+    const { term, input, frames, configFile } = driver()
+    writeFileSync(
+      configFile,
+      '[[hotkeys]]\nbind = "Super+P"\ntarget = "app:firefox.desktop"\n\n[[hotkeys]]\nbind = "SUPER, P"\ntarget = "app:firefox.desktop"\n'
+    )
+    const pending = openWithBinds(term, configFile, [
+      { keyText: 'SUPER, P', hotkey: { mods: ['super'], key: 'p' }, target: 'app:firefox.desktop' }
+    ])
+    await beat()
+
+    await type(input, [DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, ENTER])
+    expect(frames()).toContain('✔ Super+P')
+
+    // Removing the chord removes every spelling of it.
+    await type(input, ['d'])
+    expect(readFileSync(configFile, 'utf8')).not.toContain('Super+P')
+    expect(readFileSync(configFile, 'utf8')).not.toContain('SUPER, P')
+
+    await leave(input, pending)
+  })
+
+  it('marks the global hotkey by what the desktop binds, not by the config value', async () => {
+    // Nothing for the toggle: the Search row says so.
+    const missing = driver()
+    const pendingMissing = openWithBinds(missing.term, missing.configFile, [
+      { keyText: 'SUPER, P', hotkey: { mods: ['super'], key: 'p' }, target: 'app:firefox.desktop' }
+    ])
+    await beat()
+    await type(missing.input, [DOWN, DOWN, ENTER])
+    expect(missing.frames()).toContain('! Hotkey')
+    await leave(missing.input, pendingMissing)
+
+    // A toggle bind on disk: bound.
+    const bound = driver()
+    const pendingBound = openWithBinds(bound.term, bound.configFile, [
+      { keyText: 'SUPER, R', hotkey: { mods: ['super'], key: 'r' }, target: null }
+    ])
+    await beat()
+    await type(bound.input, [DOWN, DOWN, ENTER])
+    expect(bound.frames()).toContain('✔ Hotkey')
+    await leave(bound.input, pendingBound)
+  })
+
+  it('offers the bind write on Escape out of Plugin hotkeys, not only on ←', async () => {
+    const { term, input, frames, configFile } = driver()
+    writeFileSync(configFile, '[[hotkeys]]\nbind = "Super+P"\ntarget = "app:firefox.desktop"\n')
+    const planned: string[][] = []
+    const pending = openWithBinds(
+      term,
+      configFile,
+      [{ keyText: 'SUPER, P', hotkey: { mods: ['super'], key: 'p' }, target: 'app:firefox.desktop' }],
+      planned
+    )
+    await beat()
+
+    await type(input, [DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, ENTER, 'd'])
+    expect(frames()).toContain('still bound')
+
+    // Escape, and give the keypress decoder its lone-escape timeout.
+    input.write(ESC)
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    expect(frames()).toContain('Update this desktop\u2019s shortcuts?')
+    expect(planned).toEqual([[]])
+
+    await leave(input, pending)
+  })
+
   it('offers "type your own command" first, and writes it as a shell pin', async () => {
     const { term, input, frames, configFile } = driver()
     const pending = open(term, configFile)

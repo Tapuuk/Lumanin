@@ -42,6 +42,7 @@ import {
 } from '../shared/keys'
 import { DEFAULT_HOTKEY, type ExtraBind, type HotkeyChoice } from '../platform/fix/actions'
 import type { ApplyResult, BindPlan, ManagedBind } from '../platform/fix/index'
+import { FILE_SEARCH_COMMAND, launcherOwnedTargets } from '../platform/fix/actions'
 import type { EnumeratedItem } from '../shared/render-tree'
 import { buildAppIndex } from '../platform/apps/index'
 import { scanAllExtensions } from '../main/extensions/registry'
@@ -2047,6 +2048,32 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     const right = parseHotkey(b)
     return left !== null && right !== null && formatHotkey(left) === formatHotkey(right)
   }
+  /** The same, with an unparseable spelling matched only by its exact text. */
+  const sameChord = (a: string, b: string): boolean => a === b || sameKey(a, b)
+  /** The spelling a row is keyed by, so `SUPER, P` and `Super+P` are one row. */
+  const canonical = (bind: string): string => {
+    const parsed = parseHotkey(bind)
+    return parsed === null ? bind : formatHotkey(parsed)
+  }
+
+  /**
+   * Whether the desktop really binds one chord to one target, read back from
+   * its own config. `null` where there is nothing of ours to read: no mark at
+   * all there, because "not bound" would be a lie.
+   */
+  const boundState = (target: string | null, chord: string): 'bound' | 'not-bound' | null => {
+    if (deps.readBinds === null) return null
+    const wanted = parseHotkey(chord)
+    if (wanted === null) return null
+    const key = formatHotkey(wanted)
+    const live = deps.readBinds()
+    return live.some((bind) => bind.target === target && bind.hotkey !== null && formatHotkey(bind.hotkey) === key)
+      ? 'bound'
+      : 'not-bound'
+  }
+  const boundMark = (state: 'bound' | 'not-bound' | null): string =>
+    state === null ? '' : state === 'bound' ? `${s.good('✔')} ` : `${s.warn('!')} `
+  const NOT_BOUND_HELP = 'In your config, not yet on your desktop - press w'
 
   /**
    * What is in `config.toml` against what is really bound, as three lists.
@@ -2060,7 +2087,10 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     readonly stale: readonly ManagedBind[]
   } | null => {
     if (deps.readBinds === null) return null
-    const live = deps.readBinds().filter((bind) => bind.target !== null)
+    // The launcher's own binds (file search) live in the same block and are
+    // never a `[[hotkeys]]` entry, so they are not "still bound after removal".
+    const owned = launcherOwnedTargets()
+    const live = deps.readBinds().filter((bind) => bind.target !== null && !owned.has(bind.target))
     const entries = hotkeyEntries()
 
     const matches = (entry: HotkeyDraftEntry, bind: ManagedBind): boolean =>
@@ -2116,7 +2146,9 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     }
 
     /** A row is either a config entry or a bind that outlived one. */
-    type Row = { readonly kind: 'entry'; readonly bind: string } | { readonly kind: 'stale' }
+    type Row =
+      | { readonly kind: 'entry'; readonly bind: string; readonly chord: string }
+      | { readonly kind: 'stale' }
 
     // Two keys close this list, and what happens next depends on which.
     let requested: 'add' | 'write' | null = null
@@ -2125,136 +2157,155 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     // difference the screen has already drawn.
     let touched = false
     let at = 0
-    for (;;) {
-      const result = await menu.list<Row>({
-        title: 'Plugin hotkeys',
-        subtitle:
-          deps.readBinds === null
-            ? 'A key straight into one of your plugins. This desktop has no config we can bind in.'
-            : 'A key straight into one of your plugins. The mark is what your desktop really binds.',
-        initialIndex: at,
-        hints: deps.readBinds === null ? ['a add', 'd remove'] : ['a add', 'd remove', 'w write binds'],
-        choices: () => {
-          const entries = hotkeyEntries()
-          const sync = hotkeySync()
-
-          const rows =
-            entries.length === 0
-              ? [
-                  {
-                    value: { kind: 'entry', bind: '' } as Row,
-                    label: 'None yet',
-                    detail: 'Press a to add one',
-                    separator: true
-                  }
-                ]
-              : entries.map((entry) => {
-                  const bound = sync === null ? null : sync.bound.some((row) => row.bind === entry.bind)
-                  return {
-                    value: { kind: 'entry', bind: entry.bind } as Row,
-                    prefix: bound === null ? '' : bound ? `${s.good('✔')} ` : `${s.warn('!')} `,
-                    label: entry.bind,
-                    detail: entry.title ?? describePin(entry.target),
-                    ...(bound === false
-                      ? { help: 'In your config, not yet on your desktop - press w' }
-                      : {})
-                  }
-                })
-
-          // The other direction, and the one that used to be invisible: a key
-          // the config no longer mentions, which the compositor still fires.
-          const stale = sync?.stale ?? []
-          if (stale.length === 0) return rows
-          return [
-            ...rows,
-            { value: { kind: 'stale' } as Row, label: '', separator: true },
-            ...stale.map((bind) => ({
-              value: { kind: 'stale' } as Row,
-              prefix: `${s.bad('✘')} `,
-              label: bind.hotkey === null ? bind.keyText : formatHotkey(bind.hotkey),
-              detail: `${describePin(bind.target ?? '')} - still bound`,
-              help: `Removed from your config but still in ${bind.path} - press d to clear it`
-            }))
-          ]
-        },
-        onKey: (key, value) => {
-          if (key.name === 'a') {
-            requested = 'add'
-            return 'close'
-          }
-          if (key.name === 'w' && deps.readBinds !== null) {
-            requested = 'write'
-            return 'close'
-          }
-          if (key.name !== 'd' && key.name !== 'delete' && key.name !== 'backspace') return 'ignored'
-          // Remove on a row that is *already* out of the config is not a second
-          // removal — there is nothing left here to remove. What the user is
-          // still looking at is the compositor's copy, and the only thing that
-          // clears that is the file write. So the same key does the meaningful
-          // thing rather than nothing: it is the one this row's help already
-          // names. Silence here was the reported bug — the footer offers
-          // `d remove`, the cursor lands on a stale row the moment the last
-          // entry goes, and the advertised key then did nothing at all.
-          if (value !== null && value.kind === 'stale') {
-            requested = 'write'
-            return 'close'
-          }
-          if (value === null || value.kind !== 'entry' || value.bind.length === 0) return 'ignored'
-          write(hotkeyEntries().filter((entry) => entry.bind !== value.bind))
-          touched = true
-          return 'handled'
-        }
-      })
-
-      at = result.index
-      if (!result.viaKey) break
-
-      // `w` — write the block now, from wherever the cursor was.
-      if (requested === 'write') {
-        requested = null
-        await writeBinds()
-        continue
-      }
-      requested = null
-
-      let picked: PinDraftEntry | null = null
-      const complete = await wizard([
-        async () => {
-          // Plugins and nothing else. A launcher that offers to bind a system
-          // key to *any* application is a launcher that has quietly appointed
-          // itself your desktop's shortcut editor — your desktop already has
-          // one, it is the one you know, and its binds do not vanish when this
-          // application is uninstalled. What only we can bind is what only we
-          // can open: a plugin's command, a category inside it, one row, or one
-          // action on one row.
-          const chosen = await pluginsScreen()
-          if (chosen === null) return 'back'
-          picked = chosen
-          return 'next'
-        },
-        async () => {
-          const hotkey = await buildHotkey(null)
-          if (hotkey === null || picked === null) return 'back'
-          const bind = formatHotkey(hotkey)
-          write([
-            ...hotkeyEntries().filter((entry) => entry.bind !== bind),
-            { bind, target: picked.key, title: picked.title }
-          ])
-          touched = true
-          return 'next'
-        }
-      ])
-      void complete
-    }
-
     // Leaving after a change, with the two still out of step, offers the write —
     // rather than letting the screen close on a difference nobody was told
     // about. Only after a change: a pre-existing difference is already drawn on
     // every row and named on the main menu, and a prompt on the way out of a
     // screen somebody only looked at is a prompt they learn to dismiss.
-    if (!touched) return
-    const sync = hotkeySync()
-    if (sync !== null && (sync.pending.length > 0 || sync.stale.length > 0)) await writeBinds()
+    const offerIfOutOfStep = async (): Promise<void> => {
+      if (!touched) return
+      const sync = hotkeySync()
+      if (sync !== null && (sync.pending.length > 0 || sync.stale.length > 0)) await writeBinds()
+    }
+    try {
+      for (;;) {
+        const result = await menu.list<Row>({
+          title: 'Plugin hotkeys',
+          subtitle:
+            deps.readBinds === null
+              ? 'A key straight into one of your plugins. This desktop has no config we can bind in.'
+              : 'A key straight into one of your plugins. The mark is what your desktop really binds.',
+          initialIndex: at,
+          hints: deps.readBinds === null ? ['a add', 'd remove'] : ['a add', 'd remove', 'w write binds'],
+          choices: () => {
+            const entries = hotkeyEntries()
+            const sync = hotkeySync()
+
+            const rows =
+              entries.length === 0
+                ? [
+                    {
+                      value: { kind: 'entry', bind: '', chord: '' } as Row,
+                      label: 'None yet',
+                      detail: 'Press a to add one',
+                      separator: true
+                    }
+                  ]
+                : entries.map((entry) => {
+                    const bound =
+                      sync === null
+                        ? null
+                        : sync.bound.some((row) => row.target === entry.target && sameChord(row.bind, entry.bind))
+                    return {
+                      value: { kind: 'entry', bind: entry.bind, chord: canonical(entry.bind) } as Row,
+                      prefix: bound === null ? '' : bound ? `${s.good('✔')} ` : `${s.warn('!')} `,
+                      label: entry.bind,
+                      detail: entry.title ?? describePin(entry.target),
+                      ...(bound === false
+                        ? { help: 'In your config, not yet on your desktop - press w' }
+                        : {})
+                    }
+                  })
+
+            // The other direction, and the one that used to be invisible: a key
+            // the config no longer mentions, which the compositor still fires.
+            const stale = sync?.stale ?? []
+            if (stale.length === 0) return rows
+            return [
+              ...rows,
+              { value: { kind: 'stale' } as Row, label: '', separator: true },
+              ...stale.map((bind) => ({
+                value: { kind: 'stale' } as Row,
+                prefix: `${s.bad('✘')} `,
+                label: bind.hotkey === null ? bind.keyText : formatHotkey(bind.hotkey),
+                detail: `${describePin(bind.target ?? '')} - still bound`,
+                help: `Removed from your config but still in ${bind.path} - press d to clear it`
+              }))
+            ]
+          },
+          onKey: (key, value) => {
+            if (key.name === 'a') {
+              requested = 'add'
+              return 'close'
+            }
+            if (key.name === 'w' && deps.readBinds !== null) {
+              requested = 'write'
+              return 'close'
+            }
+            if (key.name !== 'd' && key.name !== 'delete' && key.name !== 'backspace') return 'ignored'
+            // Remove on a row that is *already* out of the config is not a second
+            // removal — there is nothing left here to remove. What the user is
+            // still looking at is the compositor's copy, and the only thing that
+            // clears that is the file write. So the same key does the meaningful
+            // thing rather than nothing: it is the one this row's help already
+            // names. Silence here was the reported bug — the footer offers
+            // `d remove`, the cursor lands on a stale row the moment the last
+            // entry goes, and the advertised key then did nothing at all.
+            if (value !== null && value.kind === 'stale') {
+              requested = 'write'
+              return 'close'
+            }
+            if (value === null || value.kind !== 'entry' || value.bind.length === 0) return 'ignored'
+            write(hotkeyEntries().filter((entry) => !sameChord(entry.bind, value.bind)))
+            touched = true
+            return 'handled'
+          }
+        })
+
+        at = result.index
+        if (!result.viaKey) break
+
+        // `w` — write the block now, from wherever the cursor was.
+        if (requested === 'write') {
+          requested = null
+          await writeBinds()
+          continue
+        }
+        requested = null
+
+        let picked: PinDraftEntry | null = null
+        const complete = await wizard([
+          async () => {
+            // Plugins and nothing else. A launcher that offers to bind a system
+            // key to *any* application is a launcher that has quietly appointed
+            // itself your desktop's shortcut editor — your desktop already has
+            // one, it is the one you know, and its binds do not vanish when this
+            // application is uninstalled. What only we can bind is what only we
+            // can open: a plugin's command, a category inside it, one row, or one
+            // action on one row.
+            const chosen = await pluginsScreen()
+            if (chosen === null) return 'back'
+            picked = chosen
+            return 'next'
+          },
+          async () => {
+            const hotkey = await buildHotkey(null)
+            if (hotkey === null || picked === null) return 'back'
+            const bind = formatHotkey(hotkey)
+            write([
+              ...hotkeyEntries().filter((entry) => !sameChord(entry.bind, bind)),
+              { bind, target: picked.key, title: picked.title }
+            ])
+            touched = true
+            return 'next'
+          }
+        ])
+        void complete
+      }
+
+    } catch (error) {
+      // Esc from inside the list unwinds past here, and used to skip the offer:
+      // `config.toml` was left naming a key the desktop does not bind. The
+      // offer runs on every exit; Esc at the offer itself means "no".
+      if (!isAbandoned(error)) throw error
+      try {
+        await offerIfOutOfStep()
+      } catch (inner) {
+        if (!isAbandoned(inner)) throw inner
+      }
+      throw error
+    }
+    await offerIfOutOfStep()
   }
 
   /**
@@ -2327,11 +2378,14 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
           return [
             {
               value: () => hotkeyScreen(['file_search', 'hotkey']),
+              prefix: boundMark(boundState(`extension:${FILE_SEARCH_COMMAND}`, now.fileSearch.hotkey.value)),
               label: 'Hotkey',
               detail: now.fileSearch.hotkey.value.length === 0 ? 'none - unreachable' : now.fileSearch.hotkey.value,
               ...(now.fileSearch.hotkey.value.length === 0
                 ? { help: 'Without a key, file search is unreachable' }
-                : {})
+                : boundState(`extension:${FILE_SEARCH_COMMAND}`, now.fileSearch.hotkey.value) === 'not-bound'
+                  ? { help: NOT_BOUND_HELP }
+                  : {})
             },
             {
               value: fileOrderScreen,
@@ -2367,8 +2421,10 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
               value: async () => {
                 await editSetting(GLOBAL_HOTKEY)
               },
+              prefix: boundMark(boundState(null, now.general.hotkey.value)),
               label: 'Hotkey',
-              detail: now.general.hotkey.value
+              detail: now.general.hotkey.value,
+              ...(boundState(null, now.general.hotkey.value) === 'not-bound' ? { help: NOT_BOUND_HELP } : {})
             },
             {
               value: enginesScreen,
@@ -2463,11 +2519,13 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         { value: 'appearance', label: 'Appearance' },
         {
           value: 'search',
+          prefix: boundMark(boundState(null, now.general.hotkey.value)),
           label: 'Search',
           detail: now.general.hotkey.value
         },
         {
           value: 'file-search',
+          prefix: boundMark(boundState(`extension:${FILE_SEARCH_COMMAND}`, now.fileSearch.hotkey.value)),
           label: 'File Search',
           detail: now.fileSearch.hotkey.value.length === 0 ? 'no key' : now.fileSearch.hotkey.value
         },
