@@ -31,7 +31,7 @@ source_aarch64=("electron-v$_electron-linux-arm64.zip::https://github.com/electr
 noextract=("electron-v$_electron-linux-x64.zip" "electron-v$_electron-linux-arm64.zip")
 # The tarball sum is regenerated per tag (`updpkgsums`), never skipped:
 # makepkg verifies what it downloads. tests/version.test.ts refuses SKIP.
-sha256sums=('0bcf43024f3e52c0d8277c17f9f5176e951c66069d40bc314540831d468bca7a')
+sha256sums=('a70a0920904fe5ee1f22e275d0934144e337d64bc16565422ca6d56779da217d')
 sha256sums_x86_64=('f4987e9f045e46b117f0805d6ba4dc524e2abb2c2e33660f175bb39564bd3dae')
 sha256sums_aarch64=('3e89a62c345d8171bf54f77df5b3d8216c492847eed00ae59cadd78d6f5535f7')
 
