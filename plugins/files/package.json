@@ -1,0 +1,54 @@
+{
+  "name": "files",
+  "title": "Files",
+  "description": "Find a file or folder anywhere under your home, then open it, browse it, or copy its path.",
+  "author": "lumanin",
+  "license": "MIT",
+  "categories": ["Productivity"],
+  "commands": [
+    {
+      "name": "search",
+      "title": "Search Files",
+      "description": "Type a name to find files and folders under your home.",
+      "mode": "view",
+      "keywords": ["file", "files", "find", "folder", "directory", "path", "locate", "fd"],
+      "lumanin": {
+        "root": false
+      }
+    }
+  ],
+  "preferences": [
+    {
+      "name": "showHidden",
+      "title": "Hidden Files",
+      "label": "Include dotfiles and dot-directories",
+      "description": "Dotfiles and everything under them.",
+      "type": "checkbox",
+      "required": false,
+      "default": false
+    },
+    {
+      "name": "noIgnore",
+      "title": "Ignored Files",
+      "label": "Also search files listed in .gitignore, .ignore and .fdignore",
+      "description": "What a .gitignore lists, such as node_modules. Only fd honours this.",
+      "type": "checkbox",
+      "required": false,
+      "default": false
+    },
+    {
+      "name": "tool",
+      "title": "Search With",
+      "description": "Adaptive prefers fd, then plocate, then find. fd skips anything listed in .gitignore, .ignore or .fdignore; plocate and find do not read those files.",
+      "type": "dropdown",
+      "required": false,
+      "default": "auto",
+      "data": [
+        { "title": "Adaptive", "value": "auto" },
+        { "title": "fd", "value": "fd" },
+        { "title": "plocate / locate", "value": "locate" },
+        { "title": "find", "value": "find" }
+      ]
+    }
+  ]
+}

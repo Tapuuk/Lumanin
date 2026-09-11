@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Lumanin Settings
+Comment=Configure the Lumanin launcher
+Exec=/usr/bin/lumanin settings
+Icon=lumanin
+Terminal=false
+Categories=Settings;Utility;

@@ -1,0 +1,51 @@
+#!/bin/sh
+# The `lumanin` launcher.
+#
+# A POSIX shell script rather than a Node script with a shebang, because the
+# thing that invokes it most is a compositor keybind — and a compositor's
+# environment is not a login shell's. `#!/usr/bin/env node` fails outright on any
+# machine where Node comes from a version manager (mise, asdf, fnm, nvm, volta):
+# those put `node` on the PATH of *interactive* shells only, so the binding
+# silently does nothing while the same command works perfectly when typed.
+#
+# So the runtime is resolved here, in order, and the last option always exists in
+# a checkout:
+#   1. $LUMANIN_NODE          — explicit override
+#   2. node on PATH           — the normal case
+#   3. Electron as Node       — bundled with the app; needs no system Node at all
+set -eu
+
+# Resolve through symlinks: `~/.local/bin/lumanin` normally points here, and
+# `dirname $0` would otherwise resolve to that directory instead of the checkout.
+SELF=$0
+if command -v readlink >/dev/null 2>&1; then
+  RESOLVED=$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")
+  SELF=$RESOLVED
+fi
+
+BIN_DIR=$(CDPATH='' cd -- "$(dirname -- "$SELF")" && pwd)
+ROOT=$(CDPATH='' cd -- "$BIN_DIR/.." && pwd)
+CLI="$ROOT/out/main/cli.js"
+
+if [ ! -f "$CLI" ]; then
+  echo "lumanin: not built yet — run \`npm run build\` in $ROOT" >&2
+  exit 1
+fi
+
+if [ -n "${LUMANIN_NODE:-}" ]; then
+  exec "$LUMANIN_NODE" "$CLI" "$@"
+fi
+
+if command -v node >/dev/null 2>&1; then
+  exec node "$CLI" "$@"
+fi
+
+ELECTRON="$ROOT/node_modules/electron/dist/electron"
+if [ -x "$ELECTRON" ]; then
+  # Electron ships its own Node; this runs the CLI on it without starting a
+  # browser process, so a machine with no system Node still works.
+  ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"
+fi
+
+echo "lumanin: no Node runtime found (set \$LUMANIN_NODE to one)" >&2
+exit 1

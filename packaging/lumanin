@@ -1,0 +1,18 @@
+#!/bin/sh
+# The `lumanin` command of a distro package (AUR, .deb, .rpm).
+#
+# The app lives under /usr/lib/lumanin with its own Electron beside it, and the
+# CLI runs on that Electron's Node (`ELECTRON_RUN_AS_NODE` starts no browser).
+# So a machine needs no Node of its own, and the version of Node the launcher
+# was tested on is the one it runs on. `$LUMANIN_NODE` still overrides, as in
+# the source checkout's bin/lumanin.
+set -eu
+# /usr/bin/lumanin -> /usr/lib/lumanin. Relative to this file rather than a
+# fixed /usr, so the .tar.gz of the same tree works extracted anywhere (a
+# $HOME/.local, a /opt) as long as bin/ and lib/ stay side by side.
+SELF=$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")
+ROOT=$(CDPATH='' cd -- "$(dirname -- "$SELF")/../lib/lumanin" && pwd)
+if [ -n "${LUMANIN_NODE:-}" ]; then
+  exec "$LUMANIN_NODE" "$ROOT/out/main/cli.js" "$@"
+fi
+ELECTRON_RUN_AS_NODE=1 exec "$ROOT/electron/electron" "$ROOT/out/main/cli.js" "$@"

@@ -1,0 +1,1288 @@
+/*
+ * The settings app.
+ *
+ * Same rule as base.css: every colour, radius, font and duration is a semantic
+ * token set by the theme runtime, and there must never be a raw colour here.
+ * The settings window is an opaque, resizable window — it overrides the
+ * transparent-body default the panel needs.
+ */
+
+body:has(.settings) {
+  background: var(--lumanin-bg);
+
+  /* The theme's own radii: inner for controls and rows, outer for cards. */
+  --s-radius: var(--lumanin-radius-inner, 4px);
+  --s-radius-large: var(--lumanin-radius-outer, 6px);
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-family: var(--lumanin-font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  color: var(--lumanin-text);
+}
+
+/* ---------------------------------------------------------------- titlebar */
+
+/* The window is frameless; this strip is the frame. Draggable everywhere the
+   close button is not. */
+.settings__titlebar {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  height: 48px;
+  padding: 0 10px 0 18px;
+  border-bottom: 1px solid var(--lumanin-border);
+  -webkit-app-region: drag;
+}
+
+/* The logo, inline in the titlebar. `currentColor` inside the SVG means the
+   `color` here is the whole recolouring story — it takes the theme's accent
+   like the rest of the chrome. */
+.settings__logo {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  color: var(--lumanin-accent);
+}
+
+/* The app's name, not a subheading: full text colour, bold, sized like the
+   content headings. */
+.settings__title {
+  flex: 1 1 auto;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--lumanin-text);
+}
+
+.settings__close {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--lumanin-radius-inner);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text-muted);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.settings__close:hover {
+  background: var(--lumanin-bg-hover);
+  color: var(--lumanin-text);
+}
+
+/* -------------------------------------------------------------------- body */
+
+.settings__body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.settings__footer {
+  display: flex;
+  gap: 12px;
+  flex: 0 0 auto;
+  padding: 6px 22px;
+  border-top: 1px solid var(--lumanin-border);
+  font-size: 11px;
+  color: var(--lumanin-text-muted);
+  user-select: text;
+  cursor: auto;
+}
+
+.settings__sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 0 0 200px;
+  padding: 10px 8px;
+  border-right: 1px solid var(--lumanin-border);
+  overflow-y: auto;
+}
+
+.settings__filter {
+  margin: 0 0 8px;
+  padding: 5px 9px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--s-radius);
+  background: var(--lumanin-bg-hover);
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text);
+  user-select: text;
+  cursor: text;
+}
+
+.settings__filter::placeholder {
+  color: var(--lumanin-text-faint);
+}
+
+.settings__section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 14px;
+  border: none;
+  border-radius: var(--s-radius-large);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text-muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings__section:hover {
+  background: var(--lumanin-bg-hover);
+  color: var(--lumanin-text);
+}
+
+.settings__section[aria-current='page'] {
+  background: color-mix(in srgb, var(--lumanin-accent) 18%, var(--lumanin-bg-selected));
+  color: var(--lumanin-accent);
+}
+
+/* Sits below the sections with a breath of space: it leaves the window rather than changing it. */
+.settings__section--link {
+  margin-top: 6px;
+}
+
+.settings__section-key {
+  font-size: 11px;
+  color: var(--lumanin-text-faint);
+}
+
+.settings__content {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 14px 22px;
+  overflow-y: auto;
+  container-type: inline-size;
+}
+
+.settings__heading {
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Scrollbars match the panel's thin bar. */
+.settings__sidebar::-webkit-scrollbar,
+.settings__content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.settings__sidebar::-webkit-scrollbar-track,
+.settings__content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings__sidebar::-webkit-scrollbar-thumb,
+.settings__content::-webkit-scrollbar-thumb {
+  background: var(--lumanin-border);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.settings__sidebar::-webkit-scrollbar-button,
+.settings__content::-webkit-scrollbar-button {
+  display: none;
+}
+
+/* ------------------------------------------------------------- screen pieces */
+
+/* A row of tabs under the heading, styled like the sidebar's section buttons. */
+.s-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--lumanin-border);
+}
+
+.s-tabs__tab {
+  padding: 5px 12px;
+  border: none;
+  border-radius: var(--s-radius-large);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text-muted);
+  cursor: pointer;
+}
+
+.s-tabs__tab:hover {
+  background: var(--lumanin-bg-hover);
+  color: var(--lumanin-text);
+}
+
+.s-tabs__tab[aria-selected='true'] {
+  background: color-mix(in srgb, var(--lumanin-accent) 18%, var(--lumanin-bg-selected));
+  color: var(--lumanin-accent);
+}
+
+.s-section {
+  margin-bottom: 18px;
+}
+
+/* Filtered out. Stated here because .s-row sets its own display. */
+.s-section[hidden],
+.s-row[hidden] {
+  display: none;
+}
+
+.s-section__title {
+  margin: 0 0 4px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lumanin-text-muted);
+}
+
+.s-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) 1fr auto;
+  column-gap: 16px;
+  align-items: start;
+  padding: 4px 0;
+}
+
+/* Sits the label level with the first line of a 28px control. */
+.s-row__text {
+  min-width: 0;
+  padding-top: 5px;
+}
+
+/* Reset and the "Saved" acknowledgement, level with the control's first line.
+   Always present so the columns line up across rows. */
+.s-row__aside {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-self: end;
+  min-height: 24px;
+  padding-top: 5px;
+}
+
+.s-row__saved {
+  font-size: 11px;
+  color: var(--lumanin-accent);
+  animation: s-saved-in 150ms ease-out;
+}
+
+@keyframes s-saved-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .s-row__saved {
+    animation: none;
+  }
+}
+
+/* The content pane before the first state arrives. */
+.s-skeleton {
+  height: 28px;
+  margin: 6px 0;
+  border-radius: var(--s-radius);
+  background: var(--lumanin-bg-hover);
+  opacity: 0;
+  animation: s-skeleton-in 150ms step-end forwards;
+}
+
+@keyframes s-skeleton-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@container (max-width: 400px) {
+  .s-row {
+    grid-template-columns: 1fr;
+  }
+
+  .s-row__text {
+    padding-top: 0;
+  }
+
+  .s-row__aside {
+    justify-self: start;
+    min-height: 0;
+    padding-top: 0;
+  }
+
+  .s-row__aside:empty {
+    display: none;
+  }
+}
+
+.s-row__label {
+  font-size: 13px;
+  color: var(--lumanin-text);
+}
+
+.s-row__help {
+  user-select: text;
+  cursor: auto;
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
+}
+
+.s-row__control {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.s-help {
+  margin: 0 0 6px;
+  user-select: text;
+  cursor: auto;
+  font-size: 12.5px;
+  color: var(--lumanin-text-muted);
+}
+
+.s-empty {
+  margin: 0 0 6px;
+  user-select: text;
+  cursor: auto;
+  font-size: 12.5px;
+  color: var(--lumanin-text-muted);
+}
+
+/* Three dots after a label or sentence, pulsing while work is in progress. */
+.s-busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.s-busy i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--lumanin-accent);
+  animation: s-busy-pulse 0.9s ease-in-out infinite;
+}
+
+.s-busy i:nth-child(2) {
+  animation-delay: 150ms;
+}
+
+.s-busy i:nth-child(3) {
+  animation-delay: 300ms;
+}
+
+@keyframes s-busy-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .s-busy i {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+.s-help code,
+.s-banner code {
+  font: inherit;
+  font-size: 0.95em;
+  background: var(--lumanin-bg-hover);
+  padding: 1px 4px;
+  border-radius: var(--s-radius);
+}
+
+.s-error {
+  user-select: text;
+  cursor: auto;
+  font-size: 12.5px;
+  color: var(--lumanin-err);
+  overflow-wrap: anywhere;
+}
+
+.s-ok {
+  user-select: text;
+  cursor: auto;
+  font-size: 12.5px;
+  color: var(--lumanin-ok);
+}
+
+.s-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+/* ----------------------------------------------------------------- controls */
+
+.s-toggle {
+  width: 36px;
+  height: 20px;
+  flex: 0 0 auto;
+  border: 1px solid var(--lumanin-border);
+  border-radius: 999px;
+  background: var(--lumanin-bg-hover);
+  cursor: pointer;
+  position: relative;
+  transition: background var(--lumanin-motion-duration, 120ms);
+}
+
+.s-toggle__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--lumanin-text-faint);
+  transition: transform var(--lumanin-motion-duration, 120ms);
+}
+
+.s-toggle--on {
+  background: color-mix(in srgb, var(--lumanin-accent) 35%, var(--lumanin-bg-hover));
+  border-color: var(--lumanin-accent);
+}
+
+.s-toggle--on .s-toggle__knob {
+  transform: translateX(16px);
+  background: var(--lumanin-accent);
+}
+
+.s-toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.s-input {
+  padding: 5px 9px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--s-radius);
+  background: var(--lumanin-bg-hover);
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text);
+  max-width: min(280px, 100%);
+}
+
+.s-input {
+  user-select: text;
+  cursor: text;
+}
+
+/* An env/flag-overridden setting renders its editor disabled — without this,
+   a disabled field is pixel-identical to an editable one. Same treatment as
+   the buttons and the toggle. */
+.s-input:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.s-input--number {
+  width: 104px;
+}
+
+.s-input--fill {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+/* The pick button: the current choice, opened into a filterable list. */
+.s-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 9px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--s-radius);
+  background: var(--lumanin-bg-hover);
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text);
+  max-width: min(280px, 100%);
+  text-align: left;
+  cursor: pointer;
+}
+
+.s-pick:hover:not(:disabled) {
+  border-color: var(--lumanin-accent);
+}
+
+.s-pick:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.s-pick__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.s-pick__caret {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--lumanin-text-muted);
+}
+
+/* Presets as one segmented control; the number field after it holds any other value. */
+.s-segments {
+  display: flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.s-segments__pill {
+  padding: 5px 12px;
+  border: 1px solid var(--lumanin-border);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text);
+  cursor: pointer;
+  margin-left: -1px;
+}
+
+.s-segments__pill:first-child {
+  margin-left: 0;
+  border-radius: var(--s-radius) 0 0 var(--s-radius);
+}
+
+.s-segments__pill:last-child {
+  border-radius: 0 var(--s-radius) var(--s-radius) 0;
+}
+
+.s-segments__pill:hover:not(:disabled) {
+  background: var(--lumanin-bg-hover);
+}
+
+.s-segments__pill[aria-checked="true"] {
+  position: relative;
+  border-color: var(--lumanin-accent);
+  color: var(--lumanin-accent);
+  background: var(--lumanin-bg-hover);
+}
+
+.s-segments__pill:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.s-button {
+  padding: 6px 16px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--s-radius);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text);
+  cursor: pointer;
+}
+
+.s-button:hover {
+  background: var(--lumanin-bg-hover);
+}
+
+.s-button--primary {
+  border-color: var(--lumanin-accent);
+  color: var(--lumanin-accent);
+}
+
+.s-button--danger {
+  border-color: var(--lumanin-err);
+  color: var(--lumanin-err);
+}
+
+.s-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.s-button--add {
+  color: var(--lumanin-text-muted);
+  border-style: dashed;
+}
+
+.s-button--add:hover:not(:disabled) {
+  color: var(--lumanin-text);
+  border-style: solid;
+}
+
+.s-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  color: var(--lumanin-text-muted);
+  cursor: pointer;
+}
+
+.s-remove:hover {
+  color: var(--lumanin-err);
+}
+
+.s-linkish {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  color: var(--lumanin-accent);
+  cursor: pointer;
+}
+
+.s-linkish:hover {
+  color: var(--lumanin-text);
+}
+
+.s-iconbtn {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--s-radius);
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
+  cursor: pointer;
+}
+
+.s-iconbtn:hover {
+  background: var(--lumanin-bg-hover);
+}
+
+.s-iconbtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* ------------------------------------------------------------------- lists */
+
+.s-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 6px;
+}
+
+/* The same 36px as a setting row: a 28px control and 4px above and below. */
+.s-list__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 10px;
+  border-radius: var(--s-radius);
+}
+
+.s-list__row:hover {
+  background: var(--lumanin-bg-hover);
+}
+
+.s-list__row--off {
+  opacity: 0.55;
+}
+
+.s-list__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.s-list__label {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.s-list__detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  user-select: text;
+  cursor: auto;
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.s-list__buttons {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+/* Move buttons show only for the row under the pointer or holding focus;
+   a dead end button is hidden outright, keeping the column aligned. */
+.s-list__buttons .s-iconbtn {
+  opacity: 0;
+  transition: opacity var(--lumanin-motion-duration, 120ms);
+}
+
+.s-list__row:hover .s-list__buttons .s-iconbtn,
+.s-list__row:focus-within .s-list__buttons .s-iconbtn {
+  opacity: 1;
+}
+
+.s-list__buttons .s-iconbtn:disabled {
+  visibility: hidden;
+}
+
+/* ------------------------------------------------------------------ banner */
+
+.s-banner {
+  user-select: text;
+  cursor: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--lumanin-accent);
+  border-radius: var(--s-radius-large);
+  font-size: 12.5px;
+  color: var(--lumanin-text);
+}
+
+.s-banner--info {
+  border-color: var(--lumanin-border);
+  color: var(--lumanin-text-muted);
+}
+
+/* ------------------------------------------------------------------- modal */
+
+.s-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--lumanin-bg) 60%, transparent);
+  z-index: 50;
+}
+
+.s-modal__box {
+  width: min(480px, 92%);
+  max-height: 86%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--s-radius-large);
+  background: var(--lumanin-bg);
+}
+
+.s-modal__box--wide {
+  width: min(640px, 94%);
+}
+
+.s-modal__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--lumanin-border);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.s-modal__body {
+  padding: 14px 16px;
+  overflow-y: auto;
+}
+
+.s-modal__buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* -------------------------------------------------------------- bind flow */
+
+.s-diff {
+  margin: 0 0 12px;
+}
+
+.s-diff__path {
+  user-select: text;
+  cursor: auto;
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+}
+
+.s-diff__body,
+.s-progress {
+  font: inherit;
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: var(--s-radius);
+  background: var(--lumanin-bg-hover);
+  font-size: 11.5px;
+  color: var(--lumanin-text-muted);
+  overflow-x: auto;
+  max-height: 220px;
+  overflow-y: auto;
+  user-select: text;
+  cursor: auto;
+}
+
+/* ------------------------------------------------------------ hotkey chips */
+
+.s-hotkey {
+  padding: 5px 12px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--s-radius);
+  background: var(--lumanin-bg-hover);
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--lumanin-text);
+  cursor: pointer;
+}
+
+.s-hotkey:hover:not(:disabled) {
+  border-color: var(--lumanin-accent);
+}
+
+.s-hotkey:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.s-hotkey--capturing {
+  border-color: var(--lumanin-accent);
+  color: var(--lumanin-accent);
+  animation: s-capture-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes s-capture-pulse {
+  0%,
+  100% {
+    border-color: var(--lumanin-accent);
+  }
+  50% {
+    border-color: var(--lumanin-border);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .s-hotkey--capturing {
+    animation: none;
+  }
+}
+
+.s-chords {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.s-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--lumanin-text);
+}
+
+.s-chip .s-remove {
+  margin: -4px -6px -4px 0;
+}
+
+.s-badge {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--lumanin-border);
+  font-size: 11px;
+  color: var(--lumanin-text-muted);
+}
+
+.s-badge--ok {
+  border-color: var(--lumanin-ok);
+  color: var(--lumanin-ok);
+}
+
+/* ----------------------------------------------------------- target picker */
+
+.s-picklist {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+}
+
+.s-pickrow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 12px;
+  border: none;
+  border-radius: var(--s-radius);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--lumanin-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.s-pickrow:hover {
+  background: var(--lumanin-bg-hover);
+}
+
+.s-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
+}
+
+.s-crumbs__item {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.s-crumbs__sep {
+  color: var(--lumanin-text-muted);
+}
+
+.s-crumbs__current {
+  color: var(--lumanin-text);
+  font-weight: 600;
+}
+
+.s-picklist--overlay {
+  max-height: 320px;
+  overflow: auto;
+}
+
+.s-pickrow--active {
+  background: var(--lumanin-bg-hover);
+}
+
+.s-pickrow--active .s-pickrow__label {
+  color: var(--lumanin-accent);
+}
+
+.s-pickrow__label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.s-pickrow__detail {
+  user-select: text;
+  cursor: auto;
+  flex: 0 1 auto;
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- plugins */
+
+.s-plugin__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.s-plugin__title {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--lumanin-text);
+  text-align: left;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.s-plugin__title:hover {
+  color: var(--lumanin-accent);
+}
+
+.s-plugin__body {
+  margin-top: 4px;
+  padding-left: 48px;
+}
+
+.s-facts {
+  user-select: text;
+  cursor: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.s-checkline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--lumanin-text);
+  margin: 8px 0;
+  cursor: pointer;
+}
+
+.s-checkline input {
+  accent-color: var(--lumanin-accent);
+}
+
+/* ------------------------------------------------------------------ wizard */
+
+/* First run fills the window: no chrome competing with it, one top-anchored
+   card, three steps. */
+.wiz {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background: var(--lumanin-bg);
+  z-index: 60;
+}
+
+.wiz__card {
+  width: min(560px, 92%);
+  margin-top: 48px;
+  max-height: calc(100% - 96px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  padding: 8px;
+}
+
+.wiz__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.wiz__logo {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  color: var(--lumanin-accent);
+}
+
+.wiz__title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--lumanin-text);
+}
+
+.wiz__lead {
+  margin: 0 0 22px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--lumanin-text-muted);
+}
+
+.wiz__lead code,
+.wiz__lead .s-chip {
+  font: inherit;
+  color: var(--lumanin-text);
+}
+
+.wiz__dots {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
+.wiz__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--lumanin-border);
+  transition: background var(--lumanin-motion-duration, 120ms);
+}
+
+.wiz__dot--done {
+  background: var(--lumanin-accent);
+}
+
+.wiz__choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 22px;
+}
+
+.wiz__choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid var(--lumanin-border);
+  border-radius: var(--s-radius-large);
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--lumanin-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.wiz__choice:hover {
+  background: var(--lumanin-bg-hover);
+}
+
+.wiz__choice--picked {
+  border-color: var(--lumanin-accent);
+  color: var(--lumanin-accent);
+}
+
+.wiz__choice--picked::after {
+  content: '✓';
+  font-size: 12px;
+}
+
+.wiz__choice-name {
+  font-size: 13.5px;
+}
+
+.wiz__choice-note {
+  font-size: 11px;
+  color: var(--lumanin-text-muted);
+}
+
+.wiz__buttons {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.wiz__button-pair {
+  display: flex;
+  gap: 8px;
+}
+
+.wiz__next {
+  margin-left: auto;
+  padding: 7px 22px;
+}
+
+.wiz__after {
+  margin: 12px 0 0;
+}
+
+.wiz__skip {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--lumanin-text-muted);
+  cursor: pointer;
+}
+
+.wiz__skip:hover {
+  color: var(--lumanin-text);
+}
+
+.wiz__details-toggle {
+  align-self: flex-start;
+  padding: 0;
+  margin: 0 0 14px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--lumanin-accent);
+  cursor: pointer;
+}
+
+.wiz__details-toggle:hover {
+  color: var(--lumanin-text);
+}
+
+.wiz__details {
+  margin-bottom: 16px;
+}
+
+.wiz__card::-webkit-scrollbar {
+  width: 8px;
+}
+
+.wiz__card::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.wiz__card::-webkit-scrollbar-thumb {
+  background: var(--lumanin-border);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+

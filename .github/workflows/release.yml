@@ -1,0 +1,109 @@
+# Packages for a release: .deb, .rpm and a .tar.gz, for x86_64 and aarch64,
+# attached to the GitHub Release of the pushed tag. Each package is installed
+# on the runner that built it and the daemon is started from it, so a package
+# that does not run never reaches the release page.
+#
+# The AUR package is not built here: PKGBUILD lives in packaging/aur and is
+# pushed to the AUR by hand (see CONTRIBUTING.md, "Cutting a release").
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  # A manual run builds the branch it is started from and attaches the result
+  # to the named release - how the workflow itself is proved before a tag is
+  # cut, against the draft release.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to attach the packages to (e.g. v1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  # The whole CI suite first. package.sh runs `build:app`, which skips the
+  # typecheck, so without this a tag could be cut from a commit that does not
+  # compile and the artifacts would still reach the release page.
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  package:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-22.04-arm]
+    # 22.04 on purpose: nothing we ship is compiled here (Electron, better-sqlite3
+    # and esbuild are all prebuilt), but the tools are older and the smoke
+    # install below proves the package on an older userland, not only a new one.
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+
+      - run: npm ci
+
+      - name: Packaging tools (fpm, rpmbuild)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q rpm ruby ruby-dev build-essential
+          sudo gem install --no-document fpm
+
+      - name: Build the packages
+        run: bash scripts/package.sh deb rpm tar
+
+      - name: Install the .deb and start the daemon from it
+        env:
+          ELECTRON_DISABLE_SANDBOX: '1'
+        run: |
+          set -x
+          sudo apt-get install -y ./release/lumanin_*.deb
+          lumanin --version
+          test -u /usr/lib/lumanin/electron/chrome-sandbox
+          xvfb-run -a -s '-screen 0 1280x800x24' bash -c '
+            lumanin show
+            sleep 3
+            lumanin ping
+            lumanin status
+            lumanin quit
+          '
+          sudo apt-get remove -y lumanin
+
+      - name: What was built
+        run: ls -la release/*.deb release/*.rpm release/*.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.os }}
+          path: |
+            release/*.deb
+            release/*.rpm
+            release/*.tar.gz
+
+  attach:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+
+      - name: Attach to the release of this tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -x
+          ls -la packages
+          # A release that does not exist yet is created as a draft, so nothing
+          # is announced before a human has read the notes.
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --title "$TAG" --notes "Packages for $TAG."
+          gh release upload "$TAG" packages/* --repo "$GITHUB_REPOSITORY" --clobber
