@@ -210,6 +210,8 @@ export interface InvokeMap extends SettingsInvokeMap {
    * path in this application that is measured in milliseconds.
    */
   'keys.current': { params: undefined; result: KeyMap }
+  /** `[search].typos`, held by the renderer for the same reason as the keys: plugin lists filter locally. */
+  'typos.current': { params: undefined; result: number }
 
   // --- Extensions. The renderer holds no extension state of its own: it
   // plays the tree the worker sends and forwards what the user did to it.
@@ -633,6 +635,8 @@ export interface EventMap {
   'theme.changed': ThemePayload
   /** `[keys]` changed on disk. Same contract as `theme.changed`. */
   'keys.changed': KeyMap
+  /** `[search].typos` changed on disk. Same contract as `keys.changed`. */
+  'typos.changed': number
   /** A batch of JSON Patch operations for one session's tree. */
   'ext.render': RenderParams
   /** `null` hides the toast; anything else shows or replaces it. */

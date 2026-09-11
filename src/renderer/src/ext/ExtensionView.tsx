@@ -78,11 +78,13 @@ interface ExtensionViewProps {
   readonly focusToken: number
   /** The panel's own keys (`[keys]`), passed down rather than re-fetched here. */
   readonly keys: KeyMap
+  /** `[search].typos`, for the built-in list filter. */
+  readonly typos: number
   /** Esc at the extension's root, or a dismissed error card. */
   readonly onExit: () => void
 }
 
-export function ExtensionView({ state, focusToken, keys, onExit }: ExtensionViewProps): React.JSX.Element {
+export function ExtensionView({ state, focusToken, keys, typos, onExit }: ExtensionViewProps): React.JSX.Element {
   const { session, tree, searchText, setSearchText, requestedItem, clearRequestedItem } = state
   const extension = session?.extensionName ?? ''
 
@@ -142,8 +144,8 @@ export function ExtensionView({ state, focusToken, keys, onExit }: ExtensionView
     () =>
       shape === null
         ? EMPTY_ROWS
-        : filterRows(shape.rows, searchText, shape.filtered, shape.keepSectionOrder),
-    [shape, searchText]
+        : filterRows(shape.rows, searchText, shape.filtered, shape.keepSectionOrder, typos),
+    [shape, searchText, typos]
   )
   const list = useMemo(
     () => (shape === null ? null : { ...shape, rows: visible }),

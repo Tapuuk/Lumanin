@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { APP_ID } from '../../shared/identity'
 import { formatHotkey, parseHotkey, toGnome, type Hotkey } from '../../shared/hotkey'
-import { shellQuote, type BindSpec } from './actions'
+import { openTargetOf, shellQuote, type BindSpec } from './actions'
 import type { PlatformProfile } from '../detect'
 
 /**
@@ -202,12 +202,11 @@ export function readGnomeBinds(
       const schema = `${CUSTOM_SCHEMA}:${path}`
       const keyText = unquote(read(schema, 'binding') ?? '')
       const command = unquote(read(schema, 'command') ?? '')
-      const open = new RegExp(`^${APP_ID} open '(.*)'$`).exec(command)
       return {
         path,
         keyText,
         hotkey: parseGnomeAccelerator(keyText),
-        target: open === null ? null : (open[1] ?? '')
+        target: openTargetOf(command)
       }
     })
 }

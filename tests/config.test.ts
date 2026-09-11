@@ -138,6 +138,17 @@ describe('robustness', () => {
     expect(config.raw['future_feature']).toEqual({ enabled: true })
   })
 
+  it('[search].typos defaults to one, takes a whole number from 0 to 5, and refuses the rest', () => {
+    expect(loadConfig({ env: NO_ENV }).search.typos.value).toBe(1)
+    expect(loadConfig({ fileContents: '[search]\ntypos = 3\n', env: NO_ENV }).search.typos.value).toBe(3)
+    expect(loadConfig({ fileContents: '[search]\ntypos = 0\n', env: NO_ENV }).search.typos.value).toBe(0)
+    expect(loadConfig({ env: { LUMANIN_TYPOS: '2' } }).search.typos.value).toBe(2)
+    const refused = loadConfig({ fileContents: '[search]\ntypos = 9\n', env: NO_ENV })
+    expect(refused.search.typos.value).toBe(1)
+    expect(refused.problems.length).toBeGreaterThan(0)
+    expect(loadConfig({ fileContents: '[search]\ntypos = 1.5\n', env: NO_ENV }).search.typos.value).toBe(1)
+  })
+
   it('does not report documented-but-unimplemented sections as unrecognized', () => {
     const config = loadConfig({
       fileContents: '[clipboard]\nretention_days = 7\n\n[search]\nfrecency_weight = 0.4\n',

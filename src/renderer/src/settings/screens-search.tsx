@@ -4,7 +4,7 @@ import { BUILTIN_ENGINES } from '@shared/engines'
 import { LAUNCHER_OWNED_TARGETS } from '@shared/bind-targets'
 import { formatHotkey, parseHotkey } from '@shared/hotkey'
 import type { PluginDto } from '@shared/ipc'
-import { HABIT_SETTING } from '@shared/settings-model'
+import { HABIT_SETTING, TYPOS_SETTING } from '@shared/settings-model'
 import { boundState, useManagedBinds } from './bind'
 import {
   AddButton,
@@ -14,7 +14,8 @@ import {
   ReorderList,
   Section,
   SettingControl,
-  TextControl
+  TextControl,
+  useFilter
 } from './controls'
 import { describeKey } from './describe'
 import { FileSearchGroup, move } from './screens-basic'
@@ -22,11 +23,51 @@ import { TargetPicker, type PickedTarget } from './TargetPicker'
 import { guarded, invokeChecked, sameList, setConfig, useOptimistic, useSettingsState } from './useSettings'
 
 /**
- * Search: ranking, engines, result order, pins, aliases and file search
- * behaviour, all of the launcher's root behaviour on one screen. The CLI menu
- * shares the settings model behind it. Plugin hotkeys live on Keys with the
- * other keys: same targets, same picker, different key.
+ * Search, in three tabs. General: how results are ranked and grouped. Global
+ * search: what the root list offers beyond apps and commands (engines, pins,
+ * aliases). File search: the search of its own, with its own knobs. The CLI
+ * menu shares the settings model behind it. Plugin hotkeys live on Keys with
+ * the other keys: same targets, same picker, different key.
+ *
+ * A filter shows every tab's content at once: a match must never hide behind
+ * a tab the person did not open.
  */
+
+const SEARCH_TABS = [
+  { id: 'general', title: 'General' },
+  { id: 'global', title: 'Global search' },
+  { id: 'files', title: 'File search' }
+] as const
+
+type SearchTab = (typeof SEARCH_TABS)[number]['id']
+
+export function SearchScreen(): React.JSX.Element {
+  const [tab, setTab] = useState<SearchTab>('general')
+  const filtering = useFilter().trim().length > 0
+  return (
+    <>
+      {!filtering && (
+        <div className="s-tabs" role="tablist" aria-label="Search">
+          {SEARCH_TABS.map((candidate) => (
+            <button
+              key={candidate.id}
+              type="button"
+              role="tab"
+              className="s-tabs__tab"
+              aria-selected={candidate.id === tab}
+              onClick={() => setTab(candidate.id)}
+            >
+              {candidate.title}
+            </button>
+          ))}
+        </div>
+      )}
+      {(filtering || tab === 'general') && <GeneralTab />}
+      {(filtering || tab === 'global') && <GlobalSearchTab />}
+      {(filtering || tab === 'files') && <FileSearchGroup />}
+    </>
+  )
+}
 
 /** Apps + plugins, fetched once per screen: what `describeKey` resolves names from. */
 function usePickerContext(): {
@@ -54,7 +95,68 @@ function samePins(
   return a.length === b.length && a.every((pin, index) => pin.key === b[index]?.key)
 }
 
-export function SearchScreen(): React.JSX.Element | null {
+/** How results are ranked and grouped: settings that shape every root query. */
+function GeneralTab(): React.JSX.Element | null {
+  const { state } = useSettingsState()
+  const resolved = state?.resolved ?? null
+  // Inert groups (`files`, `calculator`) are dropped from display: a config may
+  // still name them, but a lever attached to nothing is not offered.
+  const [order, commitOrder] = useOptimistic<readonly ResultGroup[]>(
+    resolved?.search.fallbackOrder.value.filter((group) => OFFERED_RESULT_GROUPS.includes(group)) ?? NONE,
+    sameList
+  )
+  if (state === null || resolved === null) return null
+
+  const writeOrder = (groups: readonly ResultGroup[]): void => {
+    const work = setConfig(['search', 'order'], [...groups])
+    guarded(work)
+    commitOrder(groups, work)
+  }
+  // Only the two rows whose position means nothing say so.
+  const groupHelp: Readonly<Partial<Record<ResultGroup, string>>> = {
+    calculator: 'Nothing. The calculator is always first.',
+    files: 'Nothing. File search is a plugin, listed under plugins.'
+  }
+  const groupRow = (group: ResultGroup, on: boolean): { id: string; label: string; detail?: string; on: boolean } => {
+    const detail = groupHelp[group]
+    return { id: group, label: RESULT_GROUP_LABELS[group], ...(detail === undefined ? {} : { detail }), on }
+  }
+
+  return (
+    <>
+      <Section title="Ranking" keywords="frecency habit recent often closeness match typo spelling fuzzy">
+        <p className="s-help">
+          Closest match first: a name starting with what you typed, then a word inside it, then a
+          keyword. Habits only order rows that match equally well.
+        </p>
+        <SettingControl setting={HABIT_SETTING} />
+        <SettingControl setting={TYPOS_SETTING} />
+      </Section>
+
+      <Section title="Result order" keywords={RESULT_KEYWORDS}>
+        <p className="s-help">
+          Apps and commands are ranked together by match, so their order here only breaks ties.
+        </p>
+        <ReorderList
+          rows={[
+            ...order.map((group) => groupRow(group, true)),
+            ...OFFERED_RESULT_GROUPS.filter((group) => !order.includes(group)).map((group) => groupRow(group, false))
+          ]}
+          onToggle={(id, next) => {
+            writeOrder(next ? [...order, id as ResultGroup] : order.filter((candidate) => candidate !== id))
+          }}
+          onMove={(id, delta) => {
+            const moved = move(order, id as ResultGroup, delta)
+            if (moved !== null) writeOrder(moved)
+          }}
+        />
+      </Section>
+    </>
+  )
+}
+
+/** What the root list offers beyond apps and commands: engines, pins, aliases. */
+function GlobalSearchTab(): React.JSX.Element | null {
   const { state } = useSettingsState()
   const context = usePickerContext()
   const [picking, setPicking] = useState<'pin' | 'alias' | null>(null)
@@ -63,12 +165,6 @@ export function SearchScreen(): React.JSX.Element | null {
   const resolved = state?.resolved ?? null
   const [enabledEngines, commitEngines] = useOptimistic<readonly string[]>(
     resolved?.search.webSearches.value.map((engine) => engine.id) ?? NONE,
-    sameList
-  )
-  // Inert groups (`files`, `calculator`) are dropped from display: a config may
-  // still name them, but a lever attached to nothing is not offered.
-  const [order, commitOrder] = useOptimistic<readonly ResultGroup[]>(
-    resolved?.search.fallbackOrder.value.filter((group) => OFFERED_RESULT_GROUPS.includes(group)) ?? NONE,
     sameList
   )
   const [pins, commitPins] = useOptimistic<readonly { key: string; title: string | null; icon?: string | null }[]>(
@@ -89,22 +185,6 @@ export function SearchScreen(): React.JSX.Element | null {
     commitEngines(ids, work)
   }
 
-  // --- result order ----------------------------------------------------------
-  const writeOrder = (groups: readonly ResultGroup[]): void => {
-    const work = setConfig(['search', 'order'], [...groups])
-    guarded(work)
-    commitOrder(groups, work)
-  }
-  // Only the two rows whose position means nothing say so.
-  const groupHelp: Readonly<Partial<Record<ResultGroup, string>>> = {
-    calculator: 'Nothing. The calculator is always first.',
-    files: 'Nothing. File search is a plugin, listed under plugins.'
-  }
-  const groupRow = (group: ResultGroup, on: boolean): { id: string; label: string; detail?: string; on: boolean } => {
-    const detail = groupHelp[group]
-    return { id: group, label: RESULT_GROUP_LABELS[group], ...(detail === undefined ? {} : { detail }), on }
-  }
-
   // --- pins ------------------------------------------------------------------
   const writePins = (entries: readonly { key: string; title: string | null; icon?: string | null }[]): void => {
     const work = invokeChecked(
@@ -120,25 +200,6 @@ export function SearchScreen(): React.JSX.Element | null {
 
   return (
     <>
-      <Section title="Result order" keywords={RESULT_KEYWORDS}>
-        <p className="s-help">
-          Apps and commands are ranked together by match, so their order here only breaks ties.
-        </p>
-        <ReorderList
-          rows={[
-            ...order.map((group) => groupRow(group, true)),
-            ...OFFERED_RESULT_GROUPS.filter((group) => !order.includes(group)).map((group) => groupRow(group, false))
-          ]}
-          onToggle={(id, next) => {
-            writeOrder(next ? [...order, id as ResultGroup] : order.filter((candidate) => candidate !== id))
-          }}
-          onMove={(id, delta) => {
-            const moved = move(order, id as ResultGroup, delta)
-            if (moved !== null) writeOrder(moved)
-          }}
-        />
-      </Section>
-
       <Section title="Web search engines" keywords={ENGINE_KEYWORDS}>
         <p className="s-help">
           Custom engines are added in <code>lumanin config</code> for now.
@@ -234,16 +295,6 @@ export function SearchScreen(): React.JSX.Element | null {
           </button>
         </div>
       </Section>
-
-      <Section title="Ranking" keywords="frecency habit recent often closeness match">
-        <p className="s-help">
-          Closest match first: a name starting with what you typed, then a word inside it, then a
-          keyword. Habits only order rows that match equally well.
-        </p>
-        <SettingControl setting={HABIT_SETTING} />
-      </Section>
-
-      <FileSearchGroup />
 
       {picking !== null && (
         <TargetPicker

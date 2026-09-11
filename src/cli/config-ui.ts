@@ -61,10 +61,11 @@ import {
   GENERAL_SETTINGS,
   GLOBAL_HOTKEY,
   HABIT_SETTING,
+  TYPOS_SETTING,
   habitLabel,
   type Setting
 } from '../shared/settings-model'
-import { isAbandoned, Menu, Screen, wizard, type Term } from './tui'
+import { isAbandoned, Menu, Screen, wizard, type Key, type Term } from './tui'
 
 /**
  * Move `value` by `delta` in an ordered list. `null` at either end.
@@ -2328,6 +2329,22 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
   }
 
   /**
+   * `w` on a screen that shows a bind mark: the hint and the key, together.
+   *
+   * The Global search and File Search screens said "press w" under a key that
+   * was not yet on the desktop, and neither screen listened for it — the
+   * handler lived on the Plugin hotkeys screen alone. A caller spreads this
+   * into its `menu.list` and treats `viaKey` as "write the binds now".
+   */
+  const writeBindsKey =
+    deps.readBinds === null
+      ? {}
+      : {
+          hints: ['w write binds'],
+          onKey: (key: Key): 'ignored' | 'close' => (key.name === 'w' ? 'close' : 'ignored')
+        }
+
+  /**
    * The categories, ordered. Reorder only — there is no "off".
    *
    * The difference from `orderScreen` is the whole design: a result *group* can
@@ -2380,6 +2397,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
       const choice = await menu.list<() => Promise<void>>({
         title: 'File Search',
         initialIndex: at,
+        ...writeBindsKey,
         choices: () => {
           const now = resolved()
           return [
@@ -2410,6 +2428,10 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         }
       })
       at = choice.index
+      if (choice.viaKey) {
+        await writeBinds()
+        continue
+      }
       if (choice.value === null) return
       await choice.value()
     }
@@ -2419,8 +2441,9 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
     let at = 0
     for (;;) {
       const choice = await menu.list<() => Promise<void>>({
-        title: 'Search',
+        title: 'Global search',
         initialIndex: at,
+        ...writeBindsKey,
         choices: () => {
           const now = resolved()
           return [
@@ -2468,11 +2491,22 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
               },
               label: HABIT_SETTING.label,
               detail: habitLabel(now.search.frecencyWeight.value)
+            },
+            {
+              value: async () => {
+                await editSetting(TYPOS_SETTING)
+              },
+              label: TYPOS_SETTING.label,
+              detail: String(now.search.typos.value)
             }
           ]
         }
       })
       at = choice.index
+      if (choice.viaKey) {
+        await writeBinds()
+        continue
+      }
       if (choice.value === null) return
       await choice.value()
     }
@@ -2527,7 +2561,7 @@ export async function runConfigUi(deps: ConfigUiDeps): Promise<number> {
         {
           value: 'search',
           prefix: boundMark(boundState(null, now.general.hotkey.value)),
-          label: 'Search',
+          label: 'Global search',
           detail: now.general.hotkey.value
         },
         {

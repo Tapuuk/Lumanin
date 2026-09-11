@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { detectPlatform, type PlatformProfile } from '../src/platform/detect'
 import { applyPlan, planFixes, planRevert, readManagedBinds, type FixDirs } from '../src/platform/fix/index'
 import { choiceFromConfig, planBind, reloadNotes } from '../src/platform/fix/bind'
-import { hyprlandCommand, hyprlandLine, launcherOwnedTargets } from '../src/platform/fix/actions'
+import { hyprlandCommand, hyprlandLine, launcherOwnedTargets, openTargetOf, shellQuote } from '../src/platform/fix/actions'
 import { LAUNCHER_OWNED_TARGETS } from '../src/shared/bind-targets'
 import { loadConfig } from '../src/shared/config'
 import {
@@ -502,6 +502,7 @@ describe('planFixes', () => {
     const options = {
       hotkey: DEFAULT_HOTKEY,
       explicit: true,
+      fileSearch: parseHotkey('Super+Shift+R') ?? DEFAULT_HOTKEY,
       extraBinds: [{ hotkey: parseHotkey('Ctrl+Alt+G') ?? DEFAULT_HOTKEY, target, label: 'Play' }]
     }
     const plan = planFixes(profile(HYPRLAND), dirs(dir), options)
@@ -515,6 +516,9 @@ describe('planFixes', () => {
     const binds = readManagedBinds(profile(HYPRLAND), dirs(dir))
     expect(binds.some((bind) => bind.target === target)).toBe(true)
     expect(binds.some((bind) => bind.target === null)).toBe(true)
+    // The file-search key: its target has nothing to quote, so the Lua line
+    // carries it bare - and it must still read back as bound.
+    expect(binds.some((bind) => bind.target === 'extension:files/search')).toBe(true)
   })
 
   it('keeps the Lua float guard out of the bind reader and stable across rewrites', () => {
@@ -800,6 +804,34 @@ describe('readManagedBinds', () => {
       hyprlandLine(`bindd = SUPER, G, Lumanin open, exec, ${hyprlandCommand(['lumanin', 'open', target])}`)
     ])
     expect(readManagedBinds(profile(HYPRLAND), dirs(dir))[0]?.target).toBe(target)
+  })
+
+  it('reads a plain target back whether the writer quoted it or not', () => {
+    // `shellQuote` leaves a target with nothing to quote bare, which is what
+    // the file-search key's target is. The readers accepted only the quoted
+    // form, so that key read back as "not bound yet" while it fired fine.
+    const plain = 'extension:files/search'
+    expect(shellQuote(['lumanin', 'open', plain])).toBe(`lumanin open ${plain}`)
+    const dir = tempConfig()
+    write(dir, 'hyprland.conf', [
+      hyprlandLine(`bindd = SUPER SHIFT, R, Lumanin: Search Files, exec, ${hyprlandCommand(['lumanin', 'open', plain])}`)
+    ])
+    expect(readManagedBinds(profile(HYPRLAND), dirs(dir))[0]?.target).toBe(plain)
+
+    // Same through sway's syntax.
+    const swayDir = tempConfig()
+    mkdirSync(join(swayDir, 'sway'), { recursive: true })
+    writeFileSync(
+      join(swayDir, 'sway', 'config'),
+      `${BLOCK_START}\nbindsym Mod4+Shift+r exec ${shellQuote(['lumanin', 'open', plain])}\n${BLOCK_END}\n`
+    )
+    expect(readManagedBinds(profile(SWAY), dirs(swayDir))[0]?.target).toBe(plain)
+
+    // A quoted target with a quote inside comes back as written to config.
+    const quoted = "extension:x/y#a:it's!Open"
+    expect(openTargetOf(shellQuote(['lumanin', 'open', quoted]))).toBe(quoted)
+    expect(openTargetOf('lumanin toggle')).toBeNull()
+    expect(openTargetOf('lumanin open')).toBeNull()
   })
 
   it('keeps a target containing a comma whole', () => {

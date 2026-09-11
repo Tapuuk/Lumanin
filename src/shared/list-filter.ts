@@ -1,11 +1,12 @@
-import { matchFields, matchGroup } from './fuzzy'
+import { DEFAULT_MAX_TYPOS, matchFields, matchGroup } from './fuzzy'
 
 /**
  * Which rows of a plugin's list the panel shows for a query.
  *
  * A plugin view is part of the launcher, so it searches the way the launcher
  * does rather than by scanning for a substring: the item's **title**, plus its
- * explicit `keywords`, with the same one forgiven typo as the root list — and
+ * explicit `keywords`, with the same forgiven typos as the root list
+ * (`[search].typos`, passed in by the view) — and
  * **never the subtitle**. A subtitle is a description; matching it made every
  * row whose description contained the query look like a result. Title matches
  * rank above keyword matches above repaired typos, author order within each
@@ -41,17 +42,22 @@ export function filterRows<T extends SearchableRow>(
   rows: readonly T[],
   query: string,
   filtering: boolean,
-  keepSectionOrder = false
+  keepSectionOrder = false,
+  maxTypos: number = DEFAULT_MAX_TYPOS
 ): readonly T[] {
   const needle = query.trim()
   if (!filtering || needle.length === 0) return rows
 
   const buckets = new Map<string | null, { row: T; group: number }[]>()
   for (const row of rows) {
-    const match = matchFields(needle, [
-      { name: 'title', text: row.title, weight: 1, isName: true },
-      { name: 'keywords', text: row.keywords, weight: 0.7, mode: 'word' as const }
-    ])
+    const match = matchFields(
+      needle,
+      [
+        { name: 'title', text: row.title, weight: 1, isName: true },
+        { name: 'keywords', text: row.keywords, weight: 0.7, mode: 'word' as const }
+      ],
+      { maxTypos }
+    )
     if (match === null) continue
     const section = row.sectionTitle ?? null
     const bucket = buckets.get(section)

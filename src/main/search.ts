@@ -490,7 +490,7 @@ export class SearchService {
 
     const scored: { entry: DesktopEntry; item: ResultItem; score: number; tier: MatchTier; at: number }[] = []
 
-    const options = { allowTypos }
+    const options = { allowTypos, maxTypos: this.deps.config().search.typos.value }
     for (const { entry, fields } of this.indexed) {
       const match = matchFields(needle, fields, options)
       if (match === null) continue

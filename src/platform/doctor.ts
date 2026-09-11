@@ -92,6 +92,12 @@ export function buildReport(
       origin: search.frecencyWeight.origin
     },
     {
+      key: 'typos',
+      value: String(search.typos.value),
+      layer: search.typos.layer,
+      origin: search.typos.origin
+    },
+    {
       key: 'engines',
       value:
         search.webSearches.value.length === 0

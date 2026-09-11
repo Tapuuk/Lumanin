@@ -805,6 +805,27 @@ export function shellQuote(argv: readonly string[]): string {
 }
 
 /**
+ * The target of a `lumanin open …` command as {@link shellQuote} wrote it, or
+ * `null` for any other command. The inverse of the writer, kept beside it so
+ * the two cannot drift: a plain target (`extension:files/search`) is written
+ * bare, one with a `#`, a space or a `'` is single-quoted with `'\''` inside.
+ *
+ * Every managed-bind reader goes through this. The readers used to accept only
+ * the quoted form, so the file-search key — whose target is plain — read back
+ * as "not bound yet" on every desktop while it fired fine.
+ */
+export function openTargetOf(command: string): string | null {
+  const trimmed = command.trim()
+  const prefix = `${APP_ID} open `
+  if (!trimmed.startsWith(prefix)) return null
+  const rest = trimmed.slice(prefix.length)
+  if (rest.startsWith("'") && rest.endsWith("'") && rest.length >= 2) {
+    return rest.slice(1, -1).replaceAll(`'\\''`, "'")
+  }
+  return /^[\w./:@%+=-]+$/.test(rest) ? rest : null
+}
+
+/**
  * A whole `hyprland.conf` line, as hyprlang needs it written.
  *
  * **`#` starts a comment anywhere in a line**, not only at its start — and our

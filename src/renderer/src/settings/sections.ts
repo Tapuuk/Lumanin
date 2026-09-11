@@ -8,6 +8,7 @@ import {
   GENERAL_SETTINGS,
   GLOBAL_HOTKEY,
   HABIT_SETTING,
+  TYPOS_SETTING,
   type Setting
 } from '@shared/settings-model'
 
@@ -65,6 +66,11 @@ export function sectionIndex(
       ...settingTexts(appearanceSettings(themes))
     ],
     search: [
+      'General',
+      'Global search',
+      'typo',
+      'spelling',
+      'fuzzy',
       'Result order',
       'Web search engines',
       'Pins',
@@ -73,7 +79,7 @@ export function sectionIndex(
       'File search',
       'Category order',
       'hidden files',
-      ...settingTexts([HABIT_SETTING, FILE_SEARCH_HIDE_ON_OPEN]),
+      ...settingTexts([HABIT_SETTING, TYPOS_SETTING, FILE_SEARCH_HIDE_ON_OPEN]),
       ...BUILTIN_ENGINES.map((engine) => engine.name),
       ...Object.values(RESULT_GROUP_LABELS),
       ...Object.values(FILE_CATEGORY_TITLES)

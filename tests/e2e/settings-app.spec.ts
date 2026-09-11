@@ -80,6 +80,15 @@ test.afterAll(async () => {
 const section = (title: string): ReturnType<Page['locator']> =>
   page.locator('.settings__section', { hasText: title })
 
+/**
+ * Open one of the Search section's three tabs. A tab's content is only there
+ * while its tab is selected, so every test on this screen goes through here.
+ */
+const searchTab = async (title: 'General' | 'Global search' | 'File search'): Promise<void> => {
+  await section('Search').click()
+  await page.locator('.s-tabs__tab', { hasText: title }).click()
+}
+
 /** A titled group on the current screen. */
 const group = (title: string): ReturnType<Page['locator']> =>
   page.locator('.s-section', { has: page.locator('.s-section__title', { hasText: new RegExp(`^${title}$`) }) })
@@ -364,17 +373,22 @@ test('the pick list narrows as you type, Enter picks, Escape leaves it alone', a
   await expect.poll(config).not.toContain('esc_at_root')
 })
 
-test('a number preset writes the number, and a typed value unchecks every preset', async () => {
+test('a number preset writes the number; the field opens behind Custom and a typed value checks only Custom', async () => {
   const row = page.locator('.s-row', { hasText: 'Panel width' })
   await row.getByRole('radio', { name: 'Wide', exact: true }).click()
   await expect.poll(config).toContain('width = 900')
   await expect(row.getByRole('radio', { name: 'Wide', exact: true })).toHaveAttribute('aria-checked', 'true')
 
+  // A named answer is picked, not typed: the field is greyed until Custom.
   const input = row.locator('input[type="number"]')
+  await expect(input).toBeDisabled()
+  await row.getByRole('radio', { name: 'Custom', exact: true }).click()
+  await expect(input).toBeEnabled()
+  await expect(input).toBeFocused()
   await input.fill('800')
   await input.press('Enter')
   await expect.poll(config).toContain('width = 800')
-  await expect(row.locator('[role="radio"][aria-checked="true"]')).toHaveCount(0)
+  await expect(row.locator('[role="radio"][aria-checked="true"]')).toHaveText('Custom')
 })
 
 test('a confirmed write says Saved at the row and the footer names the file and the time', async () => {
@@ -433,7 +447,7 @@ test('file search: hotkey capture writes the chord, Backspace removes the key', 
 })
 
 test('file search: reordering categories writes the order', async () => {
-  await section('Search').click()
+  await searchTab('File search')
   const list = group('File search').locator('.s-list')
   const first = await list.locator('.s-list__label').first().innerText()
   await list.locator('.s-list__row').first().locator('[aria-label="Move down"]').click()
@@ -511,7 +525,7 @@ test('keys: the bind banner lives on the Keys screen, reports on Panel, and surv
 })
 
 test('search: engines toggle and reorder as [search].engines', async () => {
-  await section('Search').click()
+  await searchTab('Global search')
   const engines = page.locator('.s-section', { hasText: 'Web search engines' })
   const firstRow = engines.locator('.s-list__row').first()
   const firstEngine = await firstRow.locator('.s-list__label').innerText()
@@ -527,7 +541,7 @@ test('search: engines toggle and reorder as [search].engines', async () => {
 })
 
 test('search: Alt+Down moves the focused engine row and keeps focus on it', async () => {
-  await section('Search').click()
+  await searchTab('Global search')
   const engines = page.locator('.s-section', { hasText: 'Web search engines' })
   const rowOf = (id: string): ReturnType<Page['locator']> => engines.locator(`.s-list__row[data-id="${id}"]`)
   // Two enabled engines, in a known order: the test above switched the only
@@ -564,7 +578,7 @@ test('search: Alt+Down moves the focused engine row and keeps focus on it', asyn
 })
 
 test('file search: hidden-files preference toggles, persists, and redraws from the store', async () => {
-  await section('Search').click()
+  await searchTab('File search')
   const row = page.locator('.s-row', { hasText: 'Hidden Files' }).first()
   await expect(row).toBeVisible()
   const toggle = row.locator('.s-toggle')
@@ -574,7 +588,7 @@ test('file search: hidden-files preference toggles, persists, and redraws from t
   // round-tripped and the screen re-fetched - which is the bug this guards.
   await expect(toggle).toHaveAttribute('aria-checked', 'true')
   await section('Panel').click()
-  await section('Search').click()
+  await searchTab('File search')
   await expect(page.locator('.s-row', { hasText: 'Hidden Files' }).first().locator('.s-toggle')).toHaveAttribute(
     'aria-checked',
     'true'
@@ -616,7 +630,7 @@ test('a garbage install source is refused with a sentence, nothing spawned', asy
 })
 
 test('empty Pins, Aliases and Plugin hotkeys each say so in one sentence', async () => {
-  await section('Search').click()
+  await searchTab('Global search')
   await expect(page.locator('.s-section', { hasText: 'Pins' }).locator('.s-empty')).toHaveText('Nothing pinned.')
   await expect(page.locator('.s-section', { hasText: 'Aliases' }).locator('.s-empty')).toHaveText('No aliases.')
   await section('Keys').click()
@@ -631,7 +645,7 @@ const pickRow = (label: string): ReturnType<Page['locator']> =>
   page.locator('.s-pickrow', { has: page.locator('.s-pickrow__label', { hasText: new RegExp(`^${label}$`) }) })
 
 test('pins: the same target twice is refused with a note and written once', async () => {
-  await section('Search').click()
+  await searchTab('Global search')
   const pins = page.locator('.s-section', { hasText: 'Pins' })
   const pinFirstCommand = async (): Promise<void> => {
     await pins.locator('.s-button', { hasText: 'Pin something' }).click()
@@ -670,7 +684,7 @@ test('an alias cannot point at a web search: the picker does not offer one', asy
 })
 
 test('pins: keyboard only, filter at every level, Backspace goes up, Esc closes', async () => {
-  await section('Search').click()
+  await searchTab('Global search')
   const pins = page.locator('.s-section', { hasText: 'Pins' })
   const dialog = page.locator('.s-modal__box[role="dialog"]')
   const where = dialog.locator('nav[aria-label="Where you are"]')
@@ -738,6 +752,7 @@ test('plugin hotkeys: the key is captured inside the picker, no second dialog', 
 test('a typed number commits on Enter', async () => {
   await section('Panel').click()
   const row = page.locator('.s-row', { hasText: 'Panel width' })
+  await row.getByRole('radio', { name: 'Custom', exact: true }).click()
   const input = row.locator('input[type="number"]')
   await input.fill('850')
   await input.press('Enter')
@@ -745,7 +760,7 @@ test('a typed number commits on Enter', async () => {
 })
 
 test('Escape in a text field leaves the field and keeps the window', async () => {
-  await section('Search').click()
+  await searchTab('Global search')
   const input = page.locator('.s-section', { hasText: 'Aliases' }).locator('input')
   await input.click()
   await input.type('ff')
@@ -776,6 +791,18 @@ test('the filter hides what does not match, jumps to the section that does, and 
   await filter.fill('')
   await page.keyboard.type('action panel')
   await expect(page.locator('.settings__heading')).toHaveText('Keys')
+
+  // On Search a filter shows every tab's content: a match on the File search
+  // tab is found from the General tab, with the tab bar out of the way.
+  await filter.fill('')
+  await searchTab('General')
+  await page.keyboard.press('Control+f')
+  await page.keyboard.type('category order')
+  await expect(page.locator('.s-tabs')).toHaveCount(0)
+  await expect(group('File search')).toBeVisible()
+  await expect(group('Ranking')).toBeHidden()
+  await filter.fill('')
+  await expect(page.locator('.s-tabs__tab[aria-selected="true"]')).toHaveText('General')
 
   await page.keyboard.press('Escape')
   await expect(filter).toHaveValue('')
@@ -828,7 +855,7 @@ test('Up and Down walk the rows, landing on the control so Space acts on it', as
 })
 
 test('a slash typed in a text field is a character, not the filter key', async () => {
-  await section('Search').click()
+  await searchTab('Global search')
   const input = page.locator('.s-section', { hasText: 'Aliases' }).locator('input')
   await input.click()
   await input.type('a/b')

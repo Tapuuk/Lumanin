@@ -8,6 +8,7 @@ import {
   fixActions,
   FIX_ACTIONS,
   MANUAL_STEPS,
+  openTargetOf,
   type FixAction,
   type FixOptions,
   type ManualStep
@@ -428,8 +429,8 @@ function parseBindLine(line: string): Omit<ManagedBind, 'path'> | null {
     command = unescape(lua[2] ?? '').trim()
     const hotkey = parseHotkey(keyText.replaceAll(' + ', '+'))
     if (command === `${APP_ID} toggle`) return { keyText, hotkey, target: null }
-    const opened = new RegExp(`^${APP_ID} open '(.*)'$`).exec(command)
-    return opened === null ? null : { keyText, hotkey, target: opened[1] ?? '' }
+    const opened = openTargetOf(command)
+    return opened === null ? null : { keyText, hotkey, target: opened }
   }
 
   const hyprland = /^\s*bindd?\s*=\s*(.+)$/.exec(line)
@@ -457,8 +458,8 @@ function parseBindLine(line: string): Omit<ManagedBind, 'path'> | null {
     const key = /key:\s*"([^"]*)"/.exec(chord)?.[1] ?? ''
     const hotkey = parseHotkey(`${mods.replaceAll(',', ' ')} ${key}`)
     if (command === `${APP_ID} toggle`) return { keyText, hotkey, target: null }
-    const opened = new RegExp(`^${APP_ID} open '(.*)'$`).exec(command)
-    return opened === null ? null : { keyText, hotkey, target: opened[1] ?? '' }
+    const opened = openTargetOf(command)
+    return opened === null ? null : { keyText, hotkey, target: opened }
   }
 
   if (hyprland !== null) {
@@ -486,9 +487,9 @@ function parseBindLine(line: string): Omit<ManagedBind, 'path'> | null {
   const hotkey = parseHotkey(keyText)
   if (command === `${APP_ID} toggle`) return { keyText, hotkey, target: null }
 
-  const open = new RegExp(`^${APP_ID} open '(.*)'$`).exec(command)
+  const open = openTargetOf(command)
   if (open === null) return null
-  return { keyText, hotkey, target: open[1] ?? '' }
+  return { keyText, hotkey, target: open }
 }
 
 /** What `--unfix` would remove: every block we can find, plus files that are wholly ours. */

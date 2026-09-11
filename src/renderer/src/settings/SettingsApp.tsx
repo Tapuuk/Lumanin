@@ -14,8 +14,9 @@ import { Wizard } from './Wizard'
 
 /**
  * The settings app's shell: a themed titlebar, a section sidebar, and a content
- * pane. Four sections: Panel, Search, Keys, Plugins. `lumanin config` edits the
- * same settings model behind its own menu; only the grouping differs.
+ * pane. Four sections: Panel, Search (three tabs: General, Global search, File
+ * search), Keys, Plugins. `lumanin config` edits the same settings model
+ * behind its own menu; only the grouping differs.
  *
  * Everything here wears the launcher's own tokens (`--lumanin-*`), applied and
  * hot-swapped by the same `useTheme` the panel uses, so a theme change repaints

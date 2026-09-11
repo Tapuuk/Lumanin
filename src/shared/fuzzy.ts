@@ -46,8 +46,9 @@
  * `Raycast` with two letters swapped — and a subsequence test can never accept
  * it, since the `y` comes too late. So a token that matches nothing gets one
  * bounded Damerau-Levenshtein pass against the words of the haystack:
- * transpositions included, **exactly one edit** however long the word — two
- * errors is a different word, not a typo — and
+ * transpositions included, **one edit** by default however long the word — two
+ * errors is usually a different word, not a typo, and `[search].typos` is the
+ * setting for people who disagree (`maxTypos`, below) — and
  * heavily penalised so a real match always outranks a repaired one. This is
  * deliberately *not* a general edit-distance search: within a candidate it fires
  * only where the strict path found nothing, and only against whole words. A
@@ -164,6 +165,12 @@ const PENALTY_TYPO = 60
 /** Below this length a typo is indistinguishable from a different word. */
 const TYPO_MIN_LENGTH = 4
 
+/** `[search].typos` when the caller names none. */
+export const DEFAULT_MAX_TYPOS = 1
+
+/** The most `[search].typos` may ask for. Past this the length rule never lets another edit in anyway. */
+export const MAX_TYPOS = 5
+
 const BOUNDARY_CHARS = new Set([' ', '-', '_', '.', '/', '\\', ':', '\t', ';', ',', '(', ')', '[', ']'])
 
 function isBoundary(previous: string | undefined): boolean {
@@ -218,6 +225,12 @@ export interface MatchOptions {
    * whose result is discarded.
    */
   readonly allowTypos?: boolean
+  /**
+   * The most edits one token may need, `[search].typos`. Defaults to
+   * {@link DEFAULT_MAX_TYPOS}. Each edit still has to be earned by length: see
+   * {@link typoBudget}.
+   */
+  readonly maxTypos?: number
 }
 
 /** Contiguous groups of matched positions. */
@@ -372,12 +385,17 @@ export function boundedDistance(a: string, b: string, max: number): number {
 /**
  * Edits allowed for a token of this length. Short words get none — one edit on
  * a three-character token matches half the dictionary — and everything else
- * gets exactly **one**, never two: `1passwrod` is `1Password` mistyped, but at
- * two edits the token has stopped being a typo and started being a different
- * word, and repairing it would only produce guesses.
+ * gets **one** by default: `1passwrod` is `1Password` mistyped, but at two
+ * edits the token has usually stopped being a typo and started being a
+ * different word, and repairing it would only produce guesses.
+ *
+ * `[search].typos` raises the ceiling, but every extra edit is paid for in
+ * length: one per four characters typed, so a second edit needs eight and a
+ * third twelve. Two edits on a five-letter token would match most of the
+ * dictionary whatever the setting says.
  */
-function typoBudget(length: number): number {
-  return length < TYPO_MIN_LENGTH ? 0 : 1
+function typoBudget(length: number, maxTypos: number): number {
+  return Math.min(maxTypos, Math.floor(length / TYPO_MIN_LENGTH))
 }
 
 /**
@@ -387,9 +405,15 @@ function typoBudget(length: number): number {
  * *prefix* of a longer word is deliberately allowed — someone typing `libreofic`
  * means `LibreOffice` — but matching a fragment in the middle is not.
  */
-function typoMatch(token: Token, haystack: string, lowerHaystack: string, from: number): TokenMatch | null {
-  const budget = typoBudget(token.text.length)
-  if (budget === 0) return null
+function typoMatch(
+  token: Token,
+  haystack: string,
+  lowerHaystack: string,
+  from: number,
+  maxTypos: number
+): TokenMatch | null {
+  const budget = typoBudget(token.text.length, maxTypos)
+  if (budget <= 0) return null
 
   const lowerToken = token.lower
   let best: TokenMatch | null = null
@@ -425,7 +449,8 @@ function matchToken(
   lowerHaystack: string,
   from: number,
   mode: FieldMode,
-  allowTypos: boolean
+  allowTypos: boolean,
+  maxTypos: number
 ): TokenMatch | null {
   if (mode === 'word') {
     const anchored = wordAnchored(token, haystack, lowerHaystack, from)
@@ -443,7 +468,7 @@ function matchToken(
   }
   if (best !== null) return { positions: best, typos: 0 }
 
-  return allowTypos ? typoMatch(token, haystack, lowerHaystack, from) : null
+  return allowTypos ? typoMatch(token, haystack, lowerHaystack, from, maxTypos) : null
 }
 
 /**
@@ -504,7 +529,8 @@ export function fuzzyMatch(
     haystack,
     loweredOf(haystack, undefined),
     mode,
-    options?.allowTypos !== false
+    options?.allowTypos !== false,
+    options?.maxTypos ?? DEFAULT_MAX_TYPOS
   )
 }
 
@@ -517,7 +543,8 @@ function scoreTokens(
   haystack: string,
   lowerHaystack: string,
   mode: FieldMode,
-  allowTypos: boolean
+  allowTypos: boolean,
+  maxTypos: number
 ): FuzzyMatch | null {
   if (tokens.length === 0) {
     return { score: 0, positions: [], typos: 0, tier: TIER.PREFIX, at: 0 }
@@ -529,7 +556,7 @@ function scoreTokens(
   let from = 0
 
   for (const token of tokens) {
-    const match = matchToken(token, haystack, lowerHaystack, from, mode, allowTypos)
+    const match = matchToken(token, haystack, lowerHaystack, from, mode, allowTypos, maxTypos)
     if (match === null) return null
     positions.push(...match.positions)
     typos += match.typos
@@ -651,6 +678,7 @@ export function matchFields(
 ): FieldMatch | null {
   const tokens = tokensOf(needle)
   const allowTypos = options?.allowTypos !== false
+  const maxTypos = options?.maxTypos ?? DEFAULT_MAX_TYPOS
   let best: FieldMatch | null = null
 
   for (const field of fields) {
@@ -659,7 +687,8 @@ export function matchFields(
       field.text,
       loweredOf(field.text, field.lower),
       field.mode ?? 'fuzzy',
-      allowTypos
+      allowTypos,
+      maxTypos
     )
     if (match === null) continue
 

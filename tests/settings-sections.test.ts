@@ -19,6 +19,7 @@ describe('settings filter', () => {
   it('jumps to the first section whose index matches', () => {
     expect(firstSectionMatching('escape', [])).toBe('panel')
     expect(firstSectionMatching('engines', [])).toBe('search')
+    expect(firstSectionMatching('spelling', [])).toBe('search')
     expect(firstSectionMatching('action panel', [])).toBe('keys')
     expect(firstSectionMatching('install', [])).toBe('plugins')
     expect(firstSectionMatching('qzxv no such setting', [])).toBeNull()

@@ -160,6 +160,23 @@ describe('fuzzy matching', () => {
   })
 })
 
+describe('[search].typos raises the ceiling, length still pays for each edit', () => {
+  it('forgives a second error only when asked, and only on a word long enough', () => {
+    // Two edits: a transposition and a substitution. Ten letters typed earns
+    // two edits under `maxTypos: 2`; the default of one refuses it.
+    expect(fuzzyMatch('librofeice', 'LibreOffice')).toBeNull()
+    expect(fuzzyMatch('librofeice', 'LibreOffice', 'fuzzy', { maxTypos: 2 })?.typos).toBe(2)
+    // Two edits on five letters is not a typo whatever the setting says.
+    expect(fuzzyMatch('gmipp', 'GIMP', 'fuzzy', { maxTypos: 3 })).toBeNull()
+    // Zero switches the repair off entirely.
+    expect(fuzzyMatch('racyast', 'Raycast', 'fuzzy', { maxTypos: 0 })).toBeNull()
+    // A repaired match still loses to a real one, however many edits it took.
+    expect(fuzzyMatch('libreoffice', 'LibreOffice')?.score).toBeGreaterThan(
+      fuzzyMatch('librofeice', 'LibreOffice', 'fuzzy', { maxTypos: 2 })?.score ?? 0
+    )
+  })
+})
+
 describe('single-typo tolerance', () => {
   // The row this exists for: an extension command, matched at the root.
   const target = 'Search 1Password'

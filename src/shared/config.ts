@@ -1,5 +1,6 @@
 import { parse as parseToml, TomlError } from 'smol-toml'
 import { DEFAULT_ENGINE_IDS, engineById } from './engines'
+import { DEFAULT_MAX_TYPOS, MAX_TYPOS } from './fuzzy'
 import { DEFAULT_PANEL_TOP_PERCENT } from './placement'
 import {
   DEFAULT_KEYS,
@@ -255,6 +256,8 @@ export interface ResolvedConfig {
     /** `[search].order`, still readable as `fallback_order`. */
     readonly fallbackOrder: Resolved<readonly ResultGroup[]>
     readonly frecencyWeight: Resolved<number>
+    /** `[search].typos`: spelling mistakes forgiven per word typed. */
+    readonly typos: Resolved<number>
     /** The enabled searches: catalog picks from `engines`, then `web_searches`. */
     readonly webSearches: Resolved<readonly WebSearch[]>
     /** Pins (`app:firefox.desktop`), in the order the user put them. */
@@ -1212,6 +1215,13 @@ export function loadConfig(options: LoadOptions): ResolvedConfig {
         fileKey: 'frecency_weight',
         fallback: 0.6,
         coerce: asUnitInterval
+      }),
+      typos: r.resolve({
+        envKey: 'TYPOS',
+        section: 'search',
+        fileKey: 'typos',
+        fallback: DEFAULT_MAX_TYPOS,
+        coerce: asDimension(0, MAX_TYPOS)
       }),
       webSearches: searchesFrom(file, env, problems),
       pins: pinsFrom(file, env, problems),

@@ -5,6 +5,7 @@ import { ResultList } from './components/ResultList'
 import { SearchBar } from './components/SearchBar'
 import { ExtensionView } from './ext/ExtensionView'
 import { useKeys } from './useKeys'
+import { useTypos } from './useTypos'
 import { keyActionFor } from '@shared/keys'
 import { useSession } from './ext/useSession'
 import { useSurfaceSize } from './useSurfaceSize'
@@ -33,6 +34,7 @@ import { useTheme } from './useTheme'
 export function App(): React.JSX.Element {
   const theme = useTheme()
   const keys = useKeys()
+  const typos = useTypos()
   const [query, setQuery] = useState('')
   const [focusToken, setFocusToken] = useState(0)
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -272,6 +274,7 @@ export function App(): React.JSX.Element {
             state={session}
             focusToken={focusToken}
             keys={keys}
+            typos={typos}
             onExit={standalone ? dismiss : endSession}
           />
         ) : (

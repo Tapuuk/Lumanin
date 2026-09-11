@@ -577,6 +577,14 @@ function NumberControl({
   const [value, commit] = useOptimistic(truth)
   const save = (next: number | null): void => commit(next, Promise.resolve(onSave(next)))
   const preset = presets.find((candidate) => candidate.value === value)
+  // The text field is only live behind the Custom pill: a number that is one
+  // of the named answers is picked, not typed, and a field that is always
+  // editable next to a row of pills reads as a second, competing editor.
+  // Custom is chosen by clicking it, and is also what a value none of the
+  // pills name must mean.
+  const [customChosen, setCustomChosen] = useState(false)
+  const custom = presets.length === 0 || customChosen || preset === undefined
+  const input = useRef<HTMLInputElement>(null)
   const [text, setText] = useState<string>(value === null ? '' : String(value))
   const [problem, setProblem] = useState<string | null>(null)
   // Follow a value changed by another writer (CLI, editor) — same reason as
@@ -611,13 +619,21 @@ function NumberControl({
   }
 
   const pick = (next: number): void => {
+    setCustomChosen(false)
     setText(String(next))
     setProblem(null)
     save(next)
   }
 
+  const chooseCustom = (): void => {
+    setCustomChosen(true)
+    // Focus follows the choice: choosing Custom is choosing to type.
+    requestAnimationFrame(() => input.current?.focus())
+  }
+
   const field = (
     <input
+      ref={input}
       className="s-input s-input--number"
       type="number"
       min={min}
@@ -626,7 +642,7 @@ function NumberControl({
       value={text}
       placeholder={adaptive ? 'Adaptive' : presets.length > 0 ? 'Default' : ''}
       aria-label={presets.length > 0 ? 'Custom value' : label}
-      disabled={disabled}
+      disabled={disabled || !custom}
       onChange={(event) => setText(event.target.value)}
       onFocus={() => {
         focused.current = true
@@ -650,43 +666,55 @@ function NumberControl({
     )
   }
 
-  // ArrowLeft/Right inside the group focus and save the neighbour, the way a
+  // The pills, Custom last. Moving onto a preset saves it; moving onto Custom
+  // only opens the field.
+  const pills: readonly { key: string; label: string; detail?: string; checked: boolean; act: () => void }[] = [
+    ...presets.map((candidate) => ({
+      key: String(candidate.value),
+      label: candidate.label,
+      ...(candidate.detail === undefined ? {} : { detail: candidate.detail }),
+      checked: !custom && candidate.value === value,
+      act: () => {
+        if (custom || candidate.value !== value) pick(candidate.value)
+      }
+    })),
+    { key: '\u0000custom', label: 'Custom', detail: 'Type a number', checked: custom, act: chooseCustom }
+  ]
+
+  // ArrowLeft/Right inside the group focus and act on the neighbour, the way a
   // radio group moves.
   const onGroupKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
-    const pills = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]'))
-    const at = pills.findIndex((pill) => pill === document.activeElement)
+    const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]'))
+    const at = buttons.findIndex((pill) => pill === document.activeElement)
     if (at === -1) return
-    const next = Math.min(pills.length - 1, Math.max(0, at + (event.key === 'ArrowRight' ? 1 : -1)))
-    const to = pills[next]
-    const candidate = presets[next]
+    const next = Math.min(buttons.length - 1, Math.max(0, at + (event.key === 'ArrowRight' ? 1 : -1)))
+    const to = buttons[next]
+    const candidate = pills[next]
     if (to === undefined || candidate === undefined) return
     event.preventDefault()
     to.focus()
-    if (candidate.value !== value) pick(candidate.value)
+    candidate.act()
   }
 
   return (
     <div className="s-inline">
       <div className="s-segments" role="radiogroup" aria-label={label} onKeyDown={onGroupKeyDown}>
-        {presets.map((candidate) => {
-          const checked = candidate.value === value
-          return (
-            <button
-              key={candidate.value}
-              type="button"
-              role="radio"
-              aria-checked={checked}
-              className="s-segments__pill"
-              title={candidate.detail}
-              disabled={disabled}
-              tabIndex={checked || (preset === undefined && candidate === presets[0]) ? 0 : -1}
-              onClick={() => pick(candidate.value)}
-            >
-              {candidate.label}
-            </button>
-          )
-        })}
+        {pills.map((pill, index) => (
+          <button
+            key={pill.key}
+            type="button"
+            role="radio"
+            aria-checked={pill.checked}
+            className="s-segments__pill"
+            title={pill.detail}
+            disabled={disabled}
+            tabIndex={pill.checked || (!pills.some((candidate) => candidate.checked) && index === 0) ? 0 : -1}
+            onClick={pill.act}
+          >
+            {pill.label}
+          </button>
+        ))}
       </div>
       {field}
       {problem !== null && <div className="s-error">{problem}</div>}

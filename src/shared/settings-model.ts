@@ -1,4 +1,5 @@
 import { ESC_AT_ROOT_VALUES, OPEN_ON_MONITOR_VALUES, type ResolvedConfig } from './config'
+import { MAX_TYPOS } from './fuzzy'
 import { APP_DISPLAY_NAME } from './identity'
 
 /**
@@ -276,6 +277,30 @@ export function habitLabel(weight: number): string {
   return nearest.value === weight ? nearest.label : `${nearest.label} (${String(weight)})`
 }
 
+/**
+ * `[search].typos`: how many spelling mistakes one typed word may hold. One is
+ * the default; every extra edit has to be earned by length (one per four
+ * characters typed), so a high number is a ceiling, not a promise.
+ */
+export const TYPOS_SETTING: Setting = {
+  path: ['search', 'typos'],
+  label: 'Spelling mistakes forgiven',
+  help: 'Per word typed. One more is allowed for every four letters, so "libreofice" gets two and "gimp" gets none.',
+  editor: {
+    kind: 'number',
+    min: 0,
+    max: MAX_TYPOS,
+    integer: true,
+    presets: [
+      { value: 1, label: 'One', detail: 'The default' },
+      { value: 2, label: 'Two' },
+      { value: 3, label: 'Three' }
+    ]
+  },
+  read: (c) => c.search.typos,
+  envKey: 'TYPOS'
+}
+
 /** `[file_search].hide_on_open`: opening a file closes the panel. */
 export const FILE_SEARCH_HIDE_ON_OPEN: Setting = {
   path: ['file_search', 'hide_on_open'],
@@ -306,6 +331,7 @@ export function allSettings(): readonly Setting[] {
     ...GENERAL_SETTINGS,
     ...appearanceSettings([]),
     HABIT_SETTING,
+    TYPOS_SETTING,
     FILE_SEARCH_HIDE_ON_OPEN
   ]
 }

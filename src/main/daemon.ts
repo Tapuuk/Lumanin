@@ -177,6 +177,7 @@ function reloadConfig(reason: string): readonly string[] {
   // has to be pushed. Sent unconditionally — comparing two keymaps to save one
   // small message would be more code than the message costs.
   emit('keys.changed', loaded.keys.value)
+  emit('typos.changed', loaded.search.typos.value)
   return pending
 }
 
@@ -878,6 +879,8 @@ function registerIpc(): void {
         return theme.payloadNow
       case 'keys.current':
         return current().keys.value
+      case 'typos.current':
+        return current().search.typos.value
       case 'search.query': {
         const query = (params as { query?: unknown } | undefined)?.query
         if (typeof query !== 'string' || search === null) return []
